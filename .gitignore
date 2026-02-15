@@ -15,6 +15,11 @@ package-lock.json
 *.swp
 *.swo
 
+# Test output
+tests/_output/*
+!tests/_output/.gitkeep
+tests/_support/_generated/
+
 # OS
 .DS_Store
 Thumbs.db

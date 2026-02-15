@@ -4,16 +4,8 @@
 	"description": "Enterprise identity management for WordPress powered by WorkOS.",
 	"private": true,
 	"scripts": {
-		"test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/workos vendor/bin/phpunit",
 		"lint:php": "composer lint",
-		"lint:php:fix": "composer lint:fix",
-		"wp-env": "wp-env",
-		"env:start": "wp-env start",
-		"env:stop": "wp-env stop",
-		"env:destroy": "wp-env destroy"
-	},
-	"devDependencies": {
-		"@wordpress/env": "^10.0"
+		"lint:php:fix": "composer lint:fix"
 	},
 	"engines": {
 		"node": ">=20"

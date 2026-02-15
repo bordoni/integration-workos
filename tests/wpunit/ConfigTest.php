@@ -2,18 +2,18 @@
 /**
  * Tests for the Config class.
  *
- * @package WorkOS\Tests\Unit
+ * @package WorkOS\Tests\Wpunit
  */
 
-namespace WorkOS\Tests\Unit;
+namespace WorkOS\Tests\Wpunit;
 
-use Yoast\PHPUnitPolyfills\TestCases\TestCase;
+use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Config;
 
 /**
  * Config class tests.
  */
-class ConfigTest extends TestCase {
+class ConfigTest extends WPTestCase {
 
 	/**
 	 * Test that the Config class exists.

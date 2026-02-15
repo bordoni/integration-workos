@@ -2,7 +2,7 @@
 /**
  * Global helper functions.
  *
- * Loaded via Composer `files` autoload — always available.
+ * Loaded explicitly from bootstrap.php after WordPress is available.
  *
  * @package WorkOS
  */

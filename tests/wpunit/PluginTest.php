@@ -2,18 +2,18 @@
 /**
  * Tests for the Plugin singleton.
  *
- * @package WorkOS\Tests\Unit
+ * @package WorkOS\Tests\Wpunit
  */
 
-namespace WorkOS\Tests\Unit;
+namespace WorkOS\Tests\Wpunit;
 
-use Yoast\PHPUnitPolyfills\TestCases\TestCase;
+use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Plugin;
 
 /**
  * Plugin singleton and constants tests.
  */
-class PluginTest extends TestCase {
+class PluginTest extends WPTestCase {
 
 	/**
 	 * Test that WORKOS_VERSION is defined.

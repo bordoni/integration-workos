@@ -23,5 +23,6 @@ if ( ! file_exists( $autoloader ) ) {
 }
 
 require_once $autoloader;
+require_once WORKOS_DIR . 'src/includes/functions-helpers.php';
 
 return true;
