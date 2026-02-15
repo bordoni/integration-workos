@@ -1,0 +1,62 @@
+/**
+ * Role Mapping table styles.
+ *
+ * @package WorkOS
+ */
+
+#workos-role-map-table {
+	max-width: 700px;
+	margin-top: 12px;
+}
+
+#workos-role-map-table input.regular-text {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+#workos-role-map-table select {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.workos-role-map-actions {
+	width: 40px;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.workos-role-map-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid #dcdcde;
+	border-radius: 50%;
+	background: #fff;
+	color: #d63638;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.workos-role-map-remove:hover {
+	background: #d63638;
+	border-color: #d63638;
+	color: #fff;
+}
+
+.workos-role-map-remove .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+#workos-role-map-add {
+	margin-top: 8px;
+}
+
+#workos-role-map-add .dashicons {
+	margin-right: 4px;
+	line-height: inherit;
+}

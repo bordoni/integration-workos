@@ -4,8 +4,13 @@
 	"description": "Enterprise identity management for WordPress powered by WorkOS.",
 	"private": true,
 	"scripts": {
+		"build": "wp-scripts build",
+		"start": "wp-scripts start",
 		"lint:php": "composer lint",
 		"lint:php:fix": "composer lint:fix"
+	},
+	"devDependencies": {
+		"@wordpress/scripts": "^30.0"
 	},
 	"engines": {
 		"node": ">=20"

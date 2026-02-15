@@ -1,5 +1,6 @@
 {
 	"build": [
+		"npm ci && npm run build",
 		"composer install --no-dev --optimize-autoloader"
 	],
 	"build_dev": [

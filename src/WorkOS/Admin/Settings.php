@@ -20,12 +20,29 @@ class Settings {
 	private const OPTION_GROUP = 'workos_settings';
 
 	/**
+	 * Page slug for the Users tab.
+	 */
+	private const USERS_PAGE = 'workos-users';
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
 		add_action( 'admin_menu', [ $this, 'register_menu' ] );
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
+		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_filter( 'plugin_action_links_' . WORKOS_BASENAME, [ $this, 'action_links' ] );
+	}
+
+	/**
+	 * Get the current tab from the query string.
+	 *
+	 * @return string Current tab slug.
+	 */
+	private function get_current_tab(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab navigation, no data modification.
+		$tab = sanitize_text_field( wp_unslash( $_GET['tab'] ?? 'general' ) );
+		return in_array( $tab, [ 'general', 'users' ], true ) ? $tab : 'general';
 	}
 
 	/**
@@ -44,9 +61,161 @@ class Settings {
 	}
 
 	/**
+	 * Enqueue role-mapping assets on the Users tab.
+	 *
+	 * @param string $hook_suffix The current admin page hook suffix.
+	 */
+	public function enqueue_assets( string $hook_suffix ): void {
+		if ( 'toplevel_page_workos' !== $hook_suffix || 'users' !== $this->get_current_tab() ) {
+			return;
+		}
+
+		$asset_file = WORKOS_DIR . 'build/role-mapping.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'workos-role-mapping',
+			WORKOS_URL . 'build/role-mapping.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		wp_enqueue_style(
+			'workos-role-mapping',
+			WORKOS_URL . 'build/role-mapping.css',
+			[],
+			$asset['version']
+		);
+
+		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		wp_add_inline_script(
+			'workos-role-mapping',
+			'window.workosRoleMapping = ' . wp_json_encode( [ 'wpRoles' => $wp_roles ] ) . ';',
+			'before'
+		);
+	}
+
+	/**
 	 * Register all settings.
+	 *
+	 * Registers all options for both tabs, then delegates section/field
+	 * registration to per-tab methods based on the current tab.
 	 */
 	public function register_settings(): void {
+		// Register all options regardless of active tab so saving
+		// on one tab does not blank out the other tab's values.
+		$this->register_all_options();
+
+		$current_tab = $this->get_current_tab();
+
+		if ( 'users' === $current_tab ) {
+			$this->register_users_fields();
+		} else {
+			$this->register_general_fields();
+		}
+	}
+
+	/**
+	 * Register all option names with the Settings API.
+	 */
+	private function register_all_options(): void {
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_api_key',
+			[
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_client_id',
+			[
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_login_mode',
+			[
+				'type'              => 'string',
+				'default'           => 'redirect',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_allow_password_fallback',
+			[
+				'type'              => 'boolean',
+				'default'           => true,
+				'sanitize_callback' => 'rest_sanitize_boolean',
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_webhook_secret',
+			[
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_deprovision_action',
+			[
+				'type'              => 'string',
+				'default'           => 'deactivate',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_reassign_user',
+			[
+				'type'              => 'integer',
+				'default'           => 0,
+				'sanitize_callback' => 'absint',
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_role_map',
+			[
+				'type'              => 'array',
+				'default'           => [],
+				'sanitize_callback' => [ $this, 'sanitize_role_map' ],
+			]
+		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_audit_logging_enabled',
+			[
+				'type'              => 'boolean',
+				'default'           => false,
+				'sanitize_callback' => 'rest_sanitize_boolean',
+			]
+		);
+	}
+
+	/**
+	 * Register sections and fields for the General tab.
+	 */
+	private function register_general_fields(): void {
 		// --- API Credentials section ---
 		add_settings_section(
 			'workos_api',
@@ -87,16 +256,6 @@ class Settings {
 			'workos'
 		);
 
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_login_mode',
-			[
-				'type'              => 'string',
-				'default'           => 'redirect',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
 		add_settings_field(
 			'workos_login_mode',
 			__( 'Login Mode', 'workos' ),
@@ -109,16 +268,6 @@ class Settings {
 					'redirect' => __( 'AuthKit Redirect (Recommended)', 'workos' ),
 					'headless' => __( 'Headless API (Custom Form)', 'workos' ),
 				],
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_allow_password_fallback',
-			[
-				'type'              => 'boolean',
-				'default'           => true,
-				'sanitize_callback' => 'rest_sanitize_boolean',
 			]
 		);
 
@@ -167,89 +316,6 @@ class Settings {
 			__( 'The signing secret from your WorkOS webhook endpoint. Starts with "whsec_".', 'workos' )
 		);
 
-		// --- User Provisioning section ---
-		add_settings_section(
-			'workos_provisioning',
-			__( 'User Provisioning', 'workos' ),
-			function () {
-				echo '<p>' . esc_html__( 'Configure how users are deprovisioned when removed from WorkOS.', 'workos' ) . '</p>';
-			},
-			'workos'
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_deprovision_action',
-			[
-				'type'              => 'string',
-				'default'           => 'deactivate',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
-		add_settings_field(
-			'workos_deprovision_action',
-			__( 'Deprovision Action', 'workos' ),
-			[ $this, 'render_select' ],
-			'workos',
-			'workos_provisioning',
-			[
-				'name'    => 'workos_deprovision_action',
-				'options' => [
-					'deactivate' => __( 'Deactivate (mark as inactive)', 'workos' ),
-					'demote'     => __( 'Demote to Subscriber role', 'workos' ),
-					'delete'     => __( 'Delete user (reassign content)', 'workos' ),
-				],
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_reassign_user',
-			[
-				'type'              => 'integer',
-				'default'           => 0,
-				'sanitize_callback' => 'absint',
-			]
-		);
-
-		add_settings_field(
-			'workos_reassign_user',
-			__( 'Reassign Content To', 'workos' ),
-			[ $this, 'render_user_select' ],
-			'workos',
-			'workos_provisioning',
-			[ 'name' => 'workos_reassign_user' ]
-		);
-
-		// --- Role Mapping section ---
-		add_settings_section(
-			'workos_roles',
-			__( 'Role Mapping', 'workos' ),
-			function () {
-				echo '<p>' . esc_html__( 'Map WorkOS roles to WordPress roles. Users will be assigned the mapped WP role on login.', 'workos' ) . '</p>';
-			},
-			'workos'
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_role_map',
-			[
-				'type'              => 'array',
-				'default'           => [],
-				'sanitize_callback' => [ $this, 'sanitize_role_map' ],
-			]
-		);
-
-		add_settings_field(
-			'workos_role_map',
-			__( 'Role Map', 'workos' ),
-			[ $this, 'render_role_map' ],
-			'workos',
-			'workos_roles'
-		);
-
 		// --- Audit Logging section ---
 		add_settings_section(
 			'workos_audit',
@@ -258,16 +324,6 @@ class Settings {
 				echo '<p>' . esc_html__( 'Forward WordPress events to WorkOS Audit Logs.', 'workos' ) . '</p>';
 			},
 			'workos'
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_audit_logging_enabled',
-			[
-				'type'              => 'boolean',
-				'default'           => false,
-				'sanitize_callback' => 'rest_sanitize_boolean',
-			]
 		);
 
 		add_settings_field(
@@ -284,6 +340,57 @@ class Settings {
 	}
 
 	/**
+	 * Register sections and fields for the Users tab.
+	 */
+	private function register_users_fields(): void {
+		// --- User Provisioning section ---
+		add_settings_section(
+			'workos_provisioning',
+			__( 'User Provisioning', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Configure how users are deprovisioned when removed from WorkOS.', 'workos' ) . '</p>';
+			},
+			self::USERS_PAGE
+		);
+
+		add_settings_field(
+			'workos_deprovision_action',
+			__( 'Deprovision Action', 'workos' ),
+			[ $this, 'render_select' ],
+			self::USERS_PAGE,
+			'workos_provisioning',
+			[
+				'name'    => 'workos_deprovision_action',
+				'options' => [
+					'deactivate' => __( 'Deactivate (mark as inactive)', 'workos' ),
+					'demote'     => __( 'Demote to Subscriber role', 'workos' ),
+					'delete'     => __( 'Delete user (reassign content)', 'workos' ),
+				],
+			]
+		);
+
+		add_settings_field(
+			'workos_reassign_user',
+			__( 'Reassign Content To', 'workos' ),
+			[ $this, 'render_user_select' ],
+			self::USERS_PAGE,
+			'workos_provisioning',
+			[ 'name' => 'workos_reassign_user' ]
+		);
+
+		// --- Role Mapping section ---
+		add_settings_section(
+			'workos_roles',
+			__( 'Role Mapping', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Map WorkOS roles to WordPress roles. Users will be assigned the mapped WP role on login.', 'workos' ) . '</p>';
+				$this->render_role_map();
+			},
+			self::USERS_PAGE
+		);
+	}
+
+	/**
 	 * Render the settings page.
 	 */
 	public function render_page(): void {
@@ -291,21 +398,37 @@ class Settings {
 			return;
 		}
 
+		$current_tab = $this->get_current_tab();
+		$tabs        = [
+			'general' => __( 'General', 'workos' ),
+			'users'   => __( 'Users', 'workos' ),
+		];
+		$page_slug   = 'general' === $current_tab ? 'workos' : self::USERS_PAGE;
+
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
 
 			<?php settings_errors( 'workos_messages' ); ?>
 
+			<nav class="nav-tab-wrapper">
+				<?php foreach ( $tabs as $slug => $label ) : ?>
+					<a href="<?php echo esc_url( add_query_arg( 'tab', $slug, admin_url( 'admin.php?page=workos' ) ) ); ?>"
+						class="nav-tab <?php echo $slug === $current_tab ? 'nav-tab-active' : ''; ?>">
+						<?php echo esc_html( $label ); ?>
+					</a>
+				<?php endforeach; ?>
+			</nav>
+
 			<form action="options.php" method="post">
 				<?php
 				settings_fields( self::OPTION_GROUP );
-				do_settings_sections( 'workos' );
+				do_settings_sections( $page_slug );
 				submit_button( __( 'Save Settings', 'workos' ) );
 				?>
 			</form>
 
-			<?php if ( workos()->is_enabled() ) : ?>
+			<?php if ( 'general' === $current_tab && workos()->is_enabled() ) : ?>
 				<hr>
 				<h2><?php esc_html_e( 'Status', 'workos' ); ?></h2>
 				<table class="widefat striped" style="max-width:600px">
@@ -335,22 +458,14 @@ class Settings {
 	 * @param string $type        Input type.
 	 * @param string $section     Section ID.
 	 * @param string $description Optional help text shown below the field.
+	 * @param string $page        Page slug for add_settings_field.
 	 */
-	private function add_field( string $name, string $label, string $type, string $section, string $description = '' ): void {
-		register_setting(
-			self::OPTION_GROUP,
-			$name,
-			[
-				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
+	private function add_field( string $name, string $label, string $type, string $section, string $description = '', string $page = 'workos' ): void {
 		add_settings_field(
 			$name,
 			$label,
 			[ $this, 'render_input' ],
-			'workos',
+			$page,
 			$section,
 			[
 				'name'        => $name,
@@ -438,13 +553,13 @@ class Settings {
 		$map      = \WorkOS\Sync\RoleMapper::get_role_map();
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
 
-		echo '<table class="widefat" style="max-width:500px"><thead><tr>';
+		echo '<table id="workos-role-map-table" class="widefat"><thead><tr>';
 		echo '<th>' . esc_html__( 'WorkOS Role', 'workos' ) . '</th>';
 		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
 		echo '</tr></thead><tbody>';
 
 		foreach ( $map as $workos_role => $wp_role ) {
-			echo '<tr><td>';
+			echo '<tr class="workos-role-map-row"><td>';
 			printf(
 				'<input type="text" name="workos_role_map[keys][]" value="%s" class="regular-text" />',
 				esc_attr( $workos_role )
@@ -463,8 +578,8 @@ class Settings {
 			echo '</td></tr>';
 		}
 
-		// Empty row for adding new mappings.
-		echo '<tr><td>';
+		// Empty row for no-JS fallback.
+		echo '<tr class="workos-role-map-row"><td>';
 		echo '<input type="text" name="workos_role_map[keys][]" value="" class="regular-text" placeholder="' . esc_attr__( 'New WorkOS role...', 'workos' ) . '" />';
 		echo '</td><td>';
 		echo '<select name="workos_role_map[values][]">';
@@ -476,7 +591,14 @@ class Settings {
 		echo '</td></tr>';
 
 		echo '</tbody></table>';
-		echo '<p class="description">' . esc_html__( 'Map WorkOS organization roles to WordPress roles. The "member" role is the default fallback.', 'workos' ) . '</p>';
+
+		// Add Mapping button — hidden until JS loads.
+		echo '<button type="button" id="workos-role-map-add" class="button" style="display:none">';
+		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
+		echo esc_html__( 'Add Mapping', 'workos' );
+		echo '</button>';
+
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'The "member" role is used as the default fallback.', 'workos' ) . '</p>';
 	}
 
 	/**
