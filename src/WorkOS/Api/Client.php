@@ -160,6 +160,17 @@ class Client {
 	}
 
 	/**
+	 * Create a WorkOS user.
+	 *
+	 * @param array $data User data (email required; first_name, last_name, email_verified optional).
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function create_user( array $data ) {
+		return $this->post( '/user_management/users', $data );
+	}
+
+	/**
 	 * List WorkOS users.
 	 *
 	 * @param array $params Query params (email, organization_id, limit, etc.).

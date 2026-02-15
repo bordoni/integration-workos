@@ -25,8 +25,9 @@ class UserSync {
 	 * Constructor — registers WP->WorkOS sync hooks.
 	 */
 	public function __construct() {
-		// WP -> WorkOS: push profile updates.
+		// WP -> WorkOS: push profile updates and new user creation.
 		add_action( 'profile_update', [ $this, 'push_profile_to_workos' ], 10, 3 );
+		add_action( 'user_register', [ $this, 'push_user_to_workos' ], 10, 2 );
 
 		// WorkOS -> WP: webhook handlers (dot notation matches WorkOS webhook event names).
 		add_action( 'workos_webhook_user.updated', [ $this, 'handle_user_updated' ] );
@@ -170,6 +171,50 @@ class UserSync {
 	}
 
 	/**
+	 * Push a newly created WP user to WorkOS.
+	 *
+	 * @param int   $user_id  WP user ID.
+	 * @param array $userdata Data passed to wp_insert_user().
+	 */
+	public function push_user_to_workos( int $user_id, array $userdata ): void {
+		if ( self::$syncing ) {
+			return;
+		}
+
+		if ( ! workos()->is_enabled() ) {
+			return;
+		}
+
+		$email = $userdata['user_email'] ?? '';
+		if ( empty( $email ) ) {
+			return;
+		}
+
+		$payload = [
+			'email'          => $email,
+			'email_verified' => true,
+		];
+
+		if ( ! empty( $userdata['first_name'] ) ) {
+			$payload['first_name'] = $userdata['first_name'];
+		}
+		if ( ! empty( $userdata['last_name'] ) ) {
+			$payload['last_name'] = $userdata['last_name'];
+		}
+
+		$result = workos()->api()->create_user( $payload );
+
+		if ( is_wp_error( $result ) ) {
+			workos_log( 'Failed to create user in WorkOS: ' . $result->get_error_message(), 'error' );
+			return;
+		}
+
+		if ( ! empty( $result['id'] ) ) {
+			self::link_user( $user_id, $result );
+		}
+	}
+
+	/**
 	 * Handle user.updated webhook: sync WorkOS -> WP.
 	 *
 	 * @param array $event Webhook event.
@@ -204,8 +249,12 @@ class UserSync {
 	 * @param array $event Webhook event.
 	 */
 	public function handle_user_created( array $event ): void {
+		self::$syncing = true;
+
 		$workos_user = $event['data'] ?? [];
 		self::find_or_create_wp_user( $workos_user );
+
+		self::$syncing = false;
 	}
 
 	/**
