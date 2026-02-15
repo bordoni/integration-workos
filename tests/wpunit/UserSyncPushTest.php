@@ -52,8 +52,12 @@ class UserSyncPushTest extends WPTestCase {
 		// Intercept outgoing HTTP requests to the WorkOS API.
 		add_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10, 3 );
 
-		// Create a fresh instance (registers hooks, but we call methods directly).
+		// Create a fresh instance for calling methods directly.
 		$this->sync = new UserSync();
+
+		// Remove user_register hooks so factory()->user->create() doesn't
+		// trigger automatic pushes — we call push_user_to_workos() explicitly.
+		remove_all_actions( 'user_register' );
 	}
 
 	/**
