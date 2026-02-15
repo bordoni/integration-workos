@@ -65,6 +65,7 @@ final class Plugin {
 		// Settings / Admin.
 		if ( is_admin() ) {
 			new Admin\Settings();
+			new Admin\UserList();
 		}
 
 		// Authentication.

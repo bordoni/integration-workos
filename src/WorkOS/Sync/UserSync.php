@@ -215,6 +215,63 @@ class UserSync {
 	}
 
 	/**
+	 * Sync an existing WordPress user to WorkOS.
+	 *
+	 * Creates the user in WorkOS and links the accounts.
+	 * Intended for manual sync of users that were created before the plugin was active.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 *
+	 * @return array|\WP_Error WorkOS user data on success, WP_Error on failure.
+	 */
+	public static function sync_existing_user( int $user_id ) {
+		if ( self::$syncing ) {
+			return new \WP_Error( 'workos_sync_in_progress', __( 'A sync operation is already in progress.', 'workos' ) );
+		}
+
+		if ( ! workos()->is_enabled() ) {
+			return new \WP_Error( 'workos_not_configured', __( 'WorkOS is not configured.', 'workos' ) );
+		}
+
+		$workos_id = get_user_meta( $user_id, '_workos_user_id', true );
+		if ( $workos_id ) {
+			return new \WP_Error( 'workos_already_linked', __( 'User is already linked to WorkOS.', 'workos' ) );
+		}
+
+		$user = get_user_by( 'id', $user_id );
+		if ( ! $user ) {
+			return new \WP_Error( 'workos_user_not_found', __( 'WordPress user not found.', 'workos' ) );
+		}
+
+		$payload = [
+			'email'          => $user->user_email,
+			'email_verified' => true,
+		];
+
+		if ( ! empty( $user->first_name ) ) {
+			$payload['first_name'] = $user->first_name;
+		}
+		if ( ! empty( $user->last_name ) ) {
+			$payload['last_name'] = $user->last_name;
+		}
+
+		self::$syncing = true;
+		$result        = workos()->api()->create_user( $payload );
+		self::$syncing = false;
+
+		if ( is_wp_error( $result ) ) {
+			workos_log( 'Failed to sync existing user #' . $user_id . ' to WorkOS: ' . $result->get_error_message(), 'error' );
+			return $result;
+		}
+
+		if ( ! empty( $result['id'] ) ) {
+			self::link_user( $user_id, $result );
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Handle user.updated webhook: sync WorkOS -> WP.
 	 *
 	 * @param array $event Webhook event.

@@ -15,59 +15,8 @@
  * @package WorkOS
  */
 
-namespace WorkOS;
-
 defined( 'ABSPATH' ) || exit;
 
-// Plugin constants.
-define( 'WORKOS_VERSION', '1.0.0-dev' );
-define( 'WORKOS_FILE', __FILE__ );
-define( 'WORKOS_DIR', plugin_dir_path( __FILE__ ) );
-define( 'WORKOS_URL', plugin_dir_url( __FILE__ ) );
-define( 'WORKOS_BASENAME', plugin_basename( __FILE__ ) );
+require_once __DIR__ . '/src/WorkOS/Bootstrap.php';
 
-// Minimum requirements check.
-if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
-	add_action(
-		'admin_notices',
-		static function () {
-			printf(
-				'<div class="notice notice-error"><p>%s</p></div>',
-				esc_html__( 'WorkOS requires PHP 7.4 or later.', 'workos' )
-			);
-		}
-	);
-	return;
-}
-
-// Load bootstrap (Composer autoloader).
-$workos_bootstrap = require_once WORKOS_DIR . 'src/includes/bootstrap.php';
-if ( false === $workos_bootstrap ) {
-	return;
-}
-
-// Activation / deactivation hooks.
-register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
-register_deactivation_hook( __FILE__, __NAMESPACE__ . '\\deactivate' );
-
-/**
- * Initialize the plugin on plugins_loaded.
- */
-function init(): void {
-	Plugin::instance();
-}
-add_action( 'plugins_loaded', __NAMESPACE__ . '\\init' );
-
-/**
- * Plugin activation callback.
- */
-function activate(): void {
-	Database\Schema::activate();
-}
-
-/**
- * Plugin deactivation callback.
- */
-function deactivate(): void {
-	flush_rewrite_rules();
-}
+add_action( 'plugins_loaded', WorkOS\Bootstrap::set_plugin_file( __FILE__ ) );
