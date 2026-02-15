@@ -44,14 +44,35 @@ jobs:
           repository: stellarwp/slic
           ref: main
           path: slic
+          fetch-depth: 1
 
-      - name: Set up slic env
+      - name: Start ssh-agent
+        run: |
+          mkdir -p "${HOME}/.ssh"
+          ssh-agent -a /tmp/ssh_agent.sock
+
+      - name: Export SSH_AUTH_SOCK
+        run: echo "SSH_AUTH_SOCK=/tmp/ssh_agent.sock" >> $GITHUB_ENV
+
+      - name: Set up slic env vars
+        run: |
+          echo "SLIC_WP_DIR=${GITHUB_WORKSPACE}/slic/_wordpress" >> $GITHUB_ENV
+          echo "SLIC_WORDPRESS_DOCKERFILE=Dockerfile.base" >> $GITHUB_ENV
+
+      - name: Set run context
+        run: echo "SLIC=1" >> $GITHUB_ENV && echo "CI=1" >> $GITHUB_ENV
+
+      - name: Set up slic for CI
         run: |
           cd ${GITHUB_WORKSPACE}/..
-          ${SLIC_BIN} here ${GITHUB_WORKSPACE}/..
+          ${SLIC_BIN} here
           ${SLIC_BIN} interactive off
           ${SLIC_BIN} build-prompt off
+          ${SLIC_BIN} build-subdir off
           ${SLIC_BIN} xdebug off
+          ${SLIC_BIN} debug on
+          ${SLIC_BIN} info
+          ${SLIC_BIN} config
 
       - name: Set up plugin
         run: |
@@ -71,10 +92,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Verify build
         run: echo "No JS build step configured yet."
