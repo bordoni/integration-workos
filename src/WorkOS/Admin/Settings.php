@@ -52,13 +52,30 @@ class Settings {
 			'workos_api',
 			__( 'API Credentials', 'workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Enter your WorkOS API key and Client ID from the WorkOS dashboard.', 'workos' ) . '</p>';
+				printf(
+					'<p>%s <a href="%s" target="_blank">%s</a></p>',
+					esc_html__( 'Enter your API key and Client ID from the', 'workos' ),
+					'https://dashboard.workos.com/api-keys',
+					esc_html__( 'WorkOS Dashboard &rarr; API Keys', 'workos' )
+				);
 			},
 			'workos'
 		);
 
-		$this->add_field( 'workos_api_key', __( 'API Key', 'workos' ), 'password', 'workos_api' );
-		$this->add_field( 'workos_client_id', __( 'Client ID', 'workos' ), 'text', 'workos_api' );
+		$this->add_field(
+			'workos_api_key',
+			__( 'API Key', 'workos' ),
+			'password',
+			'workos_api',
+			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "sk_".', 'workos' )
+		);
+		$this->add_field(
+			'workos_client_id',
+			__( 'Client ID', 'workos' ),
+			'text',
+			'workos_api',
+			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "client_".', 'workos' )
+		);
 
 		// --- Authentication section ---
 		add_settings_section(
@@ -123,16 +140,32 @@ class Settings {
 			__( 'Webhooks', 'workos' ),
 			function () {
 				$url = rest_url( 'workos/v1/webhook' );
+				echo '<p>' . esc_html__( 'Webhooks allow WorkOS to notify your site when users, organizations, or memberships change.', 'workos' ) . '</p>';
+				echo '<ol>';
 				printf(
-					'<p>%s <code>%s</code></p>',
-					esc_html__( 'Set this URL as your webhook endpoint in WorkOS:', 'workos' ),
+					'<li>%s <a href="%s" target="_blank">%s</a></li>',
+					esc_html__( 'Go to', 'workos' ),
+					'https://dashboard.workos.com/webhooks',
+					esc_html__( 'WorkOS Dashboard &rarr; Webhooks', 'workos' )
+				);
+				printf(
+					'<li>%s <code>%s</code></li>',
+					esc_html__( 'Create a new endpoint with this URL:', 'workos' ),
 					esc_url( $url )
 				);
+				echo '<li>' . esc_html__( 'Copy the signing secret that WorkOS generates and paste it below.', 'workos' ) . '</li>';
+				echo '</ol>';
 			},
 			'workos'
 		);
 
-		$this->add_field( 'workos_webhook_secret', __( 'Webhook Secret', 'workos' ), 'password', 'workos_webhooks' );
+		$this->add_field(
+			'workos_webhook_secret',
+			__( 'Webhook Secret', 'workos' ),
+			'password',
+			'workos_webhooks',
+			__( 'The signing secret from your WorkOS webhook endpoint. Starts with "whsec_".', 'workos' )
+		);
 
 		// --- User Provisioning section ---
 		add_settings_section(
@@ -297,12 +330,13 @@ class Settings {
 	/**
 	 * Add a simple text/password settings field.
 	 *
-	 * @param string $name    Option name.
-	 * @param string $label   Field label.
-	 * @param string $type    Input type.
-	 * @param string $section Section ID.
+	 * @param string $name        Option name.
+	 * @param string $label       Field label.
+	 * @param string $type        Input type.
+	 * @param string $section     Section ID.
+	 * @param string $description Optional help text shown below the field.
 	 */
-	private function add_field( string $name, string $label, string $type, string $section ): void {
+	private function add_field( string $name, string $label, string $type, string $section, string $description = '' ): void {
 		register_setting(
 			self::OPTION_GROUP,
 			$name,
@@ -319,8 +353,9 @@ class Settings {
 			'workos',
 			$section,
 			[
-				'name' => $name,
-				'type' => $type,
+				'name'        => $name,
+				'type'        => $type,
+				'description' => $description,
 			]
 		);
 	}
@@ -338,6 +373,10 @@ class Settings {
 			esc_attr( $args['name'] ),
 			esc_attr( $value )
 		);
+
+		if ( ! empty( $args['description'] ) ) {
+			echo '<p class="description">' . esc_html( $args['description'] ) . '</p>';
+		}
 	}
 
 	/**
