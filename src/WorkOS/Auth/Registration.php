@@ -32,12 +32,12 @@ class Registration {
 
 		$action = sanitize_text_field( wp_unslash( $_REQUEST['action'] ?? '' ) );
 
-		if ( $action !== 'register' ) {
+		if ( 'register' !== $action ) {
 			return;
 		}
 
 		$signup_url = $this->get_signup_url();
-		wp_redirect( $signup_url );
+		wp_safe_redirect( $signup_url );
 		exit;
 	}
 
@@ -64,10 +64,12 @@ class Registration {
 	private function get_signup_url(): string {
 		$state = wp_create_nonce( 'workos_auth' ) . '|' . admin_url();
 
-		return workos()->api()->get_authorization_url( [
-			'redirect_uri' => Login::get_callback_url(),
-			'state'        => $state,
-			'provider'     => 'authkit',
-		] );
+		return workos()->api()->get_authorization_url(
+			[
+				'redirect_uri' => Login::get_callback_url(),
+				'state'        => $state,
+				'provider'     => 'authkit',
+			]
+		);
 	}
 }

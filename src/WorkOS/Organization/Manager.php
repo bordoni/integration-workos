@@ -58,7 +58,7 @@ class Manager {
 	 * @param array $event Webhook event.
 	 */
 	public function handle_membership_created( array $event ): void {
-		$membership = $event['data'] ?? [];
+		$membership     = $event['data'] ?? [];
 		$workos_user_id = $membership['user_id'] ?? '';
 		$workos_org_id  = $membership['organization_id'] ?? '';
 
@@ -73,10 +73,14 @@ class Manager {
 			return;
 		}
 
-		self::add_membership( $local_org->id, $wp_user_id, [
-			'workos_membership_id' => $membership['id'] ?? '',
-			'workos_role'          => $membership['role'] ?? 'member',
-		] );
+		self::add_membership(
+			$local_org->id,
+			$wp_user_id,
+			[
+				'workos_membership_id' => $membership['id'] ?? '',
+				'workos_role'          => $membership['role'] ?? 'member',
+			]
+		);
 	}
 
 	/**
@@ -85,7 +89,7 @@ class Manager {
 	 * @param array $event Webhook event.
 	 */
 	public function handle_membership_deleted( array $event ): void {
-		$membership = $event['data'] ?? [];
+		$membership     = $event['data'] ?? [];
 		$workos_user_id = $membership['user_id'] ?? '';
 		$workos_org_id  = $membership['organization_id'] ?? '';
 
@@ -163,7 +167,7 @@ class Manager {
 			self::link_to_site( $org_id, get_current_blog_id(), true );
 		}
 
-		return $org_id ?: false;
+		return $org_id ? $org_id : false;
 	}
 
 	/**
@@ -181,7 +185,7 @@ class Manager {
 			$wpdb->prepare( "SELECT * FROM {$table} WHERE workos_org_id = %s", $workos_org_id )
 		);
 
-		return $row ?: null;
+		return $row ? $row : null;
 	}
 
 	/**
@@ -199,7 +203,7 @@ class Manager {
 			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id )
 		);
 
-		return $row ?: null;
+		return $row ? $row : null;
 	}
 
 	/**
@@ -257,11 +261,13 @@ class Manager {
 		if ( $existing ) {
 			$wpdb->update(
 				$table,
-				array_filter( [
-					'workos_membership_id' => $extra['workos_membership_id'] ?? '',
-					'workos_role'          => $extra['workos_role'] ?? 'member',
-					'wp_role'              => $extra['wp_role'] ?? '',
-				] ),
+				array_filter(
+					[
+						'workos_membership_id' => $extra['workos_membership_id'] ?? '',
+						'workos_role'          => $extra['workos_role'] ?? 'member',
+						'wp_role'              => $extra['wp_role'] ?? '',
+					]
+				),
 				[ 'id' => $existing ]
 			);
 			return;
@@ -291,10 +297,14 @@ class Manager {
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_org_memberships';
 
-		$wpdb->delete( $table, [
-			'org_id'  => $org_id,
-			'user_id' => $user_id,
-		], [ '%d', '%d' ] );
+		$wpdb->delete(
+			$table,
+			[
+				'org_id'  => $org_id,
+				'user_id' => $user_id,
+			],
+			[ '%d', '%d' ]
+		);
 	}
 
 	/**
@@ -306,8 +316,8 @@ class Manager {
 	 */
 	public static function get_user_orgs( int $user_id ): array {
 		global $wpdb;
-		$org_table  = $wpdb->prefix . 'workos_organizations';
-		$mem_table  = $wpdb->prefix . 'workos_org_memberships';
+		$org_table = $wpdb->prefix . 'workos_organizations';
+		$mem_table = $wpdb->prefix . 'workos_org_memberships';
 
 		return $wpdb->get_results(
 			$wpdb->prepare(

@@ -74,15 +74,17 @@ class Login {
 
 		// Build state with redirect_to.
 		$redirect_to = sanitize_url( wp_unslash( $_REQUEST['redirect_to'] ?? admin_url() ) );
-		$state        = wp_create_nonce( 'workos_auth' ) . '|' . $redirect_to;
+		$state       = wp_create_nonce( 'workos_auth' ) . '|' . $redirect_to;
 
-		$auth_url = workos()->api()->get_authorization_url( [
-			'redirect_uri' => self::get_callback_url(),
-			'state'        => $state,
-			'provider'     => 'authkit',
-		] );
+		$auth_url = workos()->api()->get_authorization_url(
+			[
+				'redirect_uri' => self::get_callback_url(),
+				'state'        => $state,
+				'provider'     => 'authkit',
+			]
+		);
 
-		wp_redirect( $auth_url );
+		wp_safe_redirect( $auth_url );
 		exit;
 	}
 
@@ -177,16 +179,18 @@ class Login {
 		$code = sanitize_text_field( wp_unslash( $_GET['code'] ?? '' ) );
 		if ( empty( $code ) ) {
 			// Check for error.
-			$error = sanitize_text_field( wp_unslash( $_GET['error'] ?? 'missing_code' ) );
+			$error      = sanitize_text_field( wp_unslash( $_GET['error'] ?? 'missing_code' ) );
 			$error_desc = sanitize_text_field( wp_unslash( $_GET['error_description'] ?? '' ) );
 			wp_die(
-				esc_html( sprintf(
+				esc_html(
+					sprintf(
 					/* translators: 1: error code, 2: error description */
-					__( 'WorkOS authentication error: %1$s — %2$s', 'workos' ),
-					$error,
-					$error_desc
-				) ),
-				__( 'Authentication Error', 'workos' ),
+						__( 'WorkOS authentication error: %1$s — %2$s', 'workos' ),
+						$error,
+						$error_desc
+					)
+				),
+				esc_html__( 'Authentication Error', 'workos' ),
 				[ 'response' => 403 ]
 			);
 		}
@@ -200,7 +204,7 @@ class Login {
 		if ( ! wp_verify_nonce( $nonce, 'workos_auth' ) ) {
 			wp_die(
 				esc_html__( 'Security check failed. Please try logging in again.', 'workos' ),
-				__( 'Authentication Error', 'workos' ),
+				esc_html__( 'Authentication Error', 'workos' ),
 				[ 'response' => 403 ]
 			);
 		}
@@ -211,7 +215,7 @@ class Login {
 		if ( is_wp_error( $result ) ) {
 			wp_die(
 				esc_html( $result->get_error_message() ),
-				__( 'Authentication Error', 'workos' ),
+				esc_html__( 'Authentication Error', 'workos' ),
 				[ 'response' => 403 ]
 			);
 		}
@@ -222,7 +226,7 @@ class Login {
 		if ( is_wp_error( $wp_user ) ) {
 			wp_die(
 				esc_html( $wp_user->get_error_message() ),
-				__( 'Authentication Error', 'workos' ),
+				esc_html__( 'Authentication Error', 'workos' ),
 				[ 'response' => 500 ]
 			);
 		}
@@ -312,7 +316,7 @@ class Login {
 			return $redirect_to;
 		}
 
-		return $requested_redirect_to ?: admin_url();
+		return $requested_redirect_to ? $requested_redirect_to : admin_url();
 	}
 
 	/**

@@ -25,11 +25,15 @@ class Receiver {
 	 * Register the webhook endpoint.
 	 */
 	public function register_route(): void {
-		register_rest_route( 'workos/v1', '/webhook', [
-			'methods'             => 'POST',
-			'callback'            => [ $this, 'handle' ],
-			'permission_callback' => '__return_true',
-		] );
+		register_rest_route(
+			'workos/v1',
+			'/webhook',
+			[
+				'methods'             => 'POST',
+				'callback'            => [ $this, 'handle' ],
+				'permission_callback' => '__return_true',
+			]
+		);
 	}
 
 	/**

@@ -33,7 +33,7 @@ class PasswordReset {
 
 		$action = sanitize_text_field( wp_unslash( $_REQUEST['action'] ?? '' ) );
 
-		if ( $action !== 'lostpassword' ) {
+		if ( 'lostpassword' !== $action ) {
 			return;
 		}
 
@@ -50,7 +50,7 @@ class PasswordReset {
 
 		// No fallback: redirect to AuthKit.
 		$reset_url = $this->get_reset_url();
-		wp_redirect( $reset_url );
+		wp_safe_redirect( $reset_url );
 		exit;
 	}
 
@@ -62,7 +62,7 @@ class PasswordReset {
 	 *
 	 * @return string
 	 */
-	public function filter_lostpassword_url( string $url, string $redirect ): string {
+	public function filter_lostpassword_url( string $url, string $redirect ): string { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		if ( ! workos()->is_enabled() ) {
 			return $url;
 		}
@@ -109,10 +109,12 @@ class PasswordReset {
 	private function get_reset_url(): string {
 		$state = wp_create_nonce( 'workos_auth' ) . '|' . wp_login_url();
 
-		return workos()->api()->get_authorization_url( [
-			'redirect_uri' => Login::get_callback_url(),
-			'state'        => $state,
-			'provider'     => 'authkit',
-		] );
+		return workos()->api()->get_authorization_url(
+			[
+				'redirect_uri' => Login::get_callback_url(),
+				'state'        => $state,
+				'provider'     => 'authkit',
+			]
+		);
 	}
 }

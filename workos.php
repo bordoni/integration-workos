@@ -28,12 +28,15 @@ define( 'WORKOS_BASENAME', plugin_basename( __FILE__ ) );
 
 // Minimum requirements check.
 if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
-	add_action( 'admin_notices', static function () {
-		printf(
-			'<div class="notice notice-error"><p>%s</p></div>',
-			esc_html__( 'WorkOS requires PHP 7.4 or later.', 'workos' )
-		);
-	} );
+	add_action(
+		'admin_notices',
+		static function () {
+			printf(
+				'<div class="notice notice-error"><p>%s</p></div>',
+				esc_html__( 'WorkOS requires PHP 7.4 or later.', 'workos' )
+			);
+		}
+	);
 	return;
 }
 

@@ -125,12 +125,12 @@ final class Plugin {
 	/**
 	 * Get a plugin option with a default.
 	 *
-	 * @param string $key     Option key (without workos_ prefix).
-	 * @param mixed  $default Default value.
+	 * @param string $key           Option key (without workos_ prefix).
+	 * @param mixed  $default_value Default value.
 	 *
 	 * @return mixed
 	 */
-	public function option( string $key, $default = '' ) {
-		return get_option( "workos_{$key}", $default );
+	public function option( string $key, $default_value = '' ) {
+		return get_option( "workos_{$key}", $default_value );
 	}
 }

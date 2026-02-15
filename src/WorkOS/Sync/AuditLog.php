@@ -44,13 +44,18 @@ class AuditLog {
 	 * @param \WP_User $user       User object.
 	 */
 	public function log_login( string $user_login, \WP_User $user ): void {
-		$this->create_event( 'user.logged_in', $user->ID, [
-			'type' => 'session',
-			'id'   => 'login',
-			'name' => 'User Login',
-		], [
-			'ip_address' => $this->get_client_ip(),
-		] );
+		$this->create_event(
+			'user.logged_in',
+			$user->ID,
+			[
+				'type' => 'session',
+				'id'   => 'login',
+				'name' => 'User Login',
+			],
+			[
+				'ip_address' => $this->get_client_ip(),
+			]
+		);
 	}
 
 	/**
@@ -62,11 +67,15 @@ class AuditLog {
 			return;
 		}
 
-		$this->create_event( 'user.logged_out', $user_id, [
-			'type' => 'session',
-			'id'   => 'logout',
-			'name' => 'User Logout',
-		] );
+		$this->create_event(
+			'user.logged_out',
+			$user_id,
+			[
+				'type' => 'session',
+				'id'   => 'logout',
+				'name' => 'User Logout',
+			]
+		);
 	}
 
 	/**
@@ -76,18 +85,26 @@ class AuditLog {
 	 */
 	public function log_login_failed( string $username ): void {
 		// We don't have a user ID, so we need to find one.
-		$user = get_user_by( 'login', $username ) ?: get_user_by( 'email', $username );
+		$user = get_user_by( 'login', $username );
+		if ( ! $user ) {
+			$user = get_user_by( 'email', $username );
+		}
 		if ( ! $user ) {
 			return;
 		}
 
-		$this->create_event( 'user.login_failed', $user->ID, [
-			'type' => 'session',
-			'id'   => 'login_failed',
-			'name' => 'Failed Login Attempt',
-		], [
-			'ip_address' => $this->get_client_ip(),
-		] );
+		$this->create_event(
+			'user.login_failed',
+			$user->ID,
+			[
+				'type' => 'session',
+				'id'   => 'login_failed',
+				'name' => 'Failed Login Attempt',
+			],
+			[
+				'ip_address' => $this->get_client_ip(),
+			]
+		);
 	}
 
 	/**
@@ -115,13 +132,18 @@ class AuditLog {
 
 		$action = $update ? 'post.updated' : 'post.created';
 
-		$this->create_event( $action, $user_id, [
-			'type' => 'post',
-			'id'   => (string) $post_id,
-			'name' => $post->post_title,
-		], [
-			'post_type' => $post->post_type,
-		] );
+		$this->create_event(
+			$action,
+			$user_id,
+			[
+				'type' => 'post',
+				'id'   => (string) $post_id,
+				'name' => $post->post_title,
+			],
+			[
+				'post_type' => $post->post_type,
+			]
+		);
 	}
 
 	/**
@@ -140,13 +162,18 @@ class AuditLog {
 			return;
 		}
 
-		$this->create_event( 'post.deleted', $user_id, [
-			'type' => 'post',
-			'id'   => (string) $post_id,
-			'name' => $post->post_title,
-		], [
-			'post_type' => $post->post_type,
-		] );
+		$this->create_event(
+			'post.deleted',
+			$user_id,
+			[
+				'type' => 'post',
+				'id'   => (string) $post_id,
+				'name' => $post->post_title,
+			],
+			[
+				'post_type' => $post->post_type,
+			]
+		);
 	}
 
 	/**
@@ -165,11 +192,15 @@ class AuditLog {
 			return;
 		}
 
-		$this->create_event( 'user.created', $actor_id, [
-			'type' => 'user',
-			'id'   => (string) $user_id,
-			'name' => $user->display_name,
-		] );
+		$this->create_event(
+			'user.created',
+			$actor_id,
+			[
+				'type' => 'user',
+				'id'   => (string) $user_id,
+				'name' => $user->display_name,
+			]
+		);
 	}
 
 	/**
@@ -186,11 +217,15 @@ class AuditLog {
 		$user = get_user_by( 'id', $user_id );
 		$name = $user ? $user->display_name : "User #{$user_id}";
 
-		$this->create_event( 'user.deleted', $actor_id, [
-			'type' => 'user',
-			'id'   => (string) $user_id,
-			'name' => $name,
-		] );
+		$this->create_event(
+			'user.deleted',
+			$actor_id,
+			[
+				'type' => 'user',
+				'id'   => (string) $user_id,
+				'name' => $name,
+			]
+		);
 	}
 
 	/**
@@ -211,14 +246,19 @@ class AuditLog {
 			return;
 		}
 
-		$this->create_event( 'user.role_changed', $actor_id, [
-			'type' => 'user',
-			'id'   => (string) $user_id,
-			'name' => $user->display_name,
-		], [
-			'old_roles' => implode( ', ', $old_roles ),
-			'new_role'  => $role,
-		] );
+		$this->create_event(
+			'user.role_changed',
+			$actor_id,
+			[
+				'type' => 'user',
+				'id'   => (string) $user_id,
+				'name' => $user->display_name,
+			],
+			[
+				'old_roles' => implode( ', ', $old_roles ),
+				'new_role'  => $role,
+			]
+		);
 	}
 
 	/**
@@ -241,16 +281,16 @@ class AuditLog {
 		}
 
 		$event = [
-			'action' => [
+			'action'      => [
 				'type' => $action,
 				'name' => ucwords( str_replace( [ '.', '_' ], ' ', $action ) ),
 			],
-			'actor' => [
+			'actor'       => [
 				'type' => 'user',
 				'id'   => $workos_id,
 			],
-			'targets' => [ $target ],
-			'context' => [
+			'targets'     => [ $target ],
+			'context'     => [
 				'location' => $this->get_client_ip(),
 			],
 			'occurred_at' => gmdate( 'c' ),
@@ -280,7 +320,8 @@ class AuditLog {
 	 * @return string
 	 */
 	private function get_client_ip(): string {
-		$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0' ) );
-		return filter_var( $ip, FILTER_VALIDATE_IP ) ?: '0.0.0.0';
+		$ip           = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0' ) );
+		$validated_ip = filter_var( $ip, FILTER_VALIDATE_IP );
+		return $validated_ip ? $validated_ip : '0.0.0.0';
 	}
 }

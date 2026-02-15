@@ -28,7 +28,7 @@ class UserSync {
 		// WP -> WorkOS: push profile updates.
 		add_action( 'profile_update', [ $this, 'push_profile_to_workos' ], 10, 3 );
 
-		// WorkOS -> WP: webhook handlers (registered via Webhook\Receiver routing).
+		// WorkOS -> WP: webhook handlers (dot notation matches WorkOS webhook event names).
 		add_action( 'workos_webhook_user.updated', [ $this, 'handle_user_updated' ] );
 		add_action( 'workos_webhook_user.created', [ $this, 'handle_user_created' ] );
 		add_action( 'workos_webhook_user.deleted', [ $this, 'handle_user_deleted' ] );
@@ -80,15 +80,17 @@ class UserSync {
 
 		// 3. Create new WP user.
 		$username = self::generate_username( $workos_user );
-		$user_id  = wp_insert_user( [
-			'user_login'   => $username,
-			'user_email'   => $email,
-			'user_pass'    => wp_generate_password( 64, true, true ),
-			'first_name'   => $workos_user['first_name'] ?? '',
-			'last_name'    => $workos_user['last_name'] ?? '',
-			'display_name' => self::build_display_name( $workos_user ),
-			'role'         => get_option( 'default_role', 'subscriber' ),
-		] );
+		$user_id  = wp_insert_user(
+			[
+				'user_login'   => $username,
+				'user_email'   => $email,
+				'user_pass'    => wp_generate_password( 64, true, true ),
+				'first_name'   => $workos_user['first_name'] ?? '',
+				'last_name'    => $workos_user['last_name'] ?? '',
+				'display_name' => self::build_display_name( $workos_user ),
+				'role'         => get_option( 'default_role', 'subscriber' ),
+			]
+		);
 
 		if ( is_wp_error( $user_id ) ) {
 			return $user_id;
@@ -272,7 +274,7 @@ class UserSync {
 		switch ( $action ) {
 			case 'delete':
 				$reassign = (int) get_option( 'workos_reassign_user', 0 );
-				wp_delete_user( $wp_user_id, $reassign ?: null );
+				wp_delete_user( $wp_user_id, $reassign ? $reassign : null );
 				break;
 
 			case 'demote':
@@ -298,12 +300,14 @@ class UserSync {
 	 * @return int|null WP user ID or null.
 	 */
 	public static function get_wp_user_id_by_workos_id( string $workos_id ): ?int {
-		$users = get_users( [
-			'meta_key'   => '_workos_user_id',
-			'meta_value' => $workos_id,
-			'number'     => 1,
-			'fields'     => 'ID',
-		] );
+		$users = get_users(
+			[
+				'meta_key'   => '_workos_user_id',
+				'meta_value' => $workos_id,
+				'number'     => 1,
+				'fields'     => 'ID',
+			]
+		);
 
 		return ! empty( $users ) ? (int) $users[0] : null;
 	}
@@ -328,7 +332,7 @@ class UserSync {
 
 		while ( username_exists( $username ) ) {
 			$username = $base . '_' . $counter;
-			$counter++;
+			++$counter;
 		}
 
 		return $username;
@@ -342,12 +346,15 @@ class UserSync {
 	 * @return string
 	 */
 	private static function build_display_name( array $workos_user ): string {
-		$parts = array_filter( [
-			$workos_user['first_name'] ?? '',
-			$workos_user['last_name'] ?? '',
-		] );
+		$parts = array_filter(
+			[
+				$workos_user['first_name'] ?? '',
+				$workos_user['last_name'] ?? '',
+			]
+		);
 
-		return implode( ' ', $parts ) ?: ( $workos_user['email'] ?? '' );
+		$full_name = implode( ' ', $parts );
+		return $full_name ? $full_name : ( $workos_user['email'] ?? '' );
 	}
 
 	/**

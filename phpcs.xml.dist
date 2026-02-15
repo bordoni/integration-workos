@@ -16,6 +16,67 @@
 	<rule ref="WordPress">
 		<!-- Allow short array syntax -->
 		<exclude name="Universal.Arrays.DisallowShortArraySyntax" />
+
+		<!-- PSR-4 autoloading requires PascalCase filenames, not class- prefixed -->
+		<exclude name="WordPress.Files.FileName.NotHyphenatedLowercase" />
+		<exclude name="WordPress.Files.FileName.InvalidClassFileName" />
+	</rule>
+
+	<!-- Direct DB queries are required for custom tables (not using WP post/meta API) -->
+	<rule ref="WordPress.DB.DirectDatabaseQuery">
+		<exclude name="WordPress.DB.DirectDatabaseQuery.DirectQuery" />
+		<exclude name="WordPress.DB.DirectDatabaseQuery.NoCaching" />
+	</rule>
+
+	<!--
+		Table name interpolation in $wpdb->prepare() is safe when the table name
+		comes from $wpdb->prefix (not user input).
+	-->
+	<rule ref="WordPress.DB.PreparedSQL.InterpolatedNotPrepared">
+		<exclude-pattern>*/Organization/Manager.php</exclude-pattern>
+	</rule>
+
+	<!-- meta_key/meta_value queries are intentional for user lookups by WorkOS ID -->
+	<rule ref="WordPress.DB.SlowDBQuery.slow_db_query_meta_key">
+		<severity>0</severity>
+	</rule>
+	<rule ref="WordPress.DB.SlowDBQuery.slow_db_query_meta_value">
+		<severity>0</severity>
+	</rule>
+
+	<!-- base64 is required for JWT/JWK/PKCE cryptographic operations, not obfuscation -->
+	<rule ref="WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode">
+		<exclude-pattern>*/Api/Client.php</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode">
+		<exclude-pattern>*/Api/Client.php</exclude-pattern>
+	</rule>
+
+	<!-- OAuth callbacks do not use WordPress nonces; they use WorkOS state tokens -->
+	<rule ref="WordPress.Security.NonceVerification.Recommended">
+		<exclude-pattern>*/Auth/*.php</exclude-pattern>
+	</rule>
+
+	<!-- wp_login is a core WP hook name we must fire to maintain compatibility -->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound">
+		<exclude-pattern>*/Auth/Login.php</exclude-pattern>
+	</rule>
+
+	<!--
+		Webhook hook names use dot notation to mirror WorkOS event types
+		(e.g. workos_webhook_user.updated). This is intentional and required
+		for the dynamic routing in Webhook/Receiver.php.
+	-->
+	<rule ref="WordPress.NamingConventions.ValidHookName.UseUnderscores">
+		<exclude-pattern>*/Webhook/Receiver.php</exclude-pattern>
+		<exclude-pattern>*/Sync/UserSync.php</exclude-pattern>
+		<exclude-pattern>*/Sync/DirectorySync.php</exclude-pattern>
+		<exclude-pattern>*/Organization/Manager.php</exclude-pattern>
+	</rule>
+
+	<!-- error_log in Webhook/Receiver is guarded by WP_DEBUG -->
+	<rule ref="WordPress.PHP.DevelopmentFunctions.error_log_error_log">
+		<exclude-pattern>*/Webhook/Receiver.php</exclude-pattern>
 	</rule>
 
 	<!-- Check for PHP cross-version compatibility -->

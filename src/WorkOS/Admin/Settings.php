@@ -70,11 +70,15 @@ class Settings {
 			'workos'
 		);
 
-		register_setting( self::OPTION_GROUP, 'workos_login_mode', [
-			'type'              => 'string',
-			'default'           => 'redirect',
-			'sanitize_callback' => 'sanitize_text_field',
-		] );
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_login_mode',
+			[
+				'type'              => 'string',
+				'default'           => 'redirect',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
 
 		add_settings_field(
 			'workos_login_mode',
@@ -91,11 +95,15 @@ class Settings {
 			]
 		);
 
-		register_setting( self::OPTION_GROUP, 'workos_allow_password_fallback', [
-			'type'              => 'boolean',
-			'default'           => true,
-			'sanitize_callback' => 'rest_sanitize_boolean',
-		] );
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_allow_password_fallback',
+			[
+				'type'              => 'boolean',
+				'default'           => true,
+				'sanitize_callback' => 'rest_sanitize_boolean',
+			]
+		);
 
 		add_settings_field(
 			'workos_allow_password_fallback',
@@ -136,11 +144,15 @@ class Settings {
 			'workos'
 		);
 
-		register_setting( self::OPTION_GROUP, 'workos_deprovision_action', [
-			'type'              => 'string',
-			'default'           => 'deactivate',
-			'sanitize_callback' => 'sanitize_text_field',
-		] );
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_deprovision_action',
+			[
+				'type'              => 'string',
+				'default'           => 'deactivate',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
 
 		add_settings_field(
 			'workos_deprovision_action',
@@ -158,11 +170,15 @@ class Settings {
 			]
 		);
 
-		register_setting( self::OPTION_GROUP, 'workos_reassign_user', [
-			'type'              => 'integer',
-			'default'           => 0,
-			'sanitize_callback' => 'absint',
-		] );
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_reassign_user',
+			[
+				'type'              => 'integer',
+				'default'           => 0,
+				'sanitize_callback' => 'absint',
+			]
+		);
 
 		add_settings_field(
 			'workos_reassign_user',
@@ -183,11 +199,15 @@ class Settings {
 			'workos'
 		);
 
-		register_setting( self::OPTION_GROUP, 'workos_role_map', [
-			'type'              => 'array',
-			'default'           => [],
-			'sanitize_callback' => [ $this, 'sanitize_role_map' ],
-		] );
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_role_map',
+			[
+				'type'              => 'array',
+				'default'           => [],
+				'sanitize_callback' => [ $this, 'sanitize_role_map' ],
+			]
+		);
 
 		add_settings_field(
 			'workos_role_map',
@@ -207,11 +227,15 @@ class Settings {
 			'workos'
 		);
 
-		register_setting( self::OPTION_GROUP, 'workos_audit_logging_enabled', [
-			'type'              => 'boolean',
-			'default'           => false,
-			'sanitize_callback' => 'rest_sanitize_boolean',
-		] );
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_audit_logging_enabled',
+			[
+				'type'              => 'boolean',
+				'default'           => false,
+				'sanitize_callback' => 'rest_sanitize_boolean',
+			]
+		);
 
 		add_settings_field(
 			'workos_audit_logging_enabled',
@@ -279,10 +303,14 @@ class Settings {
 	 * @param string $section Section ID.
 	 */
 	private function add_field( string $name, string $label, string $type, string $section ): void {
-		register_setting( self::OPTION_GROUP, $name, [
-			'type'              => 'string',
-			'sanitize_callback' => 'sanitize_text_field',
-		] );
+		register_setting(
+			self::OPTION_GROUP,
+			$name,
+			[
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
 
 		add_settings_field(
 			$name,
@@ -290,7 +318,10 @@ class Settings {
 			[ $this, 'render_input' ],
 			'workos',
 			$section,
-			[ 'name' => $name, 'type' => $type ]
+			[
+				'name' => $name,
+				'type' => $type,
+			]
 		);
 	}
 
@@ -350,12 +381,14 @@ class Settings {
 	 */
 	public function render_user_select( array $args ): void {
 		$value = (int) get_option( $args['name'], 0 );
-		wp_dropdown_users( [
-			'name'             => $args['name'],
-			'selected'         => $value,
-			'show_option_none' => __( '— Select User —', 'workos' ),
-			'role__in'         => [ 'administrator', 'editor' ],
-		] );
+		wp_dropdown_users(
+			[
+				'name'             => $args['name'],
+				'selected'         => $value,
+				'show_option_none' => __( '— Select User —', 'workos' ),
+				'role__in'         => [ 'administrator', 'editor' ],
+			]
+		);
 		echo '<p class="description">' . esc_html__( 'Content from deleted users will be reassigned to this user.', 'workos' ) . '</p>';
 	}
 

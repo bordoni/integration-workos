@@ -10,7 +10,7 @@
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 // Remove options.
-$options = [
+$workos_options = [
 	'workos_api_key',
 	'workos_client_id',
 	'workos_login_mode',
@@ -23,14 +23,14 @@ $options = [
 	'workos_db_version',
 ];
 
-foreach ( $options as $option ) {
-	delete_option( $option );
+foreach ( $workos_options as $workos_option ) {
+	delete_option( $workos_option );
 }
 
 // Remove user meta.
 global $wpdb;
 
-$meta_keys = [
+$workos_meta_keys = [
 	'_workos_user_id',
 	'_workos_org_id',
 	'_workos_last_synced_at',
@@ -40,8 +40,8 @@ $meta_keys = [
 	'_workos_deactivated',
 ];
 
-foreach ( $meta_keys as $key ) {
-	$wpdb->delete( $wpdb->usermeta, [ 'meta_key' => $key ], [ '%s' ] );
+foreach ( $workos_meta_keys as $workos_key ) {
+	$wpdb->delete( $wpdb->usermeta, [ 'meta_key' => $workos_key ], [ '%s' ] ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
 }
 
 // Drop custom tables.

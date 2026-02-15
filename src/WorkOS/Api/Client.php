@@ -63,25 +63,29 @@ class Client {
 	 * Build the AuthKit authorization URL.
 	 *
 	 * @param array $args {
-	 *     @type string $redirect_uri  Callback URL.
-	 *     @type string $state         CSRF token.
-	 *     @type string $provider      e.g. 'authkit'.
-	 *     @type string $connection_id Specific SSO connection.
+	 *     Authorization URL parameters.
+	 *
+	 *     @type string $redirect_uri    Callback URL.
+	 *     @type string $state           CSRF token.
+	 *     @type string $provider        Provider, e.g. 'authkit'.
+	 *     @type string $connection_id   Specific SSO connection.
 	 *     @type string $organization_id Target organization.
 	 * }
 	 *
 	 * @return string Authorization URL.
 	 */
 	public function get_authorization_url( array $args = [] ): string {
-		$params = array_filter( [
-			'client_id'       => $this->client_id,
-			'redirect_uri'    => $args['redirect_uri'] ?? '',
-			'response_type'   => 'code',
-			'state'           => $args['state'] ?? '',
-			'provider'        => $args['provider'] ?? 'authkit',
-			'connection_id'   => $args['connection_id'] ?? '',
-			'organization_id' => $args['organization_id'] ?? '',
-		] );
+		$params = array_filter(
+			[
+				'client_id'       => $this->client_id,
+				'redirect_uri'    => $args['redirect_uri'] ?? '',
+				'response_type'   => 'code',
+				'state'           => $args['state'] ?? '',
+				'provider'        => $args['provider'] ?? 'authkit',
+				'connection_id'   => $args['connection_id'] ?? '',
+				'organization_id' => $args['organization_id'] ?? '',
+			]
+		);
 
 		return 'https://api.workos.com/user_management/authorize?' . http_build_query( $params );
 	}
@@ -95,13 +99,16 @@ class Client {
 	 * @return array|\WP_Error User data and tokens, or error.
 	 */
 	public function authenticate_with_code( string $code, string $redirect_uri ) {
-		return $this->post( '/user_management/authenticate', [
-			'code'         => $code,
-			'client_id'    => $this->client_id,
-			'client_secret' => $this->api_key,
-			'grant_type'   => 'authorization_code',
-			'redirect_uri' => $redirect_uri,
-		] );
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'code'          => $code,
+				'client_id'     => $this->client_id,
+				'client_secret' => $this->api_key,
+				'grant_type'    => 'authorization_code',
+				'redirect_uri'  => $redirect_uri,
+			]
+		);
 	}
 
 	/**
@@ -113,13 +120,16 @@ class Client {
 	 * @return array|\WP_Error User data and tokens, or error.
 	 */
 	public function authenticate_with_password( string $email, string $password ) {
-		return $this->post( '/user_management/authenticate', [
-			'email'         => $email,
-			'password'      => $password,
-			'client_id'     => $this->client_id,
-			'client_secret' => $this->api_key,
-			'grant_type'    => 'password',
-		] );
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'email'         => $email,
+				'password'      => $password,
+				'client_id'     => $this->client_id,
+				'client_secret' => $this->api_key,
+				'grant_type'    => 'password',
+			]
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -214,9 +224,15 @@ class Client {
 	 * @return array|\WP_Error
 	 */
 	public function create_audit_event( string $org_id, array $event ) {
-		return $this->post( "/audit_logs/events", array_merge( $event, [
-			'organization_id' => $org_id,
-		] ) );
+		return $this->post(
+			'/audit_logs/events',
+			array_merge(
+				$event,
+				[
+					'organization_id' => $org_id,
+				]
+			)
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -241,7 +257,7 @@ class Client {
 	): bool {
 		$parts = [];
 		foreach ( explode( ',', $signature ) as $part ) {
-			[ $key, $value ] = explode( '=', $part, 2 );
+			[ $key, $value ]       = explode( '=', $part, 2 );
 			$parts[ trim( $key ) ] = trim( $value );
 		}
 
@@ -272,7 +288,7 @@ class Client {
 	 */
 	public function verify_access_token( string $token ) {
 		$parts = explode( '.', $token );
-		if ( count( $parts ) !== 3 ) {
+		if ( 3 !== count( $parts ) ) {
 			return new \WP_Error( 'workos_invalid_token', __( 'Invalid token format.', 'workos' ) );
 		}
 
@@ -298,7 +314,7 @@ class Client {
 		}
 
 		$valid = openssl_verify( $signing_input, $signature, $public_key, OPENSSL_ALGO_SHA256 );
-		if ( $valid !== 1 ) {
+		if ( 1 !== $valid ) {
 			return new \WP_Error( 'workos_invalid_token', __( 'Token signature verification failed.', 'workos' ) );
 		}
 
@@ -361,7 +377,7 @@ class Client {
 	 * @return string|\WP_Error PEM-encoded public key.
 	 */
 	private static function jwk_to_pem( array $jwk ) {
-		if ( ( $jwk['kty'] ?? '' ) !== 'RSA' ) {
+		if ( 'RSA' !== ( $jwk['kty'] ?? '' ) ) {
 			return new \WP_Error( 'workos_unsupported_key', __( 'Only RSA keys are supported.', 'workos' ) );
 		}
 
@@ -404,10 +420,13 @@ class Client {
 			$url .= '?' . http_build_query( $params );
 		}
 
-		$response = wp_remote_get( $url, [
-			'headers' => $this->headers(),
-			'timeout' => 15,
-		] );
+		$response = wp_remote_get(
+			$url,
+			[
+				'headers' => $this->headers(),
+				'timeout' => 15,
+			]
+		);
 
 		return $this->parse_response( $response );
 	}
@@ -421,11 +440,14 @@ class Client {
 	 * @return array|\WP_Error
 	 */
 	private function post( string $path, array $data = [] ) {
-		$response = wp_remote_post( self::BASE_URL . $path, [
-			'headers' => $this->headers( true ),
-			'body'    => wp_json_encode( $data ),
-			'timeout' => 15,
-		] );
+		$response = wp_remote_post(
+			self::BASE_URL . $path,
+			[
+				'headers' => $this->headers( true ),
+				'body'    => wp_json_encode( $data ),
+				'timeout' => 15,
+			]
+		);
 
 		return $this->parse_response( $response );
 	}
@@ -439,12 +461,15 @@ class Client {
 	 * @return array|\WP_Error
 	 */
 	private function put( string $path, array $data = [] ) {
-		$response = wp_remote_request( self::BASE_URL . $path, [
-			'method'  => 'PUT',
-			'headers' => $this->headers( true ),
-			'body'    => wp_json_encode( $data ),
-			'timeout' => 15,
-		] );
+		$response = wp_remote_request(
+			self::BASE_URL . $path,
+			[
+				'method'  => 'PUT',
+				'headers' => $this->headers( true ),
+				'body'    => wp_json_encode( $data ),
+				'timeout' => 15,
+			]
+		);
 
 		return $this->parse_response( $response );
 	}
@@ -489,7 +514,10 @@ class Client {
 			return new \WP_Error(
 				'workos_api_error',
 				$message,
-				[ 'status' => $code, 'body' => $body ]
+				[
+					'status' => $code,
+					'body'   => $body,
+				]
 			);
 		}
 

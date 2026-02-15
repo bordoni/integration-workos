@@ -67,7 +67,7 @@ class TokenAuth {
 
 		$wp_user_id = \WorkOS\Sync\UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
 
-		return $wp_user_id ?: $user_id;
+		return $wp_user_id ? $wp_user_id : $user_id;
 	}
 
 	/**
@@ -129,7 +129,7 @@ class TokenAuth {
 		$rest_prefix = rest_get_url_prefix();
 		$request_uri = sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) );
 
-		return strpos( $request_uri, "/{$rest_prefix}/" ) !== false;
+		return false !== strpos( $request_uri, "/{$rest_prefix}/" );
 	}
 
 	/**
