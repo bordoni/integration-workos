@@ -1,0 +1,34 @@
+{
+	"build": [
+		"composer install --no-dev --optimize-autoloader"
+	],
+	"build_dev": [
+		"composer install"
+	],
+	"checks": {
+		"version_conflict": {
+			"fail_method": "error"
+		}
+	},
+	"paths": {
+		"changelog": "CHANGELOG.md",
+		"css": [],
+		"js": [],
+		"sync_files": [],
+		"versions": [
+			{
+				"file": "workos.php",
+				"regex": "(Version:\\s+).*"
+			},
+			{
+				"file": "workos.php",
+				"regex": "(define\\( 'WORKOS_VERSION', ').*?(')"
+			},
+			{
+				"file": "readme.txt",
+				"regex": "(Stable tag:\\s+).*"
+			}
+		]
+	},
+	"zip_name": "workos-identity"
+}

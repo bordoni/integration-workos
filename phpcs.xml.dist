@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<ruleset name="WorkOS Identity">
+	<description>Coding standards for the WorkOS Identity plugin.</description>
+
+	<!-- Scan these files -->
+	<file>./src</file>
+	<file>./workos.php</file>
+	<file>./uninstall.php</file>
+
+	<!-- Exclude vendor and node_modules -->
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+	<exclude-pattern>*/tests/*</exclude-pattern>
+
+	<!-- Use WordPress Coding Standards -->
+	<rule ref="WordPress">
+		<!-- Allow short array syntax -->
+		<exclude name="Universal.Arrays.DisallowShortArraySyntax" />
+	</rule>
+
+	<!-- Check for PHP cross-version compatibility -->
+	<config name="testVersion" value="7.4-" />
+	<rule ref="PHPCompatibilityWP" />
+
+	<!-- WordPress minimum versions -->
+	<config name="minimum_wp_version" value="5.9" />
+
+	<!-- Text domain -->
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="workos" />
+			</property>
+		</properties>
+	</rule>
+
+	<!-- Prefixes -->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="workos" />
+				<element value="WorkOS" />
+			</property>
+		</properties>
+	</rule>
+</ruleset>

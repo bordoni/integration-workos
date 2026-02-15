@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: WorkOS Identity
- * Plugin URI:  https://workos.com
+ * Plugin URI:  https://software.liquidweb.com
  * Description: Enterprise identity management for WordPress powered by WorkOS. SSO, directory sync, MFA, and user management.
  * Version:     1.0.0-dev
- * Author:      WorkOS
- * Author URI:  https://workos.com
+ * Author:      LiquidWeb Software
+ * Author URI:  https://software.liquidweb.com
  * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: workos
@@ -14,6 +14,8 @@
  *
  * @package WorkOS
  */
+
+namespace WorkOS;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -35,32 +37,34 @@ if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
 	return;
 }
 
-// Autoloader.
-spl_autoload_register( static function ( string $class ) {
-	$prefix = 'WorkOS\\';
-	if ( strpos( $class, $prefix ) !== 0 ) {
-		return;
-	}
-
-	$relative = substr( $class, strlen( $prefix ) );
-	$file     = WORKOS_DIR . 'src/' . str_replace( '\\', '/', $relative ) . '.php';
-
-	if ( file_exists( $file ) ) {
-		require_once $file;
-	}
-} );
-
-// Boot the plugin.
-require_once WORKOS_DIR . 'src/Plugin.php';
-
-/**
- * Get the plugin singleton instance.
- *
- * @return \WorkOS\Plugin
- */
-function workos(): \WorkOS\Plugin {
-	return \WorkOS\Plugin::instance();
+// Load bootstrap (Composer autoloader).
+$workos_bootstrap = require_once WORKOS_DIR . 'src/includes/bootstrap.php';
+if ( false === $workos_bootstrap ) {
+	return;
 }
 
-// Initialize.
-workos();
+// Activation / deactivation hooks.
+register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
+register_deactivation_hook( __FILE__, __NAMESPACE__ . '\\deactivate' );
+
+/**
+ * Initialize the plugin on plugins_loaded.
+ */
+function init(): void {
+	Plugin::instance();
+}
+add_action( 'plugins_loaded', __NAMESPACE__ . '\\init' );
+
+/**
+ * Plugin activation callback.
+ */
+function activate(): void {
+	Database\Schema::activate();
+}
+
+/**
+ * Plugin deactivation callback.
+ */
+function deactivate(): void {
+	flush_rewrite_rules();
+}

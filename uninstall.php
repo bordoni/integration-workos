@@ -45,7 +45,7 @@ foreach ( $meta_keys as $key ) {
 }
 
 // Drop custom tables.
-require_once plugin_dir_path( __FILE__ ) . 'src/Database/Schema.php';
+require_once plugin_dir_path( __FILE__ ) . 'src/WorkOS/Database/Schema.php';
 \WorkOS\Database\Schema::drop_tables();
 
 // Clear transients.

@@ -41,21 +41,24 @@ final class Plugin {
 	}
 
 	/**
-	 * Constructor — hooks everything.
+	 * Constructor — initializes hooks and components.
 	 */
 	private function __construct() {
-		// Activation / deactivation.
-		register_activation_hook( WORKOS_FILE, [ Database\Schema::class, 'activate' ] );
-		register_deactivation_hook( WORKOS_FILE, [ $this, 'deactivate' ] );
-
-		// Core subsystems.
-		add_action( 'plugins_loaded', [ $this, 'boot' ] );
+		$this->init_hooks();
+		$this->init_components();
 	}
 
 	/**
-	 * Boot all subsystems after plugins_loaded.
+	 * Register core WordPress hooks.
 	 */
-	public function boot(): void {
+	private function init_hooks(): void {
+		add_action( 'init', [ $this, 'load_textdomain' ] );
+	}
+
+	/**
+	 * Boot all subsystems.
+	 */
+	private function init_components(): void {
 		// Ensure schema is current.
 		Database\Schema::maybe_upgrade();
 
@@ -88,10 +91,10 @@ final class Plugin {
 	}
 
 	/**
-	 * Deactivation callback.
+	 * Load the plugin text domain for translations.
 	 */
-	public function deactivate(): void {
-		flush_rewrite_rules();
+	public function load_textdomain(): void {
+		load_plugin_textdomain( 'workos', false, dirname( WORKOS_BASENAME ) . '/languages' );
 	}
 
 	/**
@@ -102,8 +105,8 @@ final class Plugin {
 	public function api(): Api\Client {
 		if ( null === $this->api ) {
 			$this->api = new Api\Client(
-				(string) get_option( 'workos_api_key', '' ),
-				(string) get_option( 'workos_client_id', '' )
+				Config::get_api_key(),
+				Config::get_client_id()
 			);
 		}
 		return $this->api;
@@ -115,8 +118,8 @@ final class Plugin {
 	 * @return bool
 	 */
 	public function is_enabled(): bool {
-		return ! empty( get_option( 'workos_api_key' ) )
-			&& ! empty( get_option( 'workos_client_id' ) );
+		return ! empty( Config::get_api_key() )
+			&& ! empty( Config::get_client_id() );
 	}
 
 	/**
