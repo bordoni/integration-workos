@@ -141,6 +141,8 @@ class Manager {
 			return $existing->id;
 		}
 
+		$now = current_time( 'mysql', true );
+
 		$wpdb->insert(
 			$table,
 			[
@@ -148,8 +150,10 @@ class Manager {
 				'name'          => $name,
 				'slug'          => $slug,
 				'domains'       => $domains,
+				'created_at'    => $now,
+				'updated_at'    => $now,
 			],
-			[ '%s', '%s', '%s', '%s' ]
+			[ '%s', '%s', '%s', '%s', '%s', '%s' ]
 		);
 
 		$org_id = $wpdb->insert_id;
@@ -271,8 +275,9 @@ class Manager {
 				'workos_membership_id' => $extra['workos_membership_id'] ?? '',
 				'workos_role'          => $extra['workos_role'] ?? 'member',
 				'wp_role'              => $extra['wp_role'] ?? '',
+				'joined_at'            => current_time( 'mysql', true ),
 			],
-			[ '%d', '%d', '%s', '%s', '%s' ]
+			[ '%d', '%d', '%s', '%s', '%s', '%s' ]
 		);
 	}
 

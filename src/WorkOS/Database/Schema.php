@@ -62,8 +62,8 @@ class Schema {
 			slug varchar(255) NOT NULL,
 			domains text,
 			settings text,
-			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
 			PRIMARY KEY  (id),
 			UNIQUE KEY idx_workos_org_id (workos_org_id),
 			UNIQUE KEY idx_slug (slug)
@@ -76,7 +76,7 @@ class Schema {
 			workos_membership_id varchar(255) DEFAULT '',
 			workos_role varchar(255) DEFAULT 'member',
 			wp_role varchar(255) DEFAULT '',
-			joined_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			joined_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
 			PRIMARY KEY  (id),
 			UNIQUE KEY idx_org_user (org_id,user_id),
 			KEY idx_user_id (user_id)
