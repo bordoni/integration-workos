@@ -61,15 +61,30 @@ class Settings {
 	}
 
 	/**
-	 * Enqueue role-mapping assets on the Users tab.
+	 * Enqueue assets for the settings page.
 	 *
 	 * @param string $hook_suffix The current admin page hook suffix.
 	 */
 	public function enqueue_assets( string $hook_suffix ): void {
-		if ( 'toplevel_page_workos' !== $hook_suffix || 'users' !== $this->get_current_tab() ) {
+		if ( 'toplevel_page_workos' !== $hook_suffix ) {
 			return;
 		}
 
+		$current_tab = $this->get_current_tab();
+
+		if ( 'general' === $current_tab ) {
+			add_thickbox();
+		}
+
+		if ( 'users' === $current_tab ) {
+			$this->enqueue_role_mapping_assets();
+		}
+	}
+
+	/**
+	 * Enqueue role-mapping script and styles on the Users tab.
+	 */
+	private function enqueue_role_mapping_assets(): void {
 		$asset_file = WORKOS_DIR . 'build/role-mapping.asset.php';
 		if ( ! file_exists( $asset_file ) ) {
 			return;
@@ -302,8 +317,15 @@ class Settings {
 					esc_html__( 'Create a new endpoint with this URL:', 'workos' ),
 					esc_url( $url )
 				);
+				printf(
+					'<li>%s <a href="#TB_inline?width=480&height=500&inlineId=workos-webhook-events" class="thickbox">%s</a></li>',
+					esc_html__( 'Subscribe to the required events &mdash;', 'workos' ),
+					esc_html__( 'View required events', 'workos' )
+				);
 				echo '<li>' . esc_html__( 'Copy the signing secret that WorkOS generates and paste it below.', 'workos' ) . '</li>';
 				echo '</ol>';
+
+				$this->render_webhook_events_modal();
 			},
 			'workos'
 		);
@@ -313,7 +335,7 @@ class Settings {
 			__( 'Webhook Secret', 'workos' ),
 			'password',
 			'workos_webhooks',
-			__( 'The signing secret from your WorkOS webhook endpoint. Starts with "whsec_".', 'workos' )
+			__( 'The signing secret from your WorkOS webhook endpoint.', 'workos' )
 		);
 
 		// --- Audit Logging section ---
@@ -544,6 +566,58 @@ class Settings {
 			]
 		);
 		echo '<p class="description">' . esc_html__( 'Content from deleted users will be reassigned to this user.', 'workos' ) . '</p>';
+	}
+
+	/**
+	 * Render the hidden Thickbox modal listing required webhook events.
+	 */
+	private function render_webhook_events_modal(): void {
+		$event_groups = [];
+
+		$event_groups[ __( 'User Management', 'workos' ) ] = [
+			'user.created',
+			'user.updated',
+			'user.deleted',
+		];
+
+		$event_groups[ __( 'Directory Sync', 'workos' ) ] = [
+			'dsync.user.created',
+			'dsync.user.updated',
+			'dsync.user.deleted',
+			'dsync.group.user_added',
+			'dsync.group.user_removed',
+		];
+
+		$event_groups[ __( 'Organizations', 'workos' ) ] = [
+			'organization.created',
+			'organization.updated',
+			'organization_membership.created',
+			'organization_membership.updated',
+			'organization_membership.deleted',
+		];
+
+		$event_groups[ __( 'Connections', 'workos' ) ] = [
+			'connection.activated',
+			'connection.deactivated',
+		];
+
+		$event_groups[ __( 'Authentication', 'workos' ) ] = [
+			'authentication.email_verification_succeeded',
+		];
+
+		echo '<div id="workos-webhook-events" style="display:none">';
+		echo '<p>' . esc_html__( 'Subscribe to the following events when creating your webhook endpoint in the WorkOS Dashboard.', 'workos' ) . '</p>';
+
+		foreach ( $event_groups as $label => $events ) {
+			echo '<h4 style="margin-bottom:4px">' . esc_html( $label ) . '</h4>';
+			echo '<ul style="margin-top:0">';
+			foreach ( $events as $event ) {
+				echo '<li><code>' . esc_html( $event ) . '</code></li>';
+			}
+			echo '</ul>';
+		}
+
+		echo '</div>';
 	}
 
 	/**
