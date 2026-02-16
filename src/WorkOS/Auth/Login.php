@@ -76,13 +76,18 @@ class Login {
 		$redirect_to = sanitize_url( wp_unslash( $_REQUEST['redirect_to'] ?? admin_url() ) );
 		$state       = wp_create_nonce( 'workos_auth' ) . '|' . $redirect_to;
 
-		$auth_url = workos()->api()->get_authorization_url(
-			[
-				'redirect_uri' => self::get_callback_url(),
-				'state'        => $state,
-				'provider'     => 'authkit',
-			]
-		);
+		$args = [
+			'redirect_uri' => self::get_callback_url(),
+			'state'        => $state,
+			'provider'     => 'authkit',
+		];
+
+		$org_id = \WorkOS\Config::get_organization_id();
+		if ( $org_id ) {
+			$args['organization_id'] = $org_id;
+		}
+
+		$auth_url = workos()->api()->get_authorization_url( $args );
 
 		wp_safe_redirect( $auth_url );
 		exit;

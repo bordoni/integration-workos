@@ -20,9 +20,10 @@ class Config {
 	 * Map of setting names to their PHP constant overrides.
 	 */
 	private const CONSTANT_MAP = [
-		'api_key'        => 'WORKOS_API_KEY',
-		'client_id'      => 'WORKOS_CLIENT_ID',
-		'webhook_secret' => 'WORKOS_WEBHOOK_SECRET',
+		'api_key'         => 'WORKOS_API_KEY',
+		'client_id'       => 'WORKOS_CLIENT_ID',
+		'webhook_secret'  => 'WORKOS_WEBHOOK_SECRET',
+		'organization_id' => 'WORKOS_ORGANIZATION_ID',
 	];
 
 	/**
@@ -50,6 +51,15 @@ class Config {
 	 */
 	public static function get_webhook_secret(): string {
 		return self::get( 'webhook_secret' );
+	}
+
+	/**
+	 * Get the WorkOS Organization ID.
+	 *
+	 * @return string
+	 */
+	public static function get_organization_id(): string {
+		return self::get( 'organization_id' );
 	}
 
 	/**

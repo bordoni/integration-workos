@@ -25,6 +25,11 @@ class Settings {
 	private const USERS_PAGE = 'workos-users';
 
 	/**
+	 * Transient key for caching the organizations list.
+	 */
+	private const ORGS_CACHE_KEY = 'workos_organizations_cache';
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -32,6 +37,10 @@ class Settings {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_filter( 'plugin_action_links_' . WORKOS_BASENAME, [ $this, 'action_links' ] );
+
+		// Flush organizations cache when API credentials change.
+		add_action( 'update_option_workos_api_key', [ $this, 'flush_organizations_cache' ] );
+		add_action( 'update_option_workos_client_id', [ $this, 'flush_organizations_cache' ] );
 	}
 
 	/**
@@ -225,6 +234,15 @@ class Settings {
 				'sanitize_callback' => 'rest_sanitize_boolean',
 			]
 		);
+
+		register_setting(
+			self::OPTION_GROUP,
+			'workos_organization_id',
+			[
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			]
+		);
 	}
 
 	/**
@@ -259,6 +277,24 @@ class Settings {
 			'text',
 			'workos_api',
 			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "client_".', 'workos' )
+		);
+
+		// --- Organization section ---
+		add_settings_section(
+			'workos_organization',
+			__( 'Organization', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Select the WorkOS organization this site belongs to.', 'workos' ) . '</p>';
+			},
+			'workos'
+		);
+
+		add_settings_field(
+			'workos_organization_id',
+			__( 'Organization', 'workos' ),
+			[ $this, 'render_organization_select' ],
+			'workos',
+			'workos_organization'
 		);
 
 		// --- Authentication section ---
@@ -566,6 +602,78 @@ class Settings {
 			]
 		);
 		echo '<p class="description">' . esc_html__( 'Content from deleted users will be reassigned to this user.', 'workos' ) . '</p>';
+	}
+
+	/**
+	 * Render the organization select dropdown.
+	 *
+	 * Shows a prompt to configure API credentials if the plugin is not enabled.
+	 * When enabled, fetches orgs from WorkOS with transient caching.
+	 */
+	public function render_organization_select(): void {
+		if ( ! workos()->is_enabled() ) {
+			echo '<p class="description">' . esc_html__( 'Configure API credentials above and save to select an organization.', 'workos' ) . '</p>';
+			return;
+		}
+
+		$is_overridden = \WorkOS\Config::is_overridden( 'organization_id' );
+		$current_value = \WorkOS\Config::get_organization_id();
+
+		// Fetch organizations with transient cache.
+		$organizations = get_transient( self::ORGS_CACHE_KEY );
+		if ( false === $organizations ) {
+			$result = workos()->api()->list_organizations();
+
+			if ( is_wp_error( $result ) ) {
+				printf(
+					'<p class="description" style="color:#d63638">%s %s</p>',
+					esc_html__( 'Could not fetch organizations:', 'workos' ),
+					esc_html( $result->get_error_message() )
+				);
+				return;
+			}
+
+			$organizations = $result['data'] ?? [];
+			set_transient( self::ORGS_CACHE_KEY, $organizations, 5 * MINUTE_IN_SECONDS );
+		}
+
+		if ( $is_overridden ) {
+			// Find the org name for display.
+			$org_name = $current_value;
+			foreach ( $organizations as $org ) {
+				if ( ( $org['id'] ?? '' ) === $current_value ) {
+					$org_name = $org['name'] ?? $current_value;
+					break;
+				}
+			}
+			printf(
+				'<input type="text" value="%s" class="regular-text" disabled /> <em>%s</em>',
+				esc_attr( $org_name ),
+				esc_html__( 'Set via WORKOS_ORGANIZATION_ID constant.', 'workos' )
+			);
+			return;
+		}
+
+		echo '<select name="workos_organization_id">';
+		printf( '<option value="">%s</option>', esc_html__( '— Select Organization —', 'workos' ) );
+		foreach ( $organizations as $org ) {
+			$org_id   = $org['id'] ?? '';
+			$org_name = $org['name'] ?? $org_id;
+			printf(
+				'<option value="%s" %s>%s</option>',
+				esc_attr( $org_id ),
+				selected( $current_value, $org_id, false ),
+				esc_html( $org_name )
+			);
+		}
+		echo '</select>';
+	}
+
+	/**
+	 * Flush the organizations transient cache.
+	 */
+	public function flush_organizations_cache(): void {
+		delete_transient( self::ORGS_CACHE_KEY );
 	}
 
 	/**
