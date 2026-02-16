@@ -10,9 +10,12 @@
 		}
 	],
 	"require": {
-		"php": ">=7.4"
+		"php": ">=7.4",
+		"lucatume/di52": "^4.0",
+		"stellarwp/container-contract": "^1.1"
 	},
 	"require-dev": {
+		"brianhenryie/strauss": "^0.19.2",
 		"codeception/module-asserts": "^3.0",
 		"codeception/module-cli": "^2.0",
 		"codeception/module-db": "^3.0",
@@ -26,7 +29,8 @@
 	"autoload": {
 		"psr-4": {
 			"WorkOS\\": "src/WorkOS/"
-		}
+		},
+		"files": ["vendor/prefixed/autoload.php"]
 	},
 	"config": {
 		"allow-plugins": {
@@ -37,6 +41,37 @@
 	"scripts": {
 		"test:wpunit": "vendor/bin/codecept run wpunit",
 		"lint": "phpcs",
-		"lint:fix": "phpcbf"
+		"lint:fix": "phpcbf",
+		"strauss-install": [
+			"test -f ./bin/strauss.phar || curl -o bin/strauss.phar -L -C - https://github.com/BrianHenryIE/strauss/releases/download/0.24.1/strauss.phar"
+		],
+		"strauss": [
+			"@strauss-install",
+			"@php bin/strauss.phar",
+			"@composer dump-autoload"
+		],
+		"post-install-cmd": ["@strauss"],
+		"post-update-cmd": ["@strauss"]
+	},
+	"extra": {
+		"strauss": {
+			"target_directory": "vendor/prefixed",
+			"classmap_prefix": "WorkOS_",
+			"constant_prefix": "WORKOS_VENDOR_",
+			"namespace_prefix": "WorkOS\\Vendor\\",
+			"packages": [
+				"lucatume/di52",
+				"stellarwp/container-contract"
+			],
+			"exclude_from_copy": {
+				"file_patterns": [
+					"/^tests\\//", "/^test\\//", "/^Test\\//",
+					"/^examples\\//", "/^docs\\//", "/^bin\\//",
+					"/\\.md$/", "/^phpunit/", "/^phpcs/",
+					"/^\\.git/", "/^Makefile/"
+				]
+			},
+			"delete_vendor_packages": true
+		}
 	}
 }

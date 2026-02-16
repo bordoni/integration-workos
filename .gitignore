@@ -1,6 +1,8 @@
 # Dependencies
 /vendor/
+/vendor/prefixed/
 /node_modules/
+/bin/
 
 # Build artifacts
 /build/

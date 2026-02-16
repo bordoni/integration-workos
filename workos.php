@@ -17,6 +17,6 @@
 
 defined( 'ABSPATH' ) || exit;
 
-require_once __DIR__ . '/src/WorkOS/Bootstrap.php';
+require_once __DIR__ . '/src/WorkOS/Plugin.php';
 
-add_action( 'plugins_loaded', WorkOS\Bootstrap::set_plugin_file( __FILE__ ) );
+add_action( 'plugins_loaded', WorkOS\Plugin::bootstrap( __FILE__ ) );

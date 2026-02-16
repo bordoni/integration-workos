@@ -18,10 +18,6 @@ class AuditLog {
 	 * Constructor — register event hooks.
 	 */
 	public function __construct() {
-		if ( ! get_option( 'workos_audit_logging_enabled', false ) ) {
-			return;
-		}
-
 		// Authentication events.
 		add_action( 'wp_login', [ $this, 'log_login' ], 10, 2 );
 		add_action( 'wp_logout', [ $this, 'log_logout' ] );
