@@ -22,16 +22,13 @@ class Schema {
 	/**
 	 * Current schema version.
 	 */
-	private const CURRENT_VERSION = 4;
+	private const CURRENT_VERSION = 1;
 
 	/**
 	 * Activation hook — create tables.
 	 */
 	public static function activate(): void {
 		self::create_tables();
-		self::migrate_to_v2();
-		self::migrate_to_v3();
-		self::migrate_to_v4();
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
 		flush_rewrite_rules();
 	}
@@ -48,115 +45,7 @@ class Schema {
 
 		self::create_tables();
 
-		if ( $installed < 2 ) {
-			self::migrate_to_v2();
-		}
-
-		if ( $installed < 3 ) {
-			self::migrate_to_v3();
-		}
-
-		if ( $installed < 4 ) {
-			self::migrate_to_v4();
-		}
-
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
-	}
-
-	/**
-	 * Migrate single-option credentials to per-environment (production) options.
-	 */
-	private static function migrate_to_v2(): void {
-		$settings = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
-
-		foreach ( $settings as $setting ) {
-			$old = get_option( "workos_{$setting}", '' );
-
-			if ( '' !== $old ) {
-				update_option( "workos_production_{$setting}", $old );
-				delete_option( "workos_{$setting}" );
-			}
-		}
-
-		if ( false === get_option( 'workos_active_environment' ) ) {
-			update_option( 'workos_active_environment', 'production' );
-		}
-	}
-
-	/**
-	 * Consolidate individual option rows into serialized arrays.
-	 */
-	private static function migrate_to_v3(): void {
-		// Consolidate per-env credential options.
-		$env_settings = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
-
-		foreach ( [ 'production', 'staging' ] as $env ) {
-			$consolidated = [];
-			foreach ( $env_settings as $setting ) {
-				$value = get_option( "workos_{$env}_{$setting}", '' );
-				if ( '' !== $value ) {
-					$consolidated[ $setting ] = $value;
-				}
-			}
-			if ( ! empty( $consolidated ) ) {
-				update_option( "workos_{$env}", $consolidated );
-			}
-			foreach ( $env_settings as $setting ) {
-				delete_option( "workos_{$env}_{$setting}" );
-			}
-		}
-
-		// Consolidate global options.
-		$global_map = [
-			'login_mode'              => [ 'workos_login_mode', '' ],
-			'allow_password_fallback' => [ 'workos_allow_password_fallback', true ],
-			'deprovision_action'      => [ 'workos_deprovision_action', 'deactivate' ],
-			'reassign_user'           => [ 'workos_reassign_user', 0 ],
-			'role_map'                => [ 'workos_role_map', [] ],
-			'audit_logging_enabled'   => [ 'workos_audit_logging_enabled', false ],
-		];
-
-		$global = [];
-		foreach ( $global_map as $key => $old ) {
-			$value = get_option( $old[0], $old[1] );
-			$global[ $key ] = $value;
-			delete_option( $old[0] );
-		}
-		update_option( 'workos_global', $global );
-	}
-
-	/**
-	 * Move global settings into per-environment options.
-	 */
-	private static function migrate_to_v4(): void {
-		$global = get_option( 'workos_global', [] );
-
-		if ( ! is_array( $global ) || empty( $global ) ) {
-			return;
-		}
-
-		$keys_to_migrate = [ 'login_mode', 'allow_password_fallback', 'deprovision_action', 'reassign_user', 'role_map', 'audit_logging_enabled' ];
-
-		foreach ( [ 'production', 'staging' ] as $env ) {
-			$env_options = get_option( "workos_{$env}", [] );
-			if ( ! is_array( $env_options ) ) {
-				$env_options = [];
-			}
-
-			foreach ( $keys_to_migrate as $key ) {
-				if ( array_key_exists( $key, $global ) && ! array_key_exists( $key, $env_options ) ) {
-					$env_options[ $key ] = $global[ $key ];
-				}
-			}
-
-			update_option( "workos_{$env}", $env_options );
-		}
-
-		// Clear migrated keys from global.
-		foreach ( $keys_to_migrate as $key ) {
-			unset( $global[ $key ] );
-		}
-		update_option( 'workos_global', $global );
 	}
 
 	/**
