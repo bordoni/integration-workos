@@ -216,7 +216,7 @@ class Plugin {
 	 * @return mixed
 	 */
 	public function option( string $key, $default_value = '' ) {
-		return get_option( "workos_{$key}", $default_value );
+		return $this->container->get( Options\Global_Options::class )->get( $key, $default_value );
 	}
 
 	/**
@@ -342,6 +342,11 @@ class Plugin {
 				);
 			}
 		);
+
+		// Register Options singletons.
+		$this->container->singleton( Options\Production::class );
+		$this->container->singleton( Options\Staging::class );
+		$this->container->singleton( Options\Global_Options::class );
 
 		// Set the container globally via the App facade.
 		App::setContainer( $this->container );

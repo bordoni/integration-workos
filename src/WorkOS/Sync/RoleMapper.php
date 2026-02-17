@@ -109,7 +109,7 @@ class RoleMapper {
 	 * @return array<string, string> WorkOS role => WP role.
 	 */
 	public static function get_role_map(): array {
-		$saved = get_option( 'workos_role_map', [] );
+		$saved = \WorkOS\App::container()->get( \WorkOS\Options\Global_Options::class )->get( 'role_map', [] );
 		return is_array( $saved ) && ! empty( $saved ) ? $saved : self::DEFAULTS;
 	}
 
@@ -119,7 +119,7 @@ class RoleMapper {
 	 * @param array $map WorkOS role => WP role.
 	 */
 	public static function save_role_map( array $map ): void {
-		update_option( 'workos_role_map', array_map( 'sanitize_text_field', $map ) );
+		\WorkOS\App::container()->get( \WorkOS\Options\Global_Options::class )->set( 'role_map', array_map( 'sanitize_text_field', $map ) );
 	}
 
 	/**

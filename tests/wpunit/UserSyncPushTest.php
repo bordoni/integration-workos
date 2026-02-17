@@ -46,8 +46,13 @@ class UserSyncPushTest extends WPTestCase {
 		$this->mock_response = null;
 
 		// Make is_enabled() return true.
-		update_option( 'workos_api_key', 'sk_test_fake' );
-		update_option( 'workos_client_id', 'client_fake' );
+		update_option( 'workos_production', [
+			'api_key'   => 'sk_test_fake',
+			'client_id' => 'client_fake',
+		] );
+
+		// Reset Options singletons so they re-read from DB.
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
 		// Intercept outgoing HTTP requests to the WorkOS API.
 		add_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10, 3 );
@@ -65,8 +70,10 @@ class UserSyncPushTest extends WPTestCase {
 	 */
 	public function tearDown(): void {
 		remove_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10 );
-		delete_option( 'workos_api_key' );
-		delete_option( 'workos_client_id' );
+		delete_option( 'workos_production' );
+
+		// Reset Options singletons so they re-read from DB.
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
 		// Reset the static syncing flag via reflection.
 		$ref = new \ReflectionProperty( UserSync::class, 'syncing' );
@@ -177,7 +184,8 @@ class UserSyncPushTest extends WPTestCase {
 	 * Test push skips when plugin is not enabled (no API key).
 	 */
 	public function test_push_skips_when_not_enabled(): void {
-		delete_option( 'workos_api_key' );
+		update_option( 'workos_production', [ 'client_id' => 'client_fake' ] );
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
 		$user_id = self::factory()->user->create( [ 'user_email' => 'carol@example.com' ] );
 

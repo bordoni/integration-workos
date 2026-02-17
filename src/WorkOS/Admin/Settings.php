@@ -7,6 +7,8 @@
 
 namespace WorkOS\Admin;
 
+use WorkOS\Config;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -25,11 +27,6 @@ class Settings {
 	private const USERS_PAGE = 'workos-users';
 
 	/**
-	 * Transient key for caching the organizations list.
-	 */
-	private const ORGS_CACHE_KEY = 'workos_organizations_cache';
-
-	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -38,9 +35,10 @@ class Settings {
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_filter( 'plugin_action_links_' . WORKOS_BASENAME, [ $this, 'action_links' ] );
 
-		// Flush organizations cache when API credentials change.
-		add_action( 'update_option_workos_api_key', [ $this, 'flush_organizations_cache' ] );
-		add_action( 'update_option_workos_client_id', [ $this, 'flush_organizations_cache' ] );
+		// Flush organizations cache when environment credentials change.
+		foreach ( [ 'production', 'staging' ] as $env ) {
+			add_action( "update_option_workos_{$env}", [ $this, 'flush_organizations_cache' ] );
+		}
 	}
 
 	/**
@@ -52,6 +50,55 @@ class Settings {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab navigation, no data modification.
 		$tab = sanitize_text_field( wp_unslash( $_GET['tab'] ?? 'general' ) );
 		return in_array( $tab, [ 'general', 'users' ], true ) ? $tab : 'general';
+	}
+
+	/**
+	 * Get the environment currently being edited on the settings page.
+	 *
+	 * This is driven by the ?env= query param and is independent of
+	 * the active environment used by the rest of the plugin.
+	 *
+	 * @return string 'production' or 'staging'.
+	 */
+	private function get_editing_environment(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Navigation param, no data modification.
+		$env = sanitize_text_field( wp_unslash( $_GET['env'] ?? Config::get_active_environment() ) );
+
+		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'production';
+	}
+
+	/**
+	 * Get the array-style option name for an environment credential setting.
+	 *
+	 * Uses the editing environment, not the active environment,
+	 * so credentials can be saved for either env without switching the active one.
+	 *
+	 * @param string $setting Setting name (e.g. 'api_key').
+	 *
+	 * @return string Option name (e.g. 'workos_production[api_key]').
+	 */
+	private function env_option( string $setting ): string {
+		return sprintf( 'workos_%s[%s]', $this->get_editing_environment(), $setting );
+	}
+
+	/**
+	 * Get the array-style option name for a global setting.
+	 *
+	 * @param string $setting Setting name (e.g. 'login_mode').
+	 *
+	 * @return string Option name (e.g. 'workos_global[login_mode]').
+	 */
+	private function global_option( string $setting ): string {
+		return "workos_global[{$setting}]";
+	}
+
+	/**
+	 * Get the organizations cache transient key for the editing environment.
+	 *
+	 * @return string
+	 */
+	private function get_orgs_cache_key(): string {
+		return 'workos_organizations_cache_' . $this->get_editing_environment();
 	}
 
 	/**
@@ -148,99 +195,40 @@ class Settings {
 	 * Register all option names with the Settings API.
 	 */
 	private function register_all_options(): void {
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_api_key',
-			[
-				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
+		// Per-environment credential options (2 serialized array rows).
+		foreach ( [ 'production', 'staging' ] as $env ) {
+			register_setting(
+				self::OPTION_GROUP,
+				"workos_{$env}",
+				[
+					'type'              => 'array',
+					'default'           => [],
+					'sanitize_callback' => [ $this, 'sanitize_environment_options' ],
+				]
+			);
+		}
 
+		// Global settings (1 serialized array row).
 		register_setting(
 			self::OPTION_GROUP,
-			'workos_client_id',
-			[
-				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_login_mode',
-			[
-				'type'              => 'string',
-				'default'           => 'redirect',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_allow_password_fallback',
-			[
-				'type'              => 'boolean',
-				'default'           => true,
-				'sanitize_callback' => 'rest_sanitize_boolean',
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_webhook_secret',
-			[
-				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_deprovision_action',
-			[
-				'type'              => 'string',
-				'default'           => 'deactivate',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_reassign_user',
-			[
-				'type'              => 'integer',
-				'default'           => 0,
-				'sanitize_callback' => 'absint',
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_role_map',
+			'workos_global',
 			[
 				'type'              => 'array',
 				'default'           => [],
-				'sanitize_callback' => [ $this, 'sanitize_role_map' ],
+				'sanitize_callback' => [ $this, 'sanitize_global_options' ],
 			]
 		);
 
+		// Active environment stays standalone (read before container boots).
 		register_setting(
 			self::OPTION_GROUP,
-			'workos_audit_logging_enabled',
-			[
-				'type'              => 'boolean',
-				'default'           => false,
-				'sanitize_callback' => 'rest_sanitize_boolean',
-			]
-		);
-
-		register_setting(
-			self::OPTION_GROUP,
-			'workos_organization_id',
+			'workos_active_environment',
 			[
 				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => 'production',
+				'sanitize_callback' => function ( $value ) {
+					return in_array( $value, [ 'production', 'staging' ], true ) ? $value : 'production';
+				},
 			]
 		);
 	}
@@ -249,10 +237,14 @@ class Settings {
 	 * Register sections and fields for the General tab.
 	 */
 	private function register_general_fields(): void {
+		$editing_env = $this->get_editing_environment();
+		$env_label   = Config::get_environments()[ $editing_env ] ?? 'Production';
+
 		// --- API Credentials section ---
 		add_settings_section(
 			'workos_api',
-			__( 'API Credentials', 'workos' ),
+			/* translators: %s: environment name (Production or Staging) */
+			sprintf( __( 'API Credentials (%s)', 'workos' ), $env_label ),
 			function () {
 				printf(
 					'<p>%s <a href="%s" target="_blank">%s</a></p>',
@@ -265,18 +257,25 @@ class Settings {
 		);
 
 		$this->add_field(
-			'workos_api_key',
+			$this->env_option( 'api_key' ),
 			__( 'API Key', 'workos' ),
 			'password',
 			'workos_api',
 			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "sk_".', 'workos' )
 		);
 		$this->add_field(
-			'workos_client_id',
+			$this->env_option( 'client_id' ),
 			__( 'Client ID', 'workos' ),
 			'text',
 			'workos_api',
 			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "client_".', 'workos' )
+		);
+		$this->add_field(
+			$this->env_option( 'environment_id' ),
+			__( 'Environment ID', 'workos' ),
+			'text',
+			'workos_api',
+			__( 'Found in the WorkOS Dashboard URL after /environment_. Starts with "environment_".', 'workos' )
 		);
 
 		// --- Organization section ---
@@ -289,12 +288,31 @@ class Settings {
 			'workos'
 		);
 
+		$env = $this->get_editing_environment();
 		add_settings_field(
-			'workos_organization_id',
+			"workos_{$env}_organization_id",
 			__( 'Organization', 'workos' ),
 			[ $this, 'render_organization_select' ],
 			'workos',
 			'workos_organization'
+		);
+
+		// --- Active Environment section ---
+		add_settings_section(
+			'workos_active_env',
+			__( 'Active Environment', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Select which environment the plugin uses for authentication, webhooks, and API calls.', 'workos' ) . '</p>';
+			},
+			'workos'
+		);
+
+		add_settings_field(
+			'workos_active_environment',
+			__( 'Active Environment', 'workos' ),
+			[ $this, 'render_active_environment_field' ],
+			'workos',
+			'workos_active_env'
 		);
 
 		// --- Authentication section ---
@@ -308,13 +326,13 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_login_mode',
+			'workos_global_login_mode',
 			__( 'Login Mode', 'workos' ),
 			[ $this, 'render_select' ],
 			'workos',
 			'workos_auth',
 			[
-				'name'    => 'workos_login_mode',
+				'name'    => $this->global_option( 'login_mode' ),
 				'options' => [
 					'redirect' => __( 'AuthKit Redirect (Recommended)', 'workos' ),
 					'headless' => __( 'Headless API (Custom Form)', 'workos' ),
@@ -323,13 +341,13 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_allow_password_fallback',
+			'workos_global_allow_password_fallback',
 			__( 'Password Fallback', 'workos' ),
 			[ $this, 'render_checkbox' ],
 			'workos',
 			'workos_auth',
 			[
-				'name'  => 'workos_allow_password_fallback',
+				'name'  => $this->global_option( 'allow_password_fallback' ),
 				'label' => __( 'Allow users to log in with WordPress password if WorkOS auth fails.', 'workos' ),
 			]
 		);
@@ -367,7 +385,7 @@ class Settings {
 		);
 
 		$this->add_field(
-			'workos_webhook_secret',
+			$this->env_option( 'webhook_secret' ),
 			__( 'Webhook Secret', 'workos' ),
 			'password',
 			'workos_webhooks',
@@ -385,13 +403,13 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_audit_logging_enabled',
+			'workos_global_audit_logging_enabled',
 			__( 'Enable Audit Logging', 'workos' ),
 			[ $this, 'render_checkbox' ],
 			'workos',
 			'workos_audit',
 			[
-				'name'  => 'workos_audit_logging_enabled',
+				'name'  => $this->global_option( 'audit_logging_enabled' ),
 				'label' => __( 'Send login, post, and user events to WorkOS Audit Logs.', 'workos' ),
 			]
 		);
@@ -412,13 +430,13 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_deprovision_action',
+			'workos_global_deprovision_action',
 			__( 'Deprovision Action', 'workos' ),
 			[ $this, 'render_select' ],
 			self::USERS_PAGE,
 			'workos_provisioning',
 			[
-				'name'    => 'workos_deprovision_action',
+				'name'    => $this->global_option( 'deprovision_action' ),
 				'options' => [
 					'deactivate' => __( 'Deactivate (mark as inactive)', 'workos' ),
 					'demote'     => __( 'Demote to Subscriber role', 'workos' ),
@@ -428,12 +446,12 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_reassign_user',
+			'workos_global_reassign_user',
 			__( 'Reassign Content To', 'workos' ),
 			[ $this, 'render_user_select' ],
 			self::USERS_PAGE,
 			'workos_provisioning',
-			[ 'name' => 'workos_reassign_user' ]
+			[ 'name' => $this->global_option( 'reassign_user' ) ]
 		);
 
 		// --- Role Mapping section ---
@@ -469,9 +487,18 @@ class Settings {
 
 			<?php settings_errors( 'workos_messages' ); ?>
 
+			<?php $this->render_environment_toggle(); ?>
+
 			<nav class="nav-tab-wrapper">
-				<?php foreach ( $tabs as $slug => $label ) : ?>
-					<a href="<?php echo esc_url( add_query_arg( 'tab', $slug, admin_url( 'admin.php?page=workos' ) ) ); ?>"
+				<?php
+				$editing_env = $this->get_editing_environment();
+				foreach ( $tabs as $slug => $label ) :
+					$tab_url = add_query_arg(
+						[ 'tab' => $slug, 'env' => $editing_env ],
+						admin_url( 'admin.php?page=workos' )
+					);
+					?>
+					<a href="<?php echo esc_url( $tab_url ); ?>"
 						class="nav-tab <?php echo $slug === $current_tab ? 'nav-tab-active' : ''; ?>">
 						<?php echo esc_html( $label ); ?>
 					</a>
@@ -509,6 +536,52 @@ class Settings {
 	}
 
 	/**
+	 * Render the environment view-switcher above the tab navigation.
+	 *
+	 * This controls which environment's credentials are displayed for editing.
+	 * It does NOT change the active environment — that is a saved setting in the form.
+	 */
+	private function render_environment_toggle(): void {
+		$editing      = $this->get_editing_environment();
+		$environments = Config::get_environments();
+		$current_tab  = $this->get_current_tab();
+		$base_url     = add_query_arg( 'tab', $current_tab, admin_url( 'admin.php?page=workos' ) );
+
+		?>
+		<div style="margin: 12px 0 8px;">
+			<?php foreach ( $environments as $slug => $label ) :
+				$url       = add_query_arg( 'env', $slug, $base_url );
+				$is_active = $slug === $editing;
+				?>
+				<a
+					href="<?php echo esc_url( $url ); ?>"
+					style="
+						display: inline-block;
+						padding: 6px 16px;
+						margin-right: 4px;
+						border: 1px solid <?php echo $is_active ? 'transparent' : '#8c8f94'; ?>;
+						border-radius: 4px;
+						font-weight: 600;
+						font-size: 13px;
+						text-decoration: none;
+						color: <?php echo $is_active ? '#fff' : '#50575e'; ?>;
+						background: <?php
+						if ( $is_active ) {
+							echo 'staging' === $slug ? '#dba617' : '#00a32a';
+						} else {
+							echo '#f0f0f1';
+						}
+						?>;
+					"
+				>
+					<?php echo esc_html( $label ); ?>
+				</a>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Add a simple text/password settings field.
 	 *
 	 * @param string $name        Option name.
@@ -519,8 +592,9 @@ class Settings {
 	 * @param string $page        Page slug for add_settings_field.
 	 */
 	private function add_field( string $name, string $label, string $type, string $section, string $description = '', string $page = 'workos' ): void {
+		$field_id = str_replace( [ '[', ']' ], [ '_', '' ], $name );
 		add_settings_field(
-			$name,
+			$field_id,
 			$label,
 			[ $this, 'render_input' ],
 			$page,
@@ -534,12 +608,41 @@ class Settings {
 	}
 
 	/**
+	 * Render the Active Environment select (or locked indicator).
+	 */
+	public function render_active_environment_field(): void {
+		if ( Config::is_environment_overridden() ) {
+			$env   = Config::get_active_environment();
+			$label = Config::get_environments()[ $env ] ?? $env;
+			printf(
+				'<input type="text" value="%s" class="regular-text" disabled /> <em>%s</em>',
+				esc_attr( $label ),
+				esc_html__( 'Locked via WORKOS_ENVIRONMENT constant.', 'workos' )
+			);
+			return;
+		}
+
+		$value = Config::get_active_environment();
+		echo '<select name="workos_active_environment">';
+		foreach ( Config::get_environments() as $slug => $label ) {
+			printf(
+				'<option value="%s" %s>%s</option>',
+				esc_attr( $slug ),
+				selected( $value, $slug, false ),
+				esc_html( $label )
+			);
+		}
+		echo '</select>';
+		echo '<p class="description">' . esc_html__( 'The plugin will use this environment for all authentication, webhooks, and API calls.', 'workos' ) . '</p>';
+	}
+
+	/**
 	 * Render a text/password input.
 	 *
 	 * @param array $args Field arguments.
 	 */
 	public function render_input( array $args ): void {
-		$value = get_option( $args['name'], '' );
+		$value = $this->get_field_value( $args['name'], '' );
 		printf(
 			'<input type="%s" name="%s" value="%s" class="regular-text" autocomplete="off" />',
 			esc_attr( $args['type'] ),
@@ -558,7 +661,7 @@ class Settings {
 	 * @param array $args Field arguments.
 	 */
 	public function render_select( array $args ): void {
-		$value = get_option( $args['name'], '' );
+		$value = $this->get_field_value( $args['name'], '' );
 		echo '<select name="' . esc_attr( $args['name'] ) . '">';
 		foreach ( $args['options'] as $key => $label ) {
 			printf(
@@ -577,7 +680,7 @@ class Settings {
 	 * @param array $args Field arguments.
 	 */
 	public function render_checkbox( array $args ): void {
-		$value = get_option( $args['name'], false );
+		$value = $this->get_field_value( $args['name'], false );
 		printf(
 			'<label><input type="checkbox" name="%s" value="1" %s /> %s</label>',
 			esc_attr( $args['name'] ),
@@ -592,7 +695,7 @@ class Settings {
 	 * @param array $args Field arguments.
 	 */
 	public function render_user_select( array $args ): void {
-		$value = (int) get_option( $args['name'], 0 );
+		$value = (int) $this->get_field_value( $args['name'], 0 );
 		wp_dropdown_users(
 			[
 				'name'             => $args['name'],
@@ -605,22 +708,41 @@ class Settings {
 	}
 
 	/**
+	 * Get the current value for a field, supporting array-style names.
+	 *
+	 * @param string $name    Option name (e.g. 'workos_production[api_key]' or 'workos_active_environment').
+	 * @param mixed  $default Default value.
+	 *
+	 * @return mixed
+	 */
+	private function get_field_value( string $name, $default = '' ) {
+		if ( preg_match( '/^([^\[]+)\[([^\]]+)\]$/', $name, $m ) ) {
+			$option = get_option( $m[1], [] );
+			return $option[ $m[2] ] ?? $default;
+		}
+		return get_option( $name, $default );
+	}
+
+	/**
 	 * Render the organization select dropdown.
 	 *
 	 * Shows a prompt to configure API credentials if the plugin is not enabled.
 	 * When enabled, fetches orgs from WorkOS with transient caching.
 	 */
 	public function render_organization_select(): void {
+		$option_name = $this->env_option( 'organization_id' );
+
 		if ( ! workos()->is_enabled() ) {
 			echo '<p class="description">' . esc_html__( 'Configure API credentials above and save to select an organization.', 'workos' ) . '</p>';
 			return;
 		}
 
-		$is_overridden = \WorkOS\Config::is_overridden( 'organization_id' );
-		$current_value = \WorkOS\Config::get_organization_id();
+		$is_overridden = Config::is_overridden( 'organization_id' );
+		$current_value = Config::get_organization_id();
 
 		// Fetch organizations with transient cache.
-		$organizations = get_transient( self::ORGS_CACHE_KEY );
+		$cache_key     = $this->get_orgs_cache_key();
+		$organizations = get_transient( $cache_key );
 		if ( false === $organizations ) {
 			$result = workos()->api()->list_organizations();
 
@@ -634,7 +756,7 @@ class Settings {
 			}
 
 			$organizations = $result['data'] ?? [];
-			set_transient( self::ORGS_CACHE_KEY, $organizations, 5 * MINUTE_IN_SECONDS );
+			set_transient( $cache_key, $organizations, 5 * MINUTE_IN_SECONDS );
 		}
 
 		if ( $is_overridden ) {
@@ -654,7 +776,7 @@ class Settings {
 			return;
 		}
 
-		echo '<select name="workos_organization_id">';
+		echo '<select name="' . esc_attr( $option_name ) . '">';
 		printf( '<option value="">%s</option>', esc_html__( '— Select Organization —', 'workos' ) );
 		foreach ( $organizations as $org ) {
 			$org_id   = $org['id'] ?? '';
@@ -673,7 +795,9 @@ class Settings {
 	 * Flush the organizations transient cache.
 	 */
 	public function flush_organizations_cache(): void {
-		delete_transient( self::ORGS_CACHE_KEY );
+		foreach ( [ 'production', 'staging' ] as $env ) {
+			delete_transient( 'workos_organizations_cache_' . $env );
+		}
 	}
 
 	/**
@@ -743,11 +867,11 @@ class Settings {
 		foreach ( $map as $workos_role => $wp_role ) {
 			echo '<tr class="workos-role-map-row"><td>';
 			printf(
-				'<input type="text" name="workos_role_map[keys][]" value="%s" class="regular-text" />',
+				'<input type="text" name="workos_global[role_map][keys][]" value="%s" class="regular-text" />',
 				esc_attr( $workos_role )
 			);
 			echo '</td><td>';
-			echo '<select name="workos_role_map[values][]">';
+			echo '<select name="workos_global[role_map][values][]">';
 			foreach ( $wp_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
@@ -762,9 +886,9 @@ class Settings {
 
 		// Empty row for no-JS fallback.
 		echo '<tr class="workos-role-map-row"><td>';
-		echo '<input type="text" name="workos_role_map[keys][]" value="" class="regular-text" placeholder="' . esc_attr__( 'New WorkOS role...', 'workos' ) . '" />';
+		echo '<input type="text" name="workos_global[role_map][keys][]" value="" class="regular-text" placeholder="' . esc_attr__( 'New WorkOS role...', 'workos' ) . '" />';
 		echo '</td><td>';
-		echo '<select name="workos_role_map[values][]">';
+		echo '<select name="workos_global[role_map][values][]">';
 		echo '<option value="">' . esc_html__( '— Select —', 'workos' ) . '</option>';
 		foreach ( $wp_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
@@ -784,6 +908,55 @@ class Settings {
 	}
 
 	/**
+	 * Sanitize an environment options array (production or staging).
+	 *
+	 * @param mixed $input Raw form input.
+	 *
+	 * @return array Sanitized options.
+	 */
+	public function sanitize_environment_options( $input ): array {
+		if ( ! is_array( $input ) || empty( $input ) ) {
+			// Determine which option is being saved from the current filter name.
+			$option_name = str_replace( 'sanitize_option_', '', current_filter() );
+			return get_option( $option_name, [] );
+		}
+
+		$allowed = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
+		$out     = [];
+		foreach ( $allowed as $key ) {
+			if ( isset( $input[ $key ] ) ) {
+				$out[ $key ] = sanitize_text_field( $input[ $key ] );
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Sanitize the global options array.
+	 *
+	 * @param mixed $input Raw form input.
+	 *
+	 * @return array Sanitized options.
+	 */
+	public function sanitize_global_options( $input ): array {
+		if ( ! is_array( $input ) || empty( $input ) ) {
+			return get_option( 'workos_global', [] );
+		}
+
+		$existing = get_option( 'workos_global', [] );
+
+		// Merge submitted keys on top of existing (preserves keys not in form).
+		return array_merge( $existing, [
+			'login_mode'              => sanitize_text_field( $input['login_mode'] ?? $existing['login_mode'] ?? 'redirect' ),
+			'allow_password_fallback' => rest_sanitize_boolean( $input['allow_password_fallback'] ?? $existing['allow_password_fallback'] ?? true ),
+			'deprovision_action'      => sanitize_text_field( $input['deprovision_action'] ?? $existing['deprovision_action'] ?? 'deactivate' ),
+			'reassign_user'           => absint( $input['reassign_user'] ?? $existing['reassign_user'] ?? 0 ),
+			'role_map'                => $this->sanitize_role_map( $input['role_map'] ?? $existing['role_map'] ?? [] ),
+			'audit_logging_enabled'   => rest_sanitize_boolean( $input['audit_logging_enabled'] ?? $existing['audit_logging_enabled'] ?? false ),
+		] );
+	}
+
+	/**
 	 * Sanitize the role map from the form submission.
 	 *
 	 * @param mixed $input Raw form input.
@@ -792,6 +965,10 @@ class Settings {
 	 */
 	public function sanitize_role_map( $input ): array {
 		if ( ! is_array( $input ) || empty( $input['keys'] ) || empty( $input['values'] ) ) {
+			// If it's already a flat map (e.g. from existing DB), pass through.
+			if ( is_array( $input ) && ! isset( $input['keys'] ) ) {
+				return array_map( 'sanitize_text_field', $input );
+			}
 			return [];
 		}
 

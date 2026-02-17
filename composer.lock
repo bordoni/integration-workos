@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e3dd4ec61da6cefa0cceb7eb6f0bcd8a",
+    "content-hash": "bfa321fa99624de43b5c7106d1939ac7",
     "packages": [
         {
             "name": "lucatume/di52",
@@ -98,6 +98,53 @@
                 "source": "https://github.com/php-fig/container/tree/1.1.2"
             },
             "time": "2021-11-05T16:50:12+00:00"
+        },
+        {
+            "name": "stellarwp/arrays",
+            "version": "1.3.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/stellarwp/arrays.git",
+                "reference": "e994abcdb5d76fb5fdea7f2e1549d0603c13f91e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/stellarwp/arrays/zipball/e994abcdb5d76fb5fdea7f2e1549d0603c13f91e",
+                "reference": "e994abcdb5d76fb5fdea7f2e1549d0603c13f91e",
+                "shasum": ""
+            },
+            "require-dev": {
+                "lucatume/wp-browser": "^3.5 || ^4.0",
+                "saggre/phpdocumentor-markdown": "^0.1.3",
+                "symfony/event-dispatcher-contracts": "^2.5.1",
+                "symfony/string": "^5.4",
+                "szepeviktor/phpstan-wordpress": "^1.1"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "StellarWP\\Arrays\\": "src/Arrays/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "GPL-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "StellarWP",
+                    "email": "dev@stellarwp.com"
+                },
+                {
+                    "name": "Matthew Batchelder",
+                    "email": "matt.batchelder@stellarwp.com"
+                }
+            ],
+            "description": "A library for array manipulation.",
+            "support": {
+                "source": "https://github.com/stellarwp/arrays/tree/1.3.2"
+            },
+            "time": "2026-02-12T19:58:13+00:00"
         },
         {
             "name": "stellarwp/container-contract",

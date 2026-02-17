@@ -13,18 +13,69 @@ defined( 'ABSPATH' ) || exit;
  * Provides access to plugin settings with support for constant-based overrides.
  *
  * Constants in wp-config.php take precedence over database-stored options.
+ * Supports per-environment (production/staging) credential storage.
  */
 class Config {
 
 	/**
-	 * Map of setting names to their PHP constant overrides.
+	 * Map of setting names to their generic PHP constant overrides.
 	 */
 	private const CONSTANT_MAP = [
 		'api_key'         => 'WORKOS_API_KEY',
 		'client_id'       => 'WORKOS_CLIENT_ID',
 		'webhook_secret'  => 'WORKOS_WEBHOOK_SECRET',
 		'organization_id' => 'WORKOS_ORGANIZATION_ID',
+		'environment_id'  => 'WORKOS_ENVIRONMENT_ID',
 	];
+
+	/**
+	 * Get the active environment.
+	 *
+	 * @return string 'production' or 'staging'.
+	 */
+	public static function get_active_environment(): string {
+		if ( defined( 'WORKOS_ENVIRONMENT' ) && in_array( constant( 'WORKOS_ENVIRONMENT' ), [ 'production', 'staging' ], true ) ) {
+			return constant( 'WORKOS_ENVIRONMENT' );
+		}
+
+		$env = get_option( 'workos_active_environment', 'production' );
+
+		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'production';
+	}
+
+	/**
+	 * Set the active environment.
+	 *
+	 * @param string $env 'production' or 'staging'.
+	 */
+	public static function set_active_environment( string $env ): void {
+		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
+			return;
+		}
+
+		update_option( 'workos_active_environment', $env );
+	}
+
+	/**
+	 * Check if the environment is locked via constant.
+	 *
+	 * @return bool
+	 */
+	public static function is_environment_overridden(): bool {
+		return defined( 'WORKOS_ENVIRONMENT' );
+	}
+
+	/**
+	 * Get the available environments.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function get_environments(): array {
+		return [
+			'production' => 'Production',
+			'staging'    => 'Staging',
+		];
+	}
 
 	/**
 	 * Get the WorkOS API key.
@@ -63,6 +114,15 @@ class Config {
 	}
 
 	/**
+	 * Get the WorkOS Environment ID.
+	 *
+	 * @return string
+	 */
+	public static function get_environment_id(): string {
+		return self::get( 'environment_id' );
+	}
+
+	/**
 	 * Check if a setting is overridden by a constant.
 	 *
 	 * @param string $setting Setting name (e.g. 'api_key').
@@ -70,9 +130,16 @@ class Config {
 	 * @return bool
 	 */
 	public static function is_overridden( string $setting ): bool {
-		$constant = self::CONSTANT_MAP[ $setting ] ?? '';
+		$env       = self::get_active_environment();
+		$env_const = 'WORKOS_' . strtoupper( $env ) . '_' . strtoupper( $setting );
 
-		return $constant && defined( $constant ) && '' !== constant( $constant );
+		if ( defined( $env_const ) && '' !== constant( $env_const ) ) {
+			return true;
+		}
+
+		$generic_const = self::CONSTANT_MAP[ $setting ] ?? '';
+
+		return $generic_const && defined( $generic_const ) && '' !== constant( $generic_const );
 	}
 
 	/**
@@ -104,17 +171,44 @@ class Config {
 	}
 
 	/**
-	 * Get a setting value, checking constant override first, then database.
+	 * Get a setting value with environment-aware precedence:
+	 *
+	 * 1. Env-specific constant: WORKOS_{ENV}_{SETTING}
+	 * 2. Generic constant: WORKOS_{SETTING}
+	 * 3. Database option: workos_{env}_{setting}
 	 *
 	 * @param string $setting Setting name (e.g. 'api_key').
 	 *
 	 * @return string
 	 */
 	private static function get( string $setting ): string {
-		if ( self::is_overridden( $setting ) ) {
-			return (string) constant( self::CONSTANT_MAP[ $setting ] );
+		$env = self::get_active_environment();
+
+		// 1. Env-specific constant: WORKOS_{ENV}_{SETTING}.
+		$env_const = 'WORKOS_' . strtoupper( $env ) . '_' . strtoupper( $setting );
+		if ( defined( $env_const ) && '' !== constant( $env_const ) ) {
+			return (string) constant( $env_const );
 		}
 
-		return (string) get_option( "workos_{$setting}", '' );
+		// 2. Generic constant: WORKOS_{SETTING}.
+		$generic_const = self::CONSTANT_MAP[ $setting ] ?? '';
+		if ( $generic_const && defined( $generic_const ) && '' !== constant( $generic_const ) ) {
+			return (string) constant( $generic_const );
+		}
+
+		// 3. Database: serialized array option.
+		return (string) self::get_env_options( $env )->get( $setting, '' );
+	}
+
+	/**
+	 * Get the Options instance for a given environment.
+	 *
+	 * @param string $env 'production' or 'staging'.
+	 *
+	 * @return Options\Options
+	 */
+	private static function get_env_options( string $env ): Options\Options {
+		$class = 'staging' === $env ? Options\Staging::class : Options\Production::class;
+		return App::container()->get( $class );
 	}
 }
