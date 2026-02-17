@@ -375,12 +375,11 @@ class UserSync {
 	 * @param int $wp_user_id WP user ID.
 	 */
 	public static function deprovision_user( int $wp_user_id ): void {
-		$global = \WorkOS\App::container()->get( \WorkOS\Options\Global_Options::class );
-		$action = $global->get( 'deprovision_action', 'deactivate' );
+		$action = workos()->option( 'deprovision_action', 'deactivate' );
 
 		switch ( $action ) {
 			case 'delete':
-				$reassign = (int) $global->get( 'reassign_user', 0 );
+				$reassign = (int) workos()->option( 'reassign_user', 0 );
 				wp_delete_user( $wp_user_id, $reassign ? $reassign : null );
 				break;
 

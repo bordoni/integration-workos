@@ -20,7 +20,7 @@ class AuditLogController extends BaseController {
 	 * @return bool
 	 */
 	public function isActive(): bool {
-		return (bool) \WorkOS\App::container()->get( \WorkOS\Options\Global_Options::class )->get( 'audit_logging_enabled', false );
+		return (bool) workos()->option( 'audit_logging_enabled', false );
 	}
 
 	/**

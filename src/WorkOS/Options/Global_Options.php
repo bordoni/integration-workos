@@ -25,13 +25,6 @@ class Global_Options extends Options {
 	 * {@inheritDoc}
 	 */
 	protected function defaults(): array {
-		return [
-			'login_mode'              => 'redirect',
-			'allow_password_fallback' => true,
-			'deprovision_action'      => 'deactivate',
-			'reassign_user'           => 0,
-			'role_map'                => [],
-			'audit_logging_enabled'   => false,
-		];
+		return [];
 	}
 }

@@ -22,7 +22,7 @@ class Schema {
 	/**
 	 * Current schema version.
 	 */
-	private const CURRENT_VERSION = 3;
+	private const CURRENT_VERSION = 4;
 
 	/**
 	 * Activation hook — create tables.
@@ -31,6 +31,7 @@ class Schema {
 		self::create_tables();
 		self::migrate_to_v2();
 		self::migrate_to_v3();
+		self::migrate_to_v4();
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
 		flush_rewrite_rules();
 	}
@@ -53,6 +54,10 @@ class Schema {
 
 		if ( $installed < 3 ) {
 			self::migrate_to_v3();
+		}
+
+		if ( $installed < 4 ) {
+			self::migrate_to_v4();
 		}
 
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
@@ -116,6 +121,40 @@ class Schema {
 			$value = get_option( $old[0], $old[1] );
 			$global[ $key ] = $value;
 			delete_option( $old[0] );
+		}
+		update_option( 'workos_global', $global );
+	}
+
+	/**
+	 * Move global settings into per-environment options.
+	 */
+	private static function migrate_to_v4(): void {
+		$global = get_option( 'workos_global', [] );
+
+		if ( ! is_array( $global ) || empty( $global ) ) {
+			return;
+		}
+
+		$keys_to_migrate = [ 'login_mode', 'allow_password_fallback', 'deprovision_action', 'reassign_user', 'role_map', 'audit_logging_enabled' ];
+
+		foreach ( [ 'production', 'staging' ] as $env ) {
+			$env_options = get_option( "workos_{$env}", [] );
+			if ( ! is_array( $env_options ) ) {
+				$env_options = [];
+			}
+
+			foreach ( $keys_to_migrate as $key ) {
+				if ( array_key_exists( $key, $global ) && ! array_key_exists( $key, $env_options ) ) {
+					$env_options[ $key ] = $global[ $key ];
+				}
+			}
+
+			update_option( "workos_{$env}", $env_options );
+		}
+
+		// Clear migrated keys from global.
+		foreach ( $keys_to_migrate as $key ) {
+			unset( $global[ $key ] );
 		}
 		update_option( 'workos_global', $global );
 	}

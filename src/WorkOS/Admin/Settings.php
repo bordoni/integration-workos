@@ -22,6 +22,11 @@ class Settings {
 	private const OPTION_GROUP = 'workos_settings';
 
 	/**
+	 * Page slug for the Organization tab.
+	 */
+	private const ORG_PAGE = 'workos-organization';
+
+	/**
 	 * Page slug for the Users tab.
 	 */
 	private const USERS_PAGE = 'workos-users';
@@ -32,12 +37,35 @@ class Settings {
 	public function __construct() {
 		add_action( 'admin_menu', [ $this, 'register_menu' ] );
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
+		add_action( 'admin_init', [ $this, 'handle_activate_environment' ] );
+		add_action( 'admin_post_workos_create_org', [ $this, 'handle_create_org' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_filter( 'plugin_action_links_' . WORKOS_BASENAME, [ $this, 'action_links' ] );
 
 		// Flush organizations cache when environment credentials change.
 		foreach ( [ 'production', 'staging' ] as $env ) {
 			add_action( "update_option_workos_{$env}", [ $this, 'flush_organizations_cache' ] );
+		}
+
+		// Admin notice for users upgrading who are missing environment_id.
+		add_action( 'admin_notices', [ $this, 'maybe_show_environment_id_notice' ] );
+	}
+
+	/**
+	 * Show admin notice when api_key + client_id are set but environment_id is missing.
+	 */
+	public function maybe_show_environment_id_notice(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( ! empty( Config::get_api_key() ) && ! empty( Config::get_client_id() ) && empty( Config::get_environment_id() ) ) {
+			printf(
+				'<div class="notice notice-warning"><p>%s <a href="%s">%s</a></p></div>',
+				esc_html__( 'WorkOS now requires an Environment ID to be fully configured.', 'workos' ),
+				esc_url( admin_url( 'admin.php?page=workos' ) ),
+				esc_html__( 'Update your settings.', 'workos' )
+			);
 		}
 	}
 
@@ -48,8 +76,22 @@ class Settings {
 	 */
 	private function get_current_tab(): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab navigation, no data modification.
-		$tab = sanitize_text_field( wp_unslash( $_GET['tab'] ?? 'general' ) );
-		return in_array( $tab, [ 'general', 'users' ], true ) ? $tab : 'general';
+		$tab = sanitize_text_field( wp_unslash( $_GET['tab'] ?? 'settings' ) );
+
+		if ( ! in_array( $tab, [ 'settings', 'organization', 'users' ], true ) ) {
+			return 'settings';
+		}
+
+		// Force redirect to settings if preconditions not met.
+		if ( 'organization' === $tab && ! $this->is_editing_env_configured() ) {
+			return 'settings';
+		}
+
+		if ( 'users' === $tab && ! $this->has_editing_env_org() ) {
+			return 'settings';
+		}
+
+		return $tab;
 	}
 
 	/**
@@ -64,14 +106,14 @@ class Settings {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Navigation param, no data modification.
 		$env = sanitize_text_field( wp_unslash( $_GET['env'] ?? Config::get_active_environment() ) );
 
-		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'production';
+		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'staging';
 	}
 
 	/**
-	 * Get the array-style option name for an environment credential setting.
+	 * Get the array-style option name for an environment setting.
 	 *
 	 * Uses the editing environment, not the active environment,
-	 * so credentials can be saved for either env without switching the active one.
+	 * so settings can be saved for either env without switching the active one.
 	 *
 	 * @param string $setting Setting name (e.g. 'api_key').
 	 *
@@ -82,14 +124,33 @@ class Settings {
 	}
 
 	/**
-	 * Get the array-style option name for a global setting.
+	 * Check if the editing environment has api_key + client_id + environment_id configured.
 	 *
-	 * @param string $setting Setting name (e.g. 'login_mode').
-	 *
-	 * @return string Option name (e.g. 'workos_global[login_mode]').
+	 * @return bool
 	 */
-	private function global_option( string $setting ): string {
-		return "workos_global[{$setting}]";
+	private function is_editing_env_configured(): bool {
+		$env     = $this->get_editing_environment();
+		$options = get_option( "workos_{$env}", [] );
+
+		return ! empty( $options['api_key'] )
+			&& ! empty( $options['client_id'] )
+			&& ! empty( $options['environment_id'] );
+	}
+
+	/**
+	 * Check if the editing environment has an organization_id set.
+	 *
+	 * @return bool
+	 */
+	private function has_editing_env_org(): bool {
+		if ( ! $this->is_editing_env_configured() ) {
+			return false;
+		}
+
+		$env     = $this->get_editing_environment();
+		$options = get_option( "workos_{$env}", [] );
+
+		return ! empty( $options['organization_id'] );
 	}
 
 	/**
@@ -128,7 +189,7 @@ class Settings {
 
 		$current_tab = $this->get_current_tab();
 
-		if ( 'general' === $current_tab ) {
+		if ( 'settings' === $current_tab ) {
 			add_thickbox();
 		}
 
@@ -174,20 +235,24 @@ class Settings {
 	/**
 	 * Register all settings.
 	 *
-	 * Registers all options for both tabs, then delegates section/field
+	 * Registers all options for all tabs, then delegates section/field
 	 * registration to per-tab methods based on the current tab.
 	 */
 	public function register_settings(): void {
-		// Register all options regardless of active tab so saving
-		// on one tab does not blank out the other tab's values.
 		$this->register_all_options();
 
 		$current_tab = $this->get_current_tab();
 
-		if ( 'users' === $current_tab ) {
-			$this->register_users_fields();
-		} else {
-			$this->register_general_fields();
+		switch ( $current_tab ) {
+			case 'organization':
+				$this->register_organization_fields();
+				break;
+			case 'users':
+				$this->register_users_fields();
+				break;
+			default:
+				$this->register_settings_fields();
+				break;
 		}
 	}
 
@@ -195,7 +260,7 @@ class Settings {
 	 * Register all option names with the Settings API.
 	 */
 	private function register_all_options(): void {
-		// Per-environment credential options (2 serialized array rows).
+		// Per-environment options (2 serialized array rows).
 		foreach ( [ 'production', 'staging' ] as $env ) {
 			register_setting(
 				self::OPTION_GROUP,
@@ -208,14 +273,16 @@ class Settings {
 			);
 		}
 
-		// Global settings (1 serialized array row).
+		// Global settings (kept as safety stub — no fields write here anymore).
 		register_setting(
 			self::OPTION_GROUP,
 			'workos_global',
 			[
 				'type'              => 'array',
 				'default'           => [],
-				'sanitize_callback' => [ $this, 'sanitize_global_options' ],
+				'sanitize_callback' => function ( $input ) {
+					return is_array( $input ) ? $input : [];
+				},
 			]
 		);
 
@@ -225,22 +292,22 @@ class Settings {
 			'workos_active_environment',
 			[
 				'type'              => 'string',
-				'default'           => 'production',
+				'default'           => 'staging',
 				'sanitize_callback' => function ( $value ) {
-					return in_array( $value, [ 'production', 'staging' ], true ) ? $value : 'production';
+					return in_array( $value, [ 'production', 'staging' ], true ) ? $value : 'staging';
 				},
 			]
 		);
 	}
 
 	/**
-	 * Register sections and fields for the General tab.
+	 * Register sections and fields for the Settings tab.
 	 */
-	private function register_general_fields(): void {
+	private function register_settings_fields(): void {
 		$editing_env = $this->get_editing_environment();
-		$env_label   = Config::get_environments()[ $editing_env ] ?? 'Production';
+		$env_label   = Config::get_environments()[ $editing_env ] ?? 'Staging';
 
-		// --- API Credentials section ---
+		// --- API Credentials section (always shown) ---
 		add_settings_section(
 			'workos_api',
 			/* translators: %s: environment name (Production or Staging) */
@@ -278,79 +345,21 @@ class Settings {
 			__( 'Found in the WorkOS Dashboard URL after /environment_. Starts with "environment_".', 'workos' )
 		);
 
-		// --- Organization section ---
-		add_settings_section(
-			'workos_organization',
-			__( 'Organization', 'workos' ),
-			function () {
-				echo '<p>' . esc_html__( 'Select the WorkOS organization this site belongs to.', 'workos' ) . '</p>';
-			},
-			'workos'
-		);
-
-		$env = $this->get_editing_environment();
-		add_settings_field(
-			"workos_{$env}_organization_id",
-			__( 'Organization', 'workos' ),
-			[ $this, 'render_organization_select' ],
-			'workos',
-			'workos_organization'
-		);
-
-		// --- Active Environment section ---
-		add_settings_section(
-			'workos_active_env',
-			__( 'Active Environment', 'workos' ),
-			function () {
-				echo '<p>' . esc_html__( 'Select which environment the plugin uses for authentication, webhooks, and API calls.', 'workos' ) . '</p>';
-			},
-			'workos'
-		);
-
-		add_settings_field(
-			'workos_active_environment',
-			__( 'Active Environment', 'workos' ),
-			[ $this, 'render_active_environment_field' ],
-			'workos',
-			'workos_active_env'
-		);
-
-		// --- Authentication section ---
-		add_settings_section(
-			'workos_auth',
-			__( 'Authentication', 'workos' ),
-			function () {
-				echo '<p>' . esc_html__( 'Configure how users authenticate with your site.', 'workos' ) . '</p>';
-			},
-			'workos'
-		);
-
-		add_settings_field(
-			'workos_global_login_mode',
-			__( 'Login Mode', 'workos' ),
-			[ $this, 'render_select' ],
-			'workos',
-			'workos_auth',
-			[
-				'name'    => $this->global_option( 'login_mode' ),
-				'options' => [
-					'redirect' => __( 'AuthKit Redirect (Recommended)', 'workos' ),
-					'headless' => __( 'Headless API (Custom Form)', 'workos' ),
-				],
-			]
-		);
-
-		add_settings_field(
-			'workos_global_allow_password_fallback',
-			__( 'Password Fallback', 'workos' ),
-			[ $this, 'render_checkbox' ],
-			'workos',
-			'workos_auth',
-			[
-				'name'  => $this->global_option( 'allow_password_fallback' ),
-				'label' => __( 'Allow users to log in with WordPress password if WorkOS auth fails.', 'workos' ),
-			]
-		);
+		// --- Progressive disclosure: only show remaining sections when configured ---
+		if ( ! $this->is_editing_env_configured() ) {
+			add_settings_section(
+				'workos_configure_notice',
+				'',
+				function () {
+					printf(
+						'<div class="notice notice-info inline"><p>%s</p></div>',
+						esc_html__( 'Configure your API Key, Client ID, and Environment ID above, then save to unlock additional settings.', 'workos' )
+					);
+				},
+				'workos'
+			);
+			return;
+		}
 
 		// --- Webhook section ---
 		add_settings_section(
@@ -392,6 +401,43 @@ class Settings {
 			__( 'The signing secret from your WorkOS webhook endpoint.', 'workos' )
 		);
 
+		// --- Authentication section ---
+		add_settings_section(
+			'workos_auth',
+			__( 'Authentication', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Configure how users authenticate with your site.', 'workos' ) . '</p>';
+			},
+			'workos'
+		);
+
+		add_settings_field(
+			'workos_env_login_mode',
+			__( 'Login Mode', 'workos' ),
+			[ $this, 'render_select' ],
+			'workos',
+			'workos_auth',
+			[
+				'name'    => $this->env_option( 'login_mode' ),
+				'options' => [
+					'redirect' => __( 'AuthKit Redirect (Recommended)', 'workos' ),
+					'headless' => __( 'Headless API (Custom Form)', 'workos' ),
+				],
+			]
+		);
+
+		add_settings_field(
+			'workos_env_allow_password_fallback',
+			__( 'Password Fallback', 'workos' ),
+			[ $this, 'render_checkbox' ],
+			'workos',
+			'workos_auth',
+			[
+				'name'  => $this->env_option( 'allow_password_fallback' ),
+				'label' => __( 'Allow users to log in with WordPress password if WorkOS auth fails.', 'workos' ),
+			]
+		);
+
 		// --- Audit Logging section ---
 		add_settings_section(
 			'workos_audit',
@@ -403,15 +449,49 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_global_audit_logging_enabled',
+			'workos_env_audit_logging_enabled',
 			__( 'Enable Audit Logging', 'workos' ),
 			[ $this, 'render_checkbox' ],
 			'workos',
 			'workos_audit',
 			[
-				'name'  => $this->global_option( 'audit_logging_enabled' ),
+				'name'  => $this->env_option( 'audit_logging_enabled' ),
 				'label' => __( 'Send login, post, and user events to WorkOS Audit Logs.', 'workos' ),
 			]
+		);
+	}
+
+	/**
+	 * Register sections and fields for the Organization tab.
+	 */
+	private function register_organization_fields(): void {
+		// --- Organization selection ---
+		add_settings_section(
+			'workos_organization',
+			__( 'Organization', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Select the WorkOS organization this site belongs to.', 'workos' ) . '</p>';
+			},
+			self::ORG_PAGE
+		);
+
+		add_settings_field(
+			'workos_env_organization_id',
+			__( 'Organization', 'workos' ),
+			[ $this, 'render_organization_select' ],
+			self::ORG_PAGE,
+			'workos_organization'
+		);
+
+		// --- Create Organization ---
+		add_settings_section(
+			'workos_create_org',
+			__( 'Create Organization', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Create a new organization in WorkOS and automatically select it.', 'workos' ) . '</p>';
+				$this->render_create_org_form();
+			},
+			self::ORG_PAGE
 		);
 	}
 
@@ -430,13 +510,13 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_global_deprovision_action',
+			'workos_env_deprovision_action',
 			__( 'Deprovision Action', 'workos' ),
 			[ $this, 'render_select' ],
 			self::USERS_PAGE,
 			'workos_provisioning',
 			[
-				'name'    => $this->global_option( 'deprovision_action' ),
+				'name'    => $this->env_option( 'deprovision_action' ),
 				'options' => [
 					'deactivate' => __( 'Deactivate (mark as inactive)', 'workos' ),
 					'demote'     => __( 'Demote to Subscriber role', 'workos' ),
@@ -446,12 +526,12 @@ class Settings {
 		);
 
 		add_settings_field(
-			'workos_global_reassign_user',
+			'workos_env_reassign_user',
 			__( 'Reassign Content To', 'workos' ),
 			[ $this, 'render_user_select' ],
 			self::USERS_PAGE,
 			'workos_provisioning',
-			[ 'name' => $this->global_option( 'reassign_user' ) ]
+			[ 'name' => $this->env_option( 'reassign_user' ) ]
 		);
 
 		// --- Role Mapping section ---
@@ -474,34 +554,71 @@ class Settings {
 			return;
 		}
 
-		$current_tab = $this->get_current_tab();
-		$tabs        = [
-			'general' => __( 'General', 'workos' ),
-			'users'   => __( 'Users', 'workos' ),
+		$current_tab  = $this->get_current_tab();
+		$editing_env  = $this->get_editing_environment();
+		$is_configured = $this->is_editing_env_configured();
+		$has_org       = $this->has_editing_env_org();
+
+		$tabs = [
+			'settings'     => __( 'Settings', 'workos' ),
+			'organization' => __( 'Organization', 'workos' ),
+			'users'        => __( 'Users', 'workos' ),
 		];
-		$page_slug   = 'general' === $current_tab ? 'workos' : self::USERS_PAGE;
+
+		$tab_disabled = [
+			'settings'     => false,
+			'organization' => ! $is_configured,
+			'users'        => ! $has_org,
+		];
+
+		$tab_tooltips = [
+			'organization' => __( 'Configure API credentials first', 'workos' ),
+			'users'        => __( 'Select an organization first', 'workos' ),
+		];
+
+		switch ( $current_tab ) {
+			case 'organization':
+				$page_slug = self::ORG_PAGE;
+				break;
+			case 'users':
+				$page_slug = self::USERS_PAGE;
+				break;
+			default:
+				$page_slug = 'workos';
+				break;
+		}
 
 		?>
 		<div class="wrap">
-			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<h1 style="display: inline-block; margin-right: 16px;"><?php echo esc_html( get_admin_page_title() ); ?></h1>
+
+			<?php $this->render_environment_picker(); ?>
 
 			<?php settings_errors( 'workos_messages' ); ?>
 
-			<?php $this->render_environment_toggle(); ?>
-
 			<nav class="nav-tab-wrapper">
 				<?php
-				$editing_env = $this->get_editing_environment();
 				foreach ( $tabs as $slug => $label ) :
-					$tab_url = add_query_arg(
+					$disabled = $tab_disabled[ $slug ];
+					$tab_url  = add_query_arg(
 						[ 'tab' => $slug, 'env' => $editing_env ],
 						admin_url( 'admin.php?page=workos' )
 					);
-					?>
-					<a href="<?php echo esc_url( $tab_url ); ?>"
-						class="nav-tab <?php echo $slug === $current_tab ? 'nav-tab-active' : ''; ?>">
-						<?php echo esc_html( $label ); ?>
-					</a>
+
+					if ( $disabled ) :
+						$tooltip = $tab_tooltips[ $slug ] ?? '';
+						?>
+						<span class="nav-tab nav-tab-disabled"
+							style="opacity: 0.5; cursor: not-allowed;"
+							title="<?php echo esc_attr( $tooltip ); ?>">
+							<?php echo esc_html( $label ); ?>
+						</span>
+					<?php else : ?>
+						<a href="<?php echo esc_url( $tab_url ); ?>"
+							class="nav-tab <?php echo $slug === $current_tab ? 'nav-tab-active' : ''; ?>">
+							<?php echo esc_html( $label ); ?>
+						</a>
+					<?php endif; ?>
 				<?php endforeach; ?>
 			</nav>
 
@@ -513,7 +630,7 @@ class Settings {
 				?>
 			</form>
 
-			<?php if ( 'general' === $current_tab && workos()->is_enabled() ) : ?>
+			<?php if ( 'settings' === $current_tab && workos()->is_enabled() ) : ?>
 				<hr>
 				<h2><?php esc_html_e( 'Status', 'workos' ); ?></h2>
 				<table class="widefat striped" style="max-width:600px">
@@ -536,22 +653,23 @@ class Settings {
 	}
 
 	/**
-	 * Render the environment view-switcher above the tab navigation.
+	 * Render the environment picker inline with the page title.
 	 *
-	 * This controls which environment's credentials are displayed for editing.
-	 * It does NOT change the active environment — that is a saved setting in the form.
+	 * Shows env buttons, active badge, and Activate button.
 	 */
-	private function render_environment_toggle(): void {
+	private function render_environment_picker(): void {
 		$editing      = $this->get_editing_environment();
+		$active       = Config::get_active_environment();
 		$environments = Config::get_environments();
 		$current_tab  = $this->get_current_tab();
-		$base_url     = add_query_arg( 'tab', $current_tab, admin_url( 'admin.php?page=workos' ) );
+		$is_locked    = Config::is_environment_overridden();
 
 		?>
-		<div style="margin: 12px 0 8px;">
+		<div style="display: inline-block; vertical-align: middle; margin-bottom: 10px;">
 			<?php foreach ( $environments as $slug => $label ) :
-				$url       = add_query_arg( 'env', $slug, $base_url );
-				$is_active = $slug === $editing;
+				$url         = add_query_arg( [ 'tab' => $current_tab, 'env' => $slug ], admin_url( 'admin.php?page=workos' ) );
+				$is_viewing  = $slug === $editing;
+				$is_active   = $slug === $active;
 				?>
 				<a
 					href="<?php echo esc_url( $url ); ?>"
@@ -559,14 +677,14 @@ class Settings {
 						display: inline-block;
 						padding: 6px 16px;
 						margin-right: 4px;
-						border: 1px solid <?php echo $is_active ? 'transparent' : '#8c8f94'; ?>;
+						border: 1px solid <?php echo $is_viewing ? 'transparent' : '#8c8f94'; ?>;
 						border-radius: 4px;
 						font-weight: 600;
 						font-size: 13px;
 						text-decoration: none;
-						color: <?php echo $is_active ? '#fff' : '#50575e'; ?>;
+						color: <?php echo $is_viewing ? '#fff' : '#50575e'; ?>;
 						background: <?php
-						if ( $is_active ) {
+						if ( $is_viewing ) {
 							echo 'staging' === $slug ? '#dba617' : '#00a32a';
 						} else {
 							echo '#f0f0f1';
@@ -575,10 +693,177 @@ class Settings {
 					"
 				>
 					<?php echo esc_html( $label ); ?>
+					<?php if ( $is_active ) : ?>
+						<span style="margin-left: 4px; font-size: 11px; opacity: 0.9;">&#x2713;active</span>
+					<?php endif; ?>
+					<?php if ( $is_locked && $is_active ) : ?>
+						<span style="margin-left: 2px; font-size: 11px;">&#x1F512;</span>
+					<?php endif; ?>
 				</a>
 			<?php endforeach; ?>
+
+			<?php if ( ! $is_locked && $editing !== $active ) :
+				$activate_url = wp_nonce_url(
+					add_query_arg(
+						[
+							'action' => 'workos_activate_env',
+							'env'    => $editing,
+						],
+						admin_url( 'admin.php?page=workos' )
+					),
+					'workos_activate_env'
+				);
+				$confirm_msg = 'production' === $editing
+					? esc_attr__( 'Are you sure you want to activate the Production environment? This will affect all users.', 'workos' )
+					: '';
+				?>
+				<a
+					href="<?php echo esc_url( $activate_url ); ?>"
+					class="button button-secondary"
+					style="margin-left: 8px; vertical-align: middle;"
+					<?php if ( $confirm_msg ) : ?>
+						onclick="return confirm('<?php echo $confirm_msg; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>');"
+					<?php endif; ?>
+				>
+					<?php
+					/* translators: %s: environment name (Production or Staging) */
+					printf( esc_html__( 'Activate %s', 'workos' ), esc_html( $environments[ $editing ] ?? $editing ) );
+					?>
+					<?php if ( 'production' === $editing ) : ?>
+						&#x26A0;
+					<?php endif; ?>
+				</a>
+			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Handle the environment activation action (admin_init).
+	 */
+	public function handle_activate_environment(): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce is verified below.
+		if ( empty( $_GET['action'] ) || 'workos_activate_env' !== $_GET['action'] ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'workos' ) );
+		}
+
+		check_admin_referer( 'workos_activate_env' );
+
+		$env = sanitize_text_field( wp_unslash( $_GET['env'] ?? '' ) );
+
+		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
+			wp_die( esc_html__( 'Invalid environment.', 'workos' ) );
+		}
+
+		if ( Config::is_environment_overridden() ) {
+			wp_die( esc_html__( 'Environment is locked via constant.', 'workos' ) );
+		}
+
+		Config::set_active_environment( $env );
+
+		$env_label = Config::get_environments()[ $env ] ?? $env;
+		add_settings_error(
+			'workos_messages',
+			'workos_env_activated',
+			/* translators: %s: environment name */
+			sprintf( __( '%s environment is now active.', 'workos' ), $env_label ),
+			'success'
+		);
+
+		wp_safe_redirect(
+			add_query_arg(
+				[
+					'page' => 'workos',
+					'env'  => $env,
+				],
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	/**
+	 * Handle organization creation (admin_post action).
+	 */
+	public function handle_create_org(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'workos' ) );
+		}
+
+		check_admin_referer( 'workos_create_org' );
+
+		$name = sanitize_text_field( wp_unslash( $_POST['org_name'] ?? '' ) );
+		$env  = sanitize_text_field( wp_unslash( $_POST['editing_env'] ?? '' ) );
+
+		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
+			$env = Config::get_active_environment();
+		}
+
+		$redirect_url = add_query_arg(
+			[
+				'page' => 'workos',
+				'tab'  => 'organization',
+				'env'  => $env,
+			],
+			admin_url( 'admin.php' )
+		);
+
+		if ( empty( $name ) ) {
+			add_settings_error(
+				'workos_messages',
+				'workos_create_org_error',
+				__( 'Organization name is required.', 'workos' ),
+				'error'
+			);
+			set_transient( 'settings_errors', get_settings_errors(), 30 );
+			wp_safe_redirect( add_query_arg( 'settings-updated', 'false', $redirect_url ) );
+			exit;
+		}
+
+		$result = workos()->api()->create_organization( [ 'name' => $name ] );
+
+		if ( is_wp_error( $result ) ) {
+			add_settings_error(
+				'workos_messages',
+				'workos_create_org_error',
+				/* translators: %s: error message from API */
+				sprintf( __( 'Failed to create organization: %s', 'workos' ), $result->get_error_message() ),
+				'error'
+			);
+			set_transient( 'settings_errors', get_settings_errors(), 30 );
+			wp_safe_redirect( add_query_arg( 'settings-updated', 'false', $redirect_url ) );
+			exit;
+		}
+
+		$org_id = $result['id'] ?? '';
+
+		if ( ! empty( $org_id ) ) {
+			// Save org_id to the editing env options.
+			$option_name = "workos_{$env}";
+			$options     = get_option( $option_name, [] );
+			if ( ! is_array( $options ) ) {
+				$options = [];
+			}
+			$options['organization_id'] = $org_id;
+			update_option( $option_name, $options );
+
+			$this->flush_organizations_cache();
+		}
+
+		add_settings_error(
+			'workos_messages',
+			'workos_create_org_success',
+			/* translators: %s: organization name */
+			sprintf( __( 'Organization "%s" created and selected.', 'workos' ), $name ),
+			'success'
+		);
+		set_transient( 'settings_errors', get_settings_errors(), 30 );
+		wp_safe_redirect( add_query_arg( 'settings-updated', 'true', $redirect_url ) );
+		exit;
 	}
 
 	/**
@@ -605,35 +890,6 @@ class Settings {
 				'description' => $description,
 			]
 		);
-	}
-
-	/**
-	 * Render the Active Environment select (or locked indicator).
-	 */
-	public function render_active_environment_field(): void {
-		if ( Config::is_environment_overridden() ) {
-			$env   = Config::get_active_environment();
-			$label = Config::get_environments()[ $env ] ?? $env;
-			printf(
-				'<input type="text" value="%s" class="regular-text" disabled /> <em>%s</em>',
-				esc_attr( $label ),
-				esc_html__( 'Locked via WORKOS_ENVIRONMENT constant.', 'workos' )
-			);
-			return;
-		}
-
-		$value = Config::get_active_environment();
-		echo '<select name="workos_active_environment">';
-		foreach ( Config::get_environments() as $slug => $label ) {
-			printf(
-				'<option value="%s" %s>%s</option>',
-				esc_attr( $slug ),
-				selected( $value, $slug, false ),
-				esc_html( $label )
-			);
-		}
-		echo '</select>';
-		echo '<p class="description">' . esc_html__( 'The plugin will use this environment for all authentication, webhooks, and API calls.', 'workos' ) . '</p>';
 	}
 
 	/**
@@ -681,6 +937,10 @@ class Settings {
 	 */
 	public function render_checkbox( array $args ): void {
 		$value = $this->get_field_value( $args['name'], false );
+		printf(
+			'<input type="hidden" name="%s" value="0" />',
+			esc_attr( $args['name'] )
+		);
 		printf(
 			'<label><input type="checkbox" name="%s" value="1" %s /> %s</label>',
 			esc_attr( $args['name'] ),
@@ -733,7 +993,7 @@ class Settings {
 		$option_name = $this->env_option( 'organization_id' );
 
 		if ( ! workos()->is_enabled() ) {
-			echo '<p class="description">' . esc_html__( 'Configure API credentials above and save to select an organization.', 'workos' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'Configure API credentials and save to select an organization.', 'workos' ) . '</p>';
 			return;
 		}
 
@@ -789,6 +1049,37 @@ class Settings {
 			);
 		}
 		echo '</select>';
+	}
+
+	/**
+	 * Render the inline Create Organization form.
+	 */
+	private function render_create_org_form(): void {
+		if ( Config::is_overridden( 'organization_id' ) ) {
+			echo '<p class="description">' . esc_html__( 'Organization is set via constant.', 'workos' ) . '</p>';
+			return;
+		}
+
+		$editing_env = $this->get_editing_environment();
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="max-width: 500px;">
+			<?php wp_nonce_field( 'workos_create_org' ); ?>
+			<input type="hidden" name="action" value="workos_create_org" />
+			<input type="hidden" name="editing_env" value="<?php echo esc_attr( $editing_env ); ?>" />
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row">
+						<label for="workos_org_name"><?php esc_html_e( 'Organization Name', 'workos' ); ?></label>
+					</th>
+					<td>
+						<input type="text" id="workos_org_name" name="org_name" class="regular-text" required />
+						<p class="description"><?php esc_html_e( 'Name for the new WorkOS organization.', 'workos' ); ?></p>
+					</td>
+				</tr>
+			</table>
+			<?php submit_button( __( 'Create Organization', 'workos' ), 'secondary' ); ?>
+		</form>
+		<?php
 	}
 
 	/**
@@ -858,6 +1149,7 @@ class Settings {
 	public function render_role_map(): void {
 		$map      = \WorkOS\Sync\RoleMapper::get_role_map();
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$env      = $this->get_editing_environment();
 
 		echo '<table id="workos-role-map-table" class="widefat"><thead><tr>';
 		echo '<th>' . esc_html__( 'WorkOS Role', 'workos' ) . '</th>';
@@ -867,11 +1159,12 @@ class Settings {
 		foreach ( $map as $workos_role => $wp_role ) {
 			echo '<tr class="workos-role-map-row"><td>';
 			printf(
-				'<input type="text" name="workos_global[role_map][keys][]" value="%s" class="regular-text" />',
+				'<input type="text" name="workos_%s[role_map][keys][]" value="%s" class="regular-text" />',
+				esc_attr( $env ),
 				esc_attr( $workos_role )
 			);
 			echo '</td><td>';
-			echo '<select name="workos_global[role_map][values][]">';
+			printf( '<select name="workos_%s[role_map][values][]">', esc_attr( $env ) );
 			foreach ( $wp_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
@@ -886,9 +1179,13 @@ class Settings {
 
 		// Empty row for no-JS fallback.
 		echo '<tr class="workos-role-map-row"><td>';
-		echo '<input type="text" name="workos_global[role_map][keys][]" value="" class="regular-text" placeholder="' . esc_attr__( 'New WorkOS role...', 'workos' ) . '" />';
+		printf(
+			'<input type="text" name="workos_%s[role_map][keys][]" value="" class="regular-text" placeholder="%s" />',
+			esc_attr( $env ),
+			esc_attr__( 'New WorkOS role...', 'workos' )
+		);
 		echo '</td><td>';
-		echo '<select name="workos_global[role_map][values][]">';
+		printf( '<select name="workos_%s[role_map][values][]">', esc_attr( $env ) );
 		echo '<option value="">' . esc_html__( '— Select —', 'workos' ) . '</option>';
 		foreach ( $wp_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
@@ -910,50 +1207,56 @@ class Settings {
 	/**
 	 * Sanitize an environment options array (production or staging).
 	 *
+	 * Uses merge semantics: reads existing option from DB, sanitizes each
+	 * submitted key by type, then merges so non-submitted keys (from other tabs)
+	 * are preserved.
+	 *
 	 * @param mixed $input Raw form input.
 	 *
 	 * @return array Sanitized options.
 	 */
 	public function sanitize_environment_options( $input ): array {
-		if ( ! is_array( $input ) || empty( $input ) ) {
-			// Determine which option is being saved from the current filter name.
-			$option_name = str_replace( 'sanitize_option_', '', current_filter() );
-			return get_option( $option_name, [] );
+		// Determine which option is being saved from the current filter name.
+		$option_name = str_replace( 'sanitize_option_', '', current_filter() );
+		$existing    = get_option( $option_name, [] );
+
+		if ( ! is_array( $existing ) ) {
+			$existing = [];
 		}
 
-		$allowed = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
-		$out     = [];
-		foreach ( $allowed as $key ) {
+		if ( ! is_array( $input ) || empty( $input ) ) {
+			return $existing;
+		}
+
+		$sanitized = [];
+
+		// Text fields.
+		$text_keys = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id', 'login_mode', 'deprovision_action' ];
+		foreach ( $text_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
-				$out[ $key ] = sanitize_text_field( $input[ $key ] );
+				$sanitized[ $key ] = sanitize_text_field( $input[ $key ] );
 			}
 		}
-		return $out;
-	}
 
-	/**
-	 * Sanitize the global options array.
-	 *
-	 * @param mixed $input Raw form input.
-	 *
-	 * @return array Sanitized options.
-	 */
-	public function sanitize_global_options( $input ): array {
-		if ( ! is_array( $input ) || empty( $input ) ) {
-			return get_option( 'workos_global', [] );
+		// Boolean fields.
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled' ];
+		foreach ( $bool_keys as $key ) {
+			if ( isset( $input[ $key ] ) ) {
+				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );
+			}
 		}
 
-		$existing = get_option( 'workos_global', [] );
+		// Integer fields.
+		if ( isset( $input['reassign_user'] ) ) {
+			$sanitized['reassign_user'] = absint( $input['reassign_user'] );
+		}
 
-		// Merge submitted keys on top of existing (preserves keys not in form).
-		return array_merge( $existing, [
-			'login_mode'              => sanitize_text_field( $input['login_mode'] ?? $existing['login_mode'] ?? 'redirect' ),
-			'allow_password_fallback' => rest_sanitize_boolean( $input['allow_password_fallback'] ?? $existing['allow_password_fallback'] ?? true ),
-			'deprovision_action'      => sanitize_text_field( $input['deprovision_action'] ?? $existing['deprovision_action'] ?? 'deactivate' ),
-			'reassign_user'           => absint( $input['reassign_user'] ?? $existing['reassign_user'] ?? 0 ),
-			'role_map'                => $this->sanitize_role_map( $input['role_map'] ?? $existing['role_map'] ?? [] ),
-			'audit_logging_enabled'   => rest_sanitize_boolean( $input['audit_logging_enabled'] ?? $existing['audit_logging_enabled'] ?? false ),
-		] );
+		// Role map.
+		if ( isset( $input['role_map'] ) ) {
+			$sanitized['role_map'] = $this->sanitize_role_map( $input['role_map'] );
+		}
+
+		return array_merge( $existing, $sanitized );
 	}
 
 	/**

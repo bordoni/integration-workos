@@ -47,6 +47,7 @@ class OptionsTest extends WPTestCase {
 		delete_option( 'workos_production' );
 		delete_option( 'workos_staging' );
 		delete_option( 'workos_global' );
+		delete_option( 'workos_active_environment' );
 
 		$this->production = new Production();
 		$this->staging    = new Staging();
@@ -60,6 +61,7 @@ class OptionsTest extends WPTestCase {
 		delete_option( 'workos_production' );
 		delete_option( 'workos_staging' );
 		delete_option( 'workos_global' );
+		delete_option( 'workos_active_environment' );
 
 		parent::tearDown();
 	}
@@ -73,12 +75,12 @@ class OptionsTest extends WPTestCase {
 	 */
 	public function test_get_returns_class_default_when_not_stored(): void {
 		$this->assertSame( '', $this->production->get( 'api_key' ) );
-		$this->assertSame( 'redirect', $this->global->get( 'login_mode' ) );
-		$this->assertTrue( $this->global->get( 'allow_password_fallback' ) );
-		$this->assertSame( 'deactivate', $this->global->get( 'deprovision_action' ) );
-		$this->assertSame( 0, $this->global->get( 'reassign_user' ) );
-		$this->assertSame( [], $this->global->get( 'role_map' ) );
-		$this->assertFalse( $this->global->get( 'audit_logging_enabled' ) );
+		$this->assertSame( 'redirect', $this->production->get( 'login_mode' ) );
+		$this->assertTrue( $this->production->get( 'allow_password_fallback' ) );
+		$this->assertSame( 'deactivate', $this->production->get( 'deprovision_action' ) );
+		$this->assertSame( 0, $this->production->get( 'reassign_user' ) );
+		$this->assertSame( [], $this->production->get( 'role_map' ) );
+		$this->assertFalse( $this->production->get( 'audit_logging_enabled' ) );
 	}
 
 	/**
@@ -86,7 +88,7 @@ class OptionsTest extends WPTestCase {
 	 */
 	public function test_get_returns_caller_default_over_class_default(): void {
 		$this->assertSame( 'custom', $this->production->get( 'api_key', 'custom' ) );
-		$this->assertSame( 'headless', $this->global->get( 'login_mode', 'headless' ) );
+		$this->assertSame( 'headless', $this->production->get( 'login_mode', 'headless' ) );
 	}
 
 	/**
@@ -103,8 +105,8 @@ class OptionsTest extends WPTestCase {
 	 * Test get returns stored value even when caller default is provided.
 	 */
 	public function test_get_stored_value_takes_precedence_over_caller_default(): void {
-		update_option( 'workos_global', [ 'login_mode' => 'headless' ] );
-		$opts = new Global_Options();
+		update_option( 'workos_production', [ 'login_mode' => 'headless' ] );
+		$opts = new Production();
 
 		$this->assertSame( 'headless', $opts->get( 'login_mode', 'redirect' ) );
 	}
@@ -161,15 +163,15 @@ class OptionsTest extends WPTestCase {
 	 * Test set can store non-string values.
 	 */
 	public function test_set_stores_non_string_values(): void {
-		$this->global->set( 'reassign_user', 42 );
-		$this->assertSame( 42, $this->global->get( 'reassign_user' ) );
+		$this->production->set( 'reassign_user', 42 );
+		$this->assertSame( 42, $this->production->get( 'reassign_user' ) );
 
-		$this->global->set( 'audit_logging_enabled', true );
-		$this->assertTrue( $this->global->get( 'audit_logging_enabled' ) );
+		$this->production->set( 'audit_logging_enabled', true );
+		$this->assertTrue( $this->production->get( 'audit_logging_enabled' ) );
 
 		$role_map = [ 'admin' => 'administrator', 'member' => 'subscriber' ];
-		$this->global->set( 'role_map', $role_map );
-		$this->assertSame( $role_map, $this->global->get( 'role_map' ) );
+		$this->production->set( 'role_map', $role_map );
+		$this->assertSame( $role_map, $this->production->get( 'role_map' ) );
 	}
 
 	// -------------------------------------------------------------------------
@@ -303,8 +305,8 @@ class OptionsTest extends WPTestCase {
 	 * Test Global_Options uses the correct option name.
 	 */
 	public function test_global_option_name(): void {
-		$this->global->set( 'login_mode', 'headless' );
-		$this->assertSame( 'headless', get_option( 'workos_global' )['login_mode'] );
+		$this->global->set( 'custom_key', 'value' );
+		$this->assertSame( 'value', get_option( 'workos_global' )['custom_key'] );
 	}
 
 	/**
@@ -319,35 +321,51 @@ class OptionsTest extends WPTestCase {
 	}
 
 	/**
-	 * Test Production defaults match expected credential keys.
+	 * Test Production defaults match expected keys (credentials + settings).
 	 */
 	public function test_production_defaults(): void {
-		$expected_keys = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
-		foreach ( $expected_keys as $key ) {
+		$credential_keys = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
+		foreach ( $credential_keys as $key ) {
 			$this->assertSame( '', $this->production->get( $key ), "Production default for '{$key}' should be empty string." );
 		}
+
+		// Settings keys now live in per-env options.
+		$this->assertSame( 'redirect', $this->production->get( 'login_mode' ) );
+		$this->assertTrue( $this->production->get( 'allow_password_fallback' ) );
+		$this->assertSame( 'deactivate', $this->production->get( 'deprovision_action' ) );
+		$this->assertSame( 0, $this->production->get( 'reassign_user' ) );
+		$this->assertSame( [], $this->production->get( 'role_map' ) );
+		$this->assertFalse( $this->production->get( 'audit_logging_enabled' ) );
 	}
 
 	/**
-	 * Test Staging defaults match expected credential keys.
+	 * Test Staging defaults match expected keys (credentials + settings).
 	 */
 	public function test_staging_defaults(): void {
-		$expected_keys = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
-		foreach ( $expected_keys as $key ) {
+		$credential_keys = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
+		foreach ( $credential_keys as $key ) {
 			$this->assertSame( '', $this->staging->get( $key ), "Staging default for '{$key}' should be empty string." );
 		}
+
+		// Settings keys now live in per-env options.
+		$this->assertSame( 'redirect', $this->staging->get( 'login_mode' ) );
+		$this->assertTrue( $this->staging->get( 'allow_password_fallback' ) );
+		$this->assertSame( 'deactivate', $this->staging->get( 'deprovision_action' ) );
+		$this->assertSame( 0, $this->staging->get( 'reassign_user' ) );
+		$this->assertSame( [], $this->staging->get( 'role_map' ) );
+		$this->assertFalse( $this->staging->get( 'audit_logging_enabled' ) );
 	}
 
 	/**
-	 * Test Global_Options defaults match expected values.
+	 * Test Global_Options defaults are empty (settings migrated to per-env).
 	 */
-	public function test_global_defaults(): void {
-		$this->assertSame( 'redirect', $this->global->get( 'login_mode' ) );
-		$this->assertTrue( $this->global->get( 'allow_password_fallback' ) );
-		$this->assertSame( 'deactivate', $this->global->get( 'deprovision_action' ) );
-		$this->assertSame( 0, $this->global->get( 'reassign_user' ) );
-		$this->assertSame( [], $this->global->get( 'role_map' ) );
-		$this->assertFalse( $this->global->get( 'audit_logging_enabled' ) );
+	public function test_global_defaults_empty(): void {
+		$this->assertNull( $this->global->get( 'login_mode' ) );
+		$this->assertNull( $this->global->get( 'allow_password_fallback' ) );
+		$this->assertNull( $this->global->get( 'deprovision_action' ) );
+		$this->assertNull( $this->global->get( 'reassign_user' ) );
+		$this->assertNull( $this->global->get( 'role_map' ) );
+		$this->assertNull( $this->global->get( 'audit_logging_enabled' ) );
 	}
 
 	// -------------------------------------------------------------------------
@@ -374,11 +392,24 @@ class OptionsTest extends WPTestCase {
 	}
 
 	/**
-	 * Test Plugin::option() reads from Global_Options.
+	 * Test Plugin::option() reads from active environment options.
 	 */
-	public function test_plugin_option_reads_global_options(): void {
-		update_option( 'workos_global', [ 'login_mode' => 'headless' ] );
-		\WorkOS\App::container()->get( Global_Options::class )->reset();
+	public function test_plugin_option_reads_active_env_options(): void {
+		// Default active env is staging (new installs).
+		update_option( 'workos_staging', [ 'login_mode' => 'headless' ] );
+		\WorkOS\App::container()->get( Staging::class )->reset();
+		update_option( 'workos_active_environment', 'staging' );
+
+		$this->assertSame( 'headless', workos()->option( 'login_mode' ) );
+	}
+
+	/**
+	 * Test Plugin::option() reads from production when active.
+	 */
+	public function test_plugin_option_reads_production_when_active(): void {
+		update_option( 'workos_active_environment', 'production' );
+		update_option( 'workos_production', [ 'login_mode' => 'headless' ] );
+		\WorkOS\App::container()->get( Production::class )->reset();
 
 		$this->assertSame( 'headless', workos()->option( 'login_mode' ) );
 	}
@@ -388,5 +419,100 @@ class OptionsTest extends WPTestCase {
 	 */
 	public function test_plugin_option_returns_caller_default(): void {
 		$this->assertSame( 'my_fallback', workos()->option( 'nonexistent', 'my_fallback' ) );
+	}
+
+	// -------------------------------------------------------------------------
+	// v4 migration tests
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Test v4 migration copies global settings into both env options.
+	 */
+	public function test_v4_migration_copies_global_to_env(): void {
+		// Set up pre-v4 state: global options with settings.
+		$global_data = [
+			'login_mode'              => 'headless',
+			'allow_password_fallback' => false,
+			'deprovision_action'      => 'delete',
+			'reassign_user'           => 42,
+			'role_map'                => [ 'admin' => 'administrator' ],
+			'audit_logging_enabled'   => true,
+		];
+		update_option( 'workos_global', $global_data );
+
+		// Set up existing env options with credentials.
+		update_option( 'workos_production', [
+			'api_key'   => 'sk_prod',
+			'client_id' => 'client_prod',
+		] );
+		update_option( 'workos_staging', [
+			'api_key'   => 'sk_stag',
+			'client_id' => 'client_stag',
+		] );
+
+		// Simulate v3 -> v4.
+		update_option( 'workos_db_version', 3 );
+		\WorkOS\Database\Schema::maybe_upgrade();
+
+		// Both envs should have the migrated settings.
+		$prod = get_option( 'workos_production' );
+		$stag = get_option( 'workos_staging' );
+
+		$this->assertSame( 'headless', $prod['login_mode'] );
+		$this->assertFalse( $prod['allow_password_fallback'] );
+		$this->assertSame( 'delete', $prod['deprovision_action'] );
+		$this->assertSame( 42, $prod['reassign_user'] );
+		$this->assertSame( [ 'admin' => 'administrator' ], $prod['role_map'] );
+		$this->assertTrue( $prod['audit_logging_enabled'] );
+		// Credentials preserved.
+		$this->assertSame( 'sk_prod', $prod['api_key'] );
+		$this->assertSame( 'client_prod', $prod['client_id'] );
+
+		$this->assertSame( 'headless', $stag['login_mode'] );
+		$this->assertSame( 'sk_stag', $stag['api_key'] );
+
+		// Global should be cleaned of migrated keys.
+		$global = get_option( 'workos_global' );
+		$this->assertArrayNotHasKey( 'login_mode', $global );
+		$this->assertArrayNotHasKey( 'allow_password_fallback', $global );
+		$this->assertArrayNotHasKey( 'deprovision_action', $global );
+		$this->assertArrayNotHasKey( 'reassign_user', $global );
+		$this->assertArrayNotHasKey( 'role_map', $global );
+		$this->assertArrayNotHasKey( 'audit_logging_enabled', $global );
+	}
+
+	/**
+	 * Test v4 migration does not overwrite existing env values.
+	 */
+	public function test_v4_migration_does_not_overwrite_existing_env_values(): void {
+		update_option( 'workos_global', [
+			'login_mode' => 'headless',
+		] );
+
+		// Production already has login_mode set.
+		update_option( 'workos_production', [
+			'login_mode' => 'redirect',
+		] );
+
+		update_option( 'workos_db_version', 3 );
+		\WorkOS\Database\Schema::maybe_upgrade();
+
+		$prod = get_option( 'workos_production' );
+		// Should keep existing value, not overwrite with global.
+		$this->assertSame( 'redirect', $prod['login_mode'] );
+	}
+
+	/**
+	 * Test v4 migration is idempotent with empty global.
+	 */
+	public function test_v4_migration_handles_empty_global(): void {
+		update_option( 'workos_global', [] );
+		update_option( 'workos_production', [ 'api_key' => 'sk_prod' ] );
+
+		update_option( 'workos_db_version', 3 );
+		\WorkOS\Database\Schema::maybe_upgrade();
+
+		$prod = get_option( 'workos_production' );
+		$this->assertSame( 'sk_prod', $prod['api_key'] );
 	}
 }

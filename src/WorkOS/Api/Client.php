@@ -207,6 +207,17 @@ class Client {
 		return $this->get( '/organizations', $params );
 	}
 
+	/**
+	 * Create a new organization.
+	 *
+	 * @param array $data Organization data (name required).
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function create_organization( array $data ) {
+		return $this->post( '/organizations', $data );
+	}
+
 	// -------------------------------------------------------------------------
 	// Organization Memberships
 	// -------------------------------------------------------------------------

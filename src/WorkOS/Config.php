@@ -38,9 +38,9 @@ class Config {
 			return constant( 'WORKOS_ENVIRONMENT' );
 		}
 
-		$env = get_option( 'workos_active_environment', 'production' );
+		$env = get_option( 'workos_active_environment', 'staging' );
 
-		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'production';
+		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'staging';
 	}
 
 	/**

@@ -204,7 +204,8 @@ class Plugin {
 	 */
 	public function is_enabled(): bool {
 		return ! empty( Config::get_api_key() )
-			&& ! empty( Config::get_client_id() );
+			&& ! empty( Config::get_client_id() )
+			&& ! empty( Config::get_environment_id() );
 	}
 
 	/**
@@ -216,7 +217,10 @@ class Plugin {
 	 * @return mixed
 	 */
 	public function option( string $key, $default_value = '' ) {
-		return $this->container->get( Options\Global_Options::class )->get( $key, $default_value );
+		$env   = Config::get_active_environment();
+		$class = 'staging' === $env ? Options\Staging::class : Options\Production::class;
+
+		return $this->container->get( $class )->get( $key, $default_value );
 	}
 
 	/**

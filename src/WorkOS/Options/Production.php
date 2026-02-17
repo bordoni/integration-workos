@@ -26,11 +26,17 @@ class Production extends Options {
 	 */
 	protected function defaults(): array {
 		return [
-			'api_key'         => '',
-			'client_id'       => '',
-			'webhook_secret'  => '',
-			'organization_id' => '',
-			'environment_id'  => '',
+			'api_key'                 => '',
+			'client_id'               => '',
+			'webhook_secret'          => '',
+			'organization_id'         => '',
+			'environment_id'          => '',
+			'login_mode'              => 'redirect',
+			'allow_password_fallback' => true,
+			'deprovision_action'      => 'deactivate',
+			'reassign_user'           => 0,
+			'role_map'                => [],
+			'audit_logging_enabled'   => false,
 		];
 	}
 }
