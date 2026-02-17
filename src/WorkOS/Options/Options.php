@@ -57,9 +57,7 @@ abstract class Options {
 	 * @param mixed  $value Value to store.
 	 */
 	public function set( string $key, $value ): void {
-		$options = $this->all();
-		Arr::set( $options, $key, $value );
-		$this->options = $options;
+		$this->options = Arr::set( $this->all(), $key, $value );
 		$this->save();
 	}
 
