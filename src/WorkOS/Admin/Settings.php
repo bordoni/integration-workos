@@ -189,7 +189,7 @@ class Settings {
 
 		$current_tab = $this->get_current_tab();
 
-		if ( 'settings' === $current_tab ) {
+		if ( in_array( $current_tab, [ 'settings', 'organization' ], true ) ) {
 			add_thickbox();
 		}
 
@@ -481,17 +481,6 @@ class Settings {
 			[ $this, 'render_organization_select' ],
 			self::ORG_PAGE,
 			'workos_organization'
-		);
-
-		// --- Create Organization ---
-		add_settings_section(
-			'workos_create_org',
-			__( 'Create Organization', 'workos' ),
-			function () {
-				echo '<p>' . esc_html__( 'Create a new organization in WorkOS and automatically select it.', 'workos' ) . '</p>';
-				$this->render_create_org_form();
-			},
-			self::ORG_PAGE
 		);
 	}
 
@@ -1049,36 +1038,39 @@ class Settings {
 			);
 		}
 		echo '</select>';
+		printf(
+			'<p><a href="#TB_inline?width=400&height=250&inlineId=workos-create-org-modal" class="thickbox">%s</a></p>',
+			esc_html__( 'Create new organization', 'workos' )
+		);
+
+		$this->render_create_org_modal();
 	}
 
 	/**
-	 * Render the inline Create Organization form.
+	 * Render the hidden Thickbox modal for creating an organization.
 	 */
-	private function render_create_org_form(): void {
-		if ( Config::is_overridden( 'organization_id' ) ) {
-			echo '<p class="description">' . esc_html__( 'Organization is set via constant.', 'workos' ) . '</p>';
-			return;
-		}
-
+	private function render_create_org_modal(): void {
 		$editing_env = $this->get_editing_environment();
 		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="max-width: 500px;">
-			<?php wp_nonce_field( 'workos_create_org' ); ?>
-			<input type="hidden" name="action" value="workos_create_org" />
-			<input type="hidden" name="editing_env" value="<?php echo esc_attr( $editing_env ); ?>" />
-			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row">
-						<label for="workos_org_name"><?php esc_html_e( 'Organization Name', 'workos' ); ?></label>
-					</th>
-					<td>
-						<input type="text" id="workos_org_name" name="org_name" class="regular-text" required />
-						<p class="description"><?php esc_html_e( 'Name for the new WorkOS organization.', 'workos' ); ?></p>
-					</td>
-				</tr>
-			</table>
-			<?php submit_button( __( 'Create Organization', 'workos' ), 'secondary' ); ?>
-		</form>
+		<div id="workos-create-org-modal" style="display:none">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<?php wp_nonce_field( 'workos_create_org' ); ?>
+				<input type="hidden" name="action" value="workos_create_org" />
+				<input type="hidden" name="editing_env" value="<?php echo esc_attr( $editing_env ); ?>" />
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row">
+							<label for="workos_org_name"><?php esc_html_e( 'Organization Name', 'workos' ); ?></label>
+						</th>
+						<td>
+							<input type="text" id="workos_org_name" name="org_name" class="regular-text" required />
+							<p class="description"><?php esc_html_e( 'Name for the new WorkOS organization.', 'workos' ); ?></p>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button( __( 'Create Organization', 'workos' ), 'secondary' ); ?>
+			</form>
+		</div>
 		<?php
 	}
 
