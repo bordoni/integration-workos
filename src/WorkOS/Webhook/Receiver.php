@@ -46,7 +46,7 @@ class Receiver {
 	public function handle( \WP_REST_Request $request ): \WP_REST_Response {
 		$signature = $request->get_header( 'workos-signature' );
 		$payload   = $request->get_body();
-		$secret    = get_option( 'workos_webhook_secret', '' );
+		$secret    = \WorkOS\Config::get_webhook_secret();
 
 		// Verify signature.
 		if ( ! empty( $secret ) ) {

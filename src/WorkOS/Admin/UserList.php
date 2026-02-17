@@ -25,7 +25,6 @@ class UserList {
 	public function __construct() {
 		add_filter( 'manage_users_columns', [ $this, 'add_column' ] );
 		add_filter( 'manage_users_custom_column', [ $this, 'render_column' ], 10, 3 );
-		add_filter( 'user_row_actions', [ $this, 'add_row_action' ], 10, 2 );
 		add_filter( 'bulk_actions-users', [ $this, 'add_bulk_action' ] );
 		add_filter( 'handle_bulk_actions-users', [ $this, 'handle_bulk_action' ], 10, 3 );
 		add_action( 'admin_init', [ $this, 'handle_single_sync' ] );
@@ -58,59 +57,84 @@ class UserList {
 			return $output;
 		}
 
-		$workos_id = get_user_meta( $user_id, '_workos_user_id', true );
+		$workos_id      = get_user_meta( $user_id, '_workos_user_id', true );
+		$environment_id = \WorkOS\Config::get_environment_id();
 
 		if ( $workos_id ) {
-			return sprintf(
-				'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
-				esc_url( 'https://dashboard.workos.com/users/' . $workos_id ),
-				esc_html( $workos_id )
-			);
+			return $this->render_linked_column( $workos_id, $environment_id );
 		}
 
-		return '&mdash;';
+		return $this->render_unlinked_column( $user_id );
 	}
 
 	/**
-	 * Add a "Sync to WorkOS" row action for unlinked users.
+	 * Render column content for a user linked to WorkOS.
 	 *
-	 * @param array    $actions Existing row actions.
-	 * @param \WP_User $user    User object.
+	 * @param string $workos_id      WorkOS user ID.
+	 * @param string $environment_id WorkOS environment ID.
 	 *
-	 * @return array
+	 * @return string Column HTML.
 	 */
-	public function add_row_action( array $actions, \WP_User $user ): array {
-		if ( ! current_user_can( 'edit_users' ) ) {
-			return $actions;
+	private function render_linked_column( string $workos_id, string $environment_id ): string {
+		if ( ! $environment_id ) {
+			return '<code>' . esc_html( $workos_id ) . '</code>';
 		}
 
-		if ( ! workos()->is_enabled() ) {
-			return $actions;
-		}
-
-		$workos_id = get_user_meta( $user->ID, '_workos_user_id', true );
-		if ( $workos_id ) {
-			return $actions;
-		}
-
-		$url = wp_nonce_url(
-			add_query_arg(
-				[
-					'action'  => 'workos_sync_user',
-					'user_id' => $user->ID,
-				],
-				admin_url( 'users.php' )
-			),
-			'workos_sync_user_' . $user->ID
+		$dashboard_url = sprintf(
+			'https://dashboard.workos.com/%s/users/%s/details',
+			rawurlencode( $environment_id ),
+			rawurlencode( $workos_id )
 		);
 
-		$actions['workos_sync'] = sprintf(
-			'<a href="%s">%s</a>',
-			esc_url( $url ),
-			esc_html__( 'Sync to WorkOS', 'workos' )
+		$html = sprintf(
+			'<code><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></code>',
+			esc_url( $dashboard_url ),
+			esc_html( $workos_id )
 		);
 
-		return $actions;
+		$html .= '<div class="row-actions">';
+		$html .= sprintf(
+			'<span class="view"><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></span>',
+			esc_url( $dashboard_url ),
+			esc_html__( 'View in WorkOS', 'workos' )
+		);
+		$html .= '</div>';
+
+		return $html;
+	}
+
+	/**
+	 * Render column content for a user not linked to WorkOS.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 *
+	 * @return string Column HTML.
+	 */
+	private function render_unlinked_column( int $user_id ): string {
+		$html = '&mdash;';
+
+		if ( workos()->is_enabled() && current_user_can( 'edit_users' ) ) {
+			$url = wp_nonce_url(
+				add_query_arg(
+					[
+						'action'  => 'workos_sync_user',
+						'user_id' => $user_id,
+					],
+					admin_url( 'users.php' )
+				),
+				'workos_sync_user_' . $user_id
+			);
+
+			$html .= '<div class="row-actions">';
+			$html .= sprintf(
+				'<span class="sync"><a href="%s">%s</a></span>',
+				esc_url( $url ),
+				esc_html__( 'Sync to WorkOS', 'workos' )
+			);
+			$html .= '</div>';
+		}
+
+		return $html;
 	}
 
 	/**

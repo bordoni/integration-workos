@@ -89,7 +89,7 @@ class Login {
 
 		$auth_url = workos()->api()->get_authorization_url( $args );
 
-		wp_safe_redirect( $auth_url );
+		wp_redirect( $auth_url );
 		exit;
 	}
 

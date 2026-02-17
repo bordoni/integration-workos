@@ -37,7 +37,7 @@ class Registration {
 		}
 
 		$signup_url = $this->get_signup_url();
-		wp_safe_redirect( $signup_url );
+		wp_redirect( $signup_url );
 		exit;
 	}
 

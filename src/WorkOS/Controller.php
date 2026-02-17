@@ -8,6 +8,7 @@
 namespace WorkOS;
 
 use WorkOS\Contracts\Controller as BaseController;
+use WorkOS\Admin\AdminBar;
 use WorkOS\Admin\Controller as AdminController;
 use WorkOS\Auth\Controller as AuthController;
 use WorkOS\REST\Controller as RESTController;
@@ -32,6 +33,10 @@ class Controller extends BaseController {
 		$this->container->register( WebhookController::class );
 		$this->container->register( SyncController::class );
 		$this->container->register( OrganizationController::class );
+
+		// Admin bar shows on both admin and frontend, so register at the main level.
+		$this->container->singleton( AdminBar::class );
+		$this->container->get( AdminBar::class );
 	}
 
 	/**
