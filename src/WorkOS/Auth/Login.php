@@ -25,7 +25,7 @@ class Login {
 		add_filter( 'authenticate', [ $this, 'authenticate_headless' ], 10, 3 );
 
 		// Register callback rewrite.
-		add_action( 'init', [ $this, 'register_rewrite' ] );
+		add_action( 'init', [ self::class, 'register_rewrite' ] );
 		add_action( 'template_redirect', [ $this, 'handle_callback' ] );
 
 		// Optionally remove WP default auth handlers.
@@ -164,7 +164,7 @@ class Login {
 	/**
 	 * Register the /workos/callback rewrite rule.
 	 */
-	public function register_rewrite(): void {
+	public static function register_rewrite(): void {
 		add_rewrite_rule(
 			'^workos/callback/?$',
 			'index.php?workos_callback=1',

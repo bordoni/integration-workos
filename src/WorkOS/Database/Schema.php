@@ -30,7 +30,6 @@ class Schema {
 	public static function activate(): void {
 		self::create_tables();
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
-		flush_rewrite_rules();
 	}
 
 	/**

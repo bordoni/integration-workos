@@ -177,6 +177,10 @@ class Plugin {
 		}
 
 		Database\Schema::activate();
+
+		// Register the rewrite rule before flushing so it gets persisted.
+		Auth\Login::register_rewrite();
+		flush_rewrite_rules();
 	}
 
 	/**
