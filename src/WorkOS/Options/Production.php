@@ -38,6 +38,7 @@ class Production extends Options {
 			'role_map'                    => [],
 			'redirect_urls'               => [],
 			'redirect_first_login_only'   => true,
+			'logout_redirect_urls'        => [],
 			'audit_logging_enabled'       => false,
 		];
 	}

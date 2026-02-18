@@ -196,6 +196,7 @@ class Settings {
 		if ( 'users' === $current_tab ) {
 			$this->enqueue_role_mapping_assets();
 			$this->enqueue_redirect_urls_assets();
+			$this->enqueue_logout_redirect_urls_assets();
 		}
 	}
 
@@ -259,12 +260,59 @@ class Settings {
 			$asset['version']
 		);
 
-		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$wp_roles  = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$all_roles = array_merge(
+			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			$wp_roles
+		);
 		wp_add_inline_script(
 			'workos-redirect-urls',
 			'window.workosRedirectUrls = ' . wp_json_encode(
 				[
-					'wpRoles' => $wp_roles,
+					'wpRoles' => $all_roles,
+					'env'     => $this->get_editing_environment(),
+				]
+			) . ';',
+			'before'
+		);
+	}
+
+	/**
+	 * Enqueue logout-redirect-urls script and styles on the Users tab.
+	 */
+	private function enqueue_logout_redirect_urls_assets(): void {
+		$asset_file = WORKOS_DIR . 'build/logout-redirect-urls.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'workos-logout-redirect-urls',
+			WORKOS_URL . 'build/logout-redirect-urls.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		wp_enqueue_style(
+			'workos-logout-redirect-urls',
+			WORKOS_URL . 'build/logout-redirect-urls.css',
+			[],
+			$asset['version']
+		);
+
+		$wp_roles  = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$all_roles = array_merge(
+			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			$wp_roles
+		);
+		wp_add_inline_script(
+			'workos-logout-redirect-urls',
+			'window.workosLogoutRedirectUrls = ' . wp_json_encode(
+				[
+					'wpRoles' => $all_roles,
 					'env'     => $this->get_editing_environment(),
 				]
 			) . ';',
@@ -570,6 +618,17 @@ class Settings {
 			function () {
 				echo '<p>' . esc_html__( 'Redirect users to a specific URL after login, based on their WordPress role.', 'workos' ) . '</p>';
 				$this->render_redirect_urls();
+			},
+			self::USERS_PAGE
+		);
+
+		// --- Logout Redirects section ---
+		add_settings_section(
+			'workos_logout_redirects',
+			__( 'Logout Redirects', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Redirect users to a specific URL after logout, based on their WordPress role.', 'workos' ) . '</p>';
+				$this->render_logout_redirect_urls();
 			},
 			self::USERS_PAGE
 		);
@@ -1270,13 +1329,19 @@ class Settings {
 		$raw_map  = is_array( $options['redirect_urls'] ?? null ) ? $options['redirect_urls'] : [];
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
 
+		// Prepend the default fallback option.
+		$all_roles = array_merge(
+			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			$wp_roles
+		);
+
 		// Legacy global setting — used as default when normalizing old-format entries.
 		$global_first_login = ! empty( $options['redirect_first_login_only'] );
 
 		// Normalize entries: legacy string values become arrays.
 		$map = [];
 		foreach ( $raw_map as $role => $entry ) {
-			if ( ! isset( $wp_roles[ $role ] ) ) {
+			if ( ! isset( $all_roles[ $role ] ) ) {
 				continue;
 			}
 			if ( is_string( $entry ) ) {
@@ -1303,7 +1368,7 @@ class Settings {
 
 			echo '<tr class="workos-redirect-url-row"><td>';
 			printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), $i );
-			foreach ( $wp_roles as $slug => $name ) {
+			foreach ( $all_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
 					esc_attr( $slug ),
@@ -1340,7 +1405,7 @@ class Settings {
 		echo '<tr class="workos-redirect-url-row"><td>';
 		printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), $i );
 		echo '<option value="">' . esc_html__( '— Select Role —', 'workos' ) . '</option>';
-		foreach ( $wp_roles as $slug => $name ) {
+		foreach ( $all_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
 		}
 		echo '</select>';
@@ -1372,7 +1437,92 @@ class Settings {
 		echo esc_html__( 'Add Redirect', 'workos' );
 		echo '</button>';
 
-		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /welcome) to redirect users to after login, per role. Leave empty to use the default dashboard.', 'workos' ) . '</p>';
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /welcome) to redirect users to after login, per role. Use "Default (all roles)" as a fallback for roles without a specific redirect.', 'workos' ) . '</p>';
+	}
+
+	/**
+	 * Render the logout redirect URLs table for the Users tab.
+	 */
+	public function render_logout_redirect_urls(): void {
+		$env      = $this->get_editing_environment();
+		$options  = get_option( "workos_{$env}", [] );
+		$raw_map  = is_array( $options['logout_redirect_urls'] ?? null ) ? $options['logout_redirect_urls'] : [];
+		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+
+		// Prepend the default fallback option.
+		$all_roles = array_merge(
+			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			$wp_roles
+		);
+
+		// Filter to only valid roles (including __default__).
+		$map = [];
+		foreach ( $raw_map as $role => $url ) {
+			if ( ! isset( $all_roles[ $role ] ) ) {
+				continue;
+			}
+			if ( is_string( $url ) ) {
+				$map[ $role ] = $url;
+			}
+		}
+
+		echo '<table id="workos-logout-redirect-urls-table" class="widefat"><thead><tr>';
+		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Redirect URL', 'workos' ) . '</th>';
+		echo '<th class="workos-logout-redirect-url-actions"></th>';
+		echo '</tr></thead><tbody>';
+
+		$i = 0;
+		foreach ( $map as $role => $url ) {
+			echo '<tr class="workos-logout-redirect-url-row"><td>';
+			printf( '<select name="workos_%s[logout_redirect_urls][keys][%d]">', esc_attr( $env ), $i );
+			foreach ( $all_roles as $slug => $name ) {
+				printf(
+					'<option value="%s" %s>%s</option>',
+					esc_attr( $slug ),
+					selected( $role, $slug, false ),
+					esc_html( $name )
+				);
+			}
+			echo '</select>';
+			echo '</td><td>';
+			printf(
+				'<input type="text" name="workos_%s[logout_redirect_urls][values][%d]" value="%s" class="regular-text" placeholder="%s" />',
+				esc_attr( $env ),
+				$i,
+				esc_attr( $url ),
+				esc_attr__( '/goodbye', 'workos' )
+			);
+			echo '</td></tr>';
+			++$i;
+		}
+
+		// Empty row for adding new redirects (no-JS fallback).
+		echo '<tr class="workos-logout-redirect-url-row"><td>';
+		printf( '<select name="workos_%s[logout_redirect_urls][keys][%d]">', esc_attr( $env ), $i );
+		echo '<option value="">' . esc_html__( '— Select Role —', 'workos' ) . '</option>';
+		foreach ( $all_roles as $slug => $name ) {
+			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
+		}
+		echo '</select>';
+		echo '</td><td>';
+		printf(
+			'<input type="text" name="workos_%s[logout_redirect_urls][values][%d]" value="" class="regular-text" placeholder="%s" />',
+			esc_attr( $env ),
+			$i,
+			esc_attr__( '/goodbye', 'workos' )
+		);
+		echo '</td></tr>';
+
+		echo '</tbody></table>';
+
+		// Add Redirect button — hidden until JS loads.
+		echo '<button type="button" id="workos-logout-redirect-urls-add" class="button" style="display:none">';
+		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
+		echo esc_html__( 'Add Redirect', 'workos' );
+		echo '</button>';
+
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /goodbye) to redirect users to after logout, per role. Use "Default (all roles)" as a fallback for roles without a specific redirect.', 'workos' ) . '</p>';
 	}
 
 	/**
@@ -1424,6 +1574,42 @@ class Settings {
 					'url'              => $value,
 					'first_login_only' => rest_sanitize_boolean( $input['first_login'][ $i ] ?? false ),
 				];
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Sanitize the logout redirect URLs map from the form submission.
+	 *
+	 * @param mixed $input Raw form input.
+	 *
+	 * @return array Sanitized logout redirect URL map (role → URL string).
+	 */
+	public function sanitize_logout_redirect_urls( $input ): array {
+		if ( ! is_array( $input ) || empty( $input['keys'] ) || empty( $input['values'] ) ) {
+			// Existing flat map from DB — pass through.
+			if ( is_array( $input ) && ! isset( $input['keys'] ) ) {
+				$sanitized = [];
+				foreach ( $input as $key => $value ) {
+					$key   = sanitize_text_field( $key );
+					$value = sanitize_text_field( $value );
+					if ( $key && $value ) {
+						$sanitized[ $key ] = $value;
+					}
+				}
+				return $sanitized;
+			}
+			return [];
+		}
+
+		$map = [];
+		foreach ( $input['keys'] as $i => $key ) {
+			$key   = sanitize_text_field( $key );
+			$value = sanitize_text_field( $input['values'][ $i ] ?? '' );
+			if ( $key && $value ) {
+				$map[ $key ] = $value;
 			}
 		}
 
@@ -1485,6 +1671,11 @@ class Settings {
 		// Redirect URLs.
 		if ( isset( $input['redirect_urls'] ) ) {
 			$sanitized['redirect_urls'] = $this->sanitize_redirect_urls( $input['redirect_urls'] );
+		}
+
+		// Logout Redirect URLs.
+		if ( isset( $input['logout_redirect_urls'] ) ) {
+			$sanitized['logout_redirect_urls'] = $this->sanitize_logout_redirect_urls( $input['logout_redirect_urls'] );
 		}
 
 		return array_merge( $existing, $sanitized );

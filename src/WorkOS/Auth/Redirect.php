@@ -107,10 +107,10 @@ class Redirect {
 			return $redirect_to;
 		}
 
-		// Look up role-based redirect entry.
+		// Look up role-based redirect entry, falling back to __default__.
 		$redirect_map = self::get_redirect_urls();
 		$role         = self::get_primary_role( $user );
-		$entry        = $redirect_map[ $role ] ?? [];
+		$entry        = $redirect_map[ $role ] ?? $redirect_map['__default__'] ?? [];
 
 		// Support both structured entries and legacy string values.
 		$role_url          = is_array( $entry ) ? ( $entry['url'] ?? '' ) : (string) $entry;

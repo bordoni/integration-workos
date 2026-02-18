@@ -64,6 +64,11 @@ class Login {
 			return;
 		}
 
+		// Allow the "You have been logged out" screen to display.
+		if ( ! empty( $_GET['loggedout'] ) ) {
+			return;
+		}
+
 		// Allow fallback login with ?fallback=1.
 		if ( ! empty( $_GET['fallback'] ) && workos()->option( 'allow_password_fallback', true ) ) {
 			return;
@@ -291,14 +296,25 @@ class Login {
 	}
 
 	/**
-	 * Handle logout — optionally redirect to WorkOS logout.
+	 * Handle logout — clear local tokens and revoke WorkOS session.
 	 */
 	public function handle_logout(): void {
 		$user_id = get_current_user_id();
 
+		$access_token = get_user_meta( $user_id, '_workos_access_token', true );
+
 		// Clean up stored tokens.
 		delete_user_meta( $user_id, '_workos_access_token' );
 		delete_user_meta( $user_id, '_workos_refresh_token' );
+
+		// Extract session ID from JWT and redirect to WorkOS logout.
+		$session_id = $access_token ? self::extract_session_id( $access_token ) : '';
+		if ( $session_id ) {
+			$logout_url = self::get_workos_logout_url( $session_id );
+			// Use logout_redirect filter at priority 20 (after LogoutRedirect at 10)
+			// to ensure WorkOS session revocation always wins when a session exists.
+			add_filter( 'logout_redirect', fn( $redirect_to ) => $logout_url, 20 );
+		}
 	}
 
 	/**
@@ -308,6 +324,41 @@ class Login {
 	 */
 	public static function get_callback_url(): string {
 		return home_url( '/workos/callback' );
+	}
+
+	/**
+	 * Extract the session ID (sid claim) from a WorkOS access token JWT.
+	 *
+	 * Decodes the payload without signature verification — we only need
+	 * the sid claim for logout, not cryptographic validation.
+	 *
+	 * @param string $token JWT access token.
+	 *
+	 * @return string Session ID, or empty string on failure.
+	 */
+	private static function extract_session_id( string $token ): string {
+		$parts = explode( '.', $token );
+		if ( count( $parts ) < 2 ) {
+			return '';
+		}
+
+		$payload = json_decode(
+			base64_decode( strtr( $parts[1], '-_', '+/' ) ),
+			true
+		);
+
+		return $payload['sid'] ?? '';
+	}
+
+	/**
+	 * Build the WorkOS session logout URL.
+	 *
+	 * @param string $session_id WorkOS session ID.
+	 *
+	 * @return string Full logout URL.
+	 */
+	private static function get_workos_logout_url( string $session_id ): string {
+		return 'https://api.workos.com/user_management/sessions/logout?' . http_build_query( [ 'session_id' => $session_id ] );
 	}
 
 	/**
