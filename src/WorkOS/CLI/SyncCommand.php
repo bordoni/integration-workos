@@ -57,7 +57,7 @@ class SyncCommand extends \WP_CLI_Command {
 					'compare' => 'NOT EXISTS',
 				],
 			],
-			'number'     => $limit ?: 0,
+			'number'     => $limit ? $limit : 0,
 			'fields'     => 'ID',
 		];
 
@@ -143,7 +143,7 @@ class SyncCommand extends \WP_CLI_Command {
 						'compare' => 'EXISTS',
 					],
 				],
-				'number'     => $limit ?: 0,
+				'number'     => $limit ? $limit : 0,
 				'fields'     => 'ID',
 			]
 		);

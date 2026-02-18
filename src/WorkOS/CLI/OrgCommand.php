@@ -82,12 +82,12 @@ class OrgCommand extends \WP_CLI_Command {
 		$rows = array_map(
 			static function ( $org ) {
 				return [
-					'id'           => $org->id,
+					'id'            => $org->id,
 					'workos_org_id' => $org->workos_org_id,
-					'name'         => $org->name,
-					'slug'         => $org->slug,
-					'created_at'   => $org->created_at,
-					'updated_at'   => $org->updated_at,
+					'name'          => $org->name,
+					'slug'          => $org->slug,
+					'created_at'    => $org->created_at,
+					'updated_at'    => $org->updated_at,
 				];
 			},
 			$orgs
@@ -280,7 +280,7 @@ class OrgCommand extends \WP_CLI_Command {
 		$mem_table  = $wpdb->prefix . 'workos_org_memberships';
 		$user_table = $wpdb->users;
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$members = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT u.ID as user_id, u.user_login, u.user_email, m.workos_role, m.wp_role, m.joined_at
@@ -291,6 +291,7 @@ class OrgCommand extends \WP_CLI_Command {
 				$org->id
 			)
 		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		$rows = array_map(
 			static function ( $m ) {

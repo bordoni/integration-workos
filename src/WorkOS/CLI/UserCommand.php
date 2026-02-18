@@ -78,10 +78,10 @@ class UserCommand extends \WP_CLI_Command {
 			WP_CLI::error( 'User not found.' );
 		}
 
-		$workos_id    = get_user_meta( $user->ID, '_workos_user_id', true );
-		$workos_org   = get_user_meta( $user->ID, '_workos_org_id', true );
-		$last_synced  = get_user_meta( $user->ID, '_workos_last_synced_at', true );
-		$deactivated  = get_user_meta( $user->ID, '_workos_deactivated', true );
+		$workos_id   = get_user_meta( $user->ID, '_workos_user_id', true );
+		$workos_org  = get_user_meta( $user->ID, '_workos_org_id', true );
+		$last_synced = get_user_meta( $user->ID, '_workos_last_synced_at', true );
+		$deactivated = get_user_meta( $user->ID, '_workos_deactivated', true );
 
 		$row = [
 			[
@@ -90,9 +90,9 @@ class UserCommand extends \WP_CLI_Command {
 				'user_email'     => $user->user_email,
 				'display_name'   => $user->display_name,
 				'role'           => implode( ', ', $user->roles ),
-				'workos_user_id' => $workos_id ?: '(none)',
-				'workos_org_id'  => $workos_org ?: '(none)',
-				'last_synced_at' => $last_synced ?: '(never)',
+				'workos_user_id' => $workos_id ? $workos_id : '(none)',
+				'workos_org_id'  => $workos_org ? $workos_org : '(none)',
+				'last_synced_at' => $last_synced ? $last_synced : '(never)',
 				'is_deactivated' => $deactivated ? 'yes' : 'no',
 			],
 		];
@@ -177,7 +177,7 @@ class UserCommand extends \WP_CLI_Command {
 		if ( 'ids' === $format ) {
 			$query_args['fields'] = 'ID';
 			$users                = get_users( $query_args );
-			echo implode( ' ', $users ) . "\n";
+			WP_CLI::line( implode( ' ', $users ) );
 			return;
 		}
 
@@ -192,7 +192,7 @@ class UserCommand extends \WP_CLI_Command {
 					'user_email'     => $user->user_email,
 					'display_name'   => $user->display_name,
 					'role'           => implode( ', ', $user->roles ),
-					'workos_user_id' => $workos_id ?: '(none)',
+					'workos_user_id' => $workos_id ? $workos_id : '(none)',
 					'linked'         => $workos_id ? 'yes' : 'no',
 				];
 			},
