@@ -367,15 +367,15 @@ class UserList {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$synced   = isset( $_GET['workos_synced'] ) ? absint( $_GET['workos_synced'] ) : 0;
+		$synced = isset( $_GET['workos_synced'] ) ? absint( $_GET['workos_synced'] ) : 0;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
 		$resynced = isset( $_GET['workos_resynced'] ) ? absint( $_GET['workos_resynced'] ) : 0;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$failed   = isset( $_GET['workos_failed'] ) ? absint( $_GET['workos_failed'] ) : 0;
+		$failed = isset( $_GET['workos_failed'] ) ? absint( $_GET['workos_failed'] ) : 0;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$skipped  = isset( $_GET['workos_skipped'] ) ? absint( $_GET['workos_skipped'] ) : 0;
+		$skipped = isset( $_GET['workos_skipped'] ) ? absint( $_GET['workos_skipped'] ) : 0;
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$errors   = isset( $_GET['workos_errors'] ) ? sanitize_text_field( wp_unslash( $_GET['workos_errors'] ) ) : '';
+		$errors = isset( $_GET['workos_errors'] ) ? sanitize_text_field( wp_unslash( $_GET['workos_errors'] ) ) : '';
 
 		if ( $synced ) {
 			printf(

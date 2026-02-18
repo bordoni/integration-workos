@@ -57,6 +57,11 @@
 		<exclude-pattern>*/Auth/*.php</exclude-pattern>
 	</rule>
 
+	<!-- Auth redirects target external URLs (WorkOS); wp_safe_redirect() would block them -->
+	<rule ref="WordPress.Security.SafeRedirect.wp_redirect_wp_redirect">
+		<exclude-pattern>*/Auth/*.php</exclude-pattern>
+	</rule>
+
 	<!-- wp_login is a core WP hook name we must fire to maintain compatibility -->
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound">
 		<exclude-pattern>*/Auth/Login.php</exclude-pattern>
@@ -72,11 +77,22 @@
 		<exclude-pattern>*/Sync/UserSync.php</exclude-pattern>
 		<exclude-pattern>*/Sync/DirectorySync.php</exclude-pattern>
 		<exclude-pattern>*/Organization/Manager.php</exclude-pattern>
+		<exclude-pattern>*/Contracts/Controller.php</exclude-pattern>
+	</rule>
+
+	<!-- Plugin.php uses camelCase for public getters and private bootstrap methods (established API) -->
+	<rule ref="WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid">
+		<exclude-pattern>*/Plugin.php</exclude-pattern>
 	</rule>
 
 	<!-- error_log in Webhook/Receiver is guarded by WP_DEBUG -->
 	<rule ref="WordPress.PHP.DevelopmentFunctions.error_log_error_log">
 		<exclude-pattern>*/Webhook/Receiver.php</exclude-pattern>
+	</rule>
+
+	<!-- $default is a standard WP parameter name (get_option, get_post_meta, etc.) -->
+	<rule ref="Universal.NamingConventions.NoReservedKeywordParameterNames.defaultFound">
+		<severity>0</severity>
 	</rule>
 
 	<!-- Check for PHP cross-version compatibility -->

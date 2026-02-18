@@ -543,8 +543,8 @@ class Settings {
 			return;
 		}
 
-		$current_tab  = $this->get_current_tab();
-		$editing_env  = $this->get_editing_environment();
+		$current_tab   = $this->get_current_tab();
+		$editing_env   = $this->get_editing_environment();
 		$is_configured = $this->is_editing_env_configured();
 		$has_org       = $this->has_editing_env_org();
 
@@ -590,7 +590,10 @@ class Settings {
 				foreach ( $tabs as $slug => $label ) :
 					$disabled = $tab_disabled[ $slug ];
 					$tab_url  = add_query_arg(
-						[ 'tab' => $slug, 'env' => $editing_env ],
+						[
+							'tab' => $slug,
+							'env' => $editing_env,
+						],
 						admin_url( 'admin.php?page=workos' )
 					);
 
@@ -655,10 +658,17 @@ class Settings {
 
 		?>
 		<div style="display: inline-block; vertical-align: middle; margin-bottom: 10px;">
-			<?php foreach ( $environments as $slug => $label ) :
-				$url         = add_query_arg( [ 'tab' => $current_tab, 'env' => $slug ], admin_url( 'admin.php?page=workos' ) );
-				$is_viewing  = $slug === $editing;
-				$is_active   = $slug === $active;
+			<?php
+			foreach ( $environments as $slug => $label ) :
+				$url        = add_query_arg(
+					[
+						'tab' => $current_tab,
+						'env' => $slug,
+					],
+					admin_url( 'admin.php?page=workos' )
+				);
+				$is_viewing = $slug === $editing;
+				$is_active  = $slug === $active;
 				?>
 				<a
 					href="<?php echo esc_url( $url ); ?>"
@@ -672,13 +682,15 @@ class Settings {
 						font-size: 13px;
 						text-decoration: none;
 						color: <?php echo $is_viewing ? '#fff' : '#50575e'; ?>;
-						background: <?php
+						background: 
+						<?php
 						if ( $is_viewing ) {
 							echo 'staging' === $slug ? '#dba617' : '#00a32a';
 						} else {
 							echo '#f0f0f1';
 						}
-						?>;
+						?>
+						;
 					"
 				>
 					<?php echo esc_html( $label ); ?>
@@ -691,7 +703,8 @@ class Settings {
 				</a>
 			<?php endforeach; ?>
 
-			<?php if ( ! $is_locked && $editing !== $active ) :
+			<?php
+			if ( ! $is_locked && $editing !== $active ) :
 				$activate_url = wp_nonce_url(
 					add_query_arg(
 						[
@@ -702,7 +715,7 @@ class Settings {
 					),
 					'workos_activate_env'
 				);
-				$confirm_msg = 'production' === $editing
+				$confirm_msg  = 'production' === $editing
 					? esc_attr__( 'Are you sure you want to activate the Production environment? This will affect all users.', 'workos' )
 					: '';
 				?>

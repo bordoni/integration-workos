@@ -120,7 +120,7 @@ class Manager {
 	 * @param int   $wp_user_id  WordPress user ID.
 	 * @param array $auth_result Full WorkOS auth response.
 	 */
-	public static function ensure_user_org_membership( int $wp_user_id, array $auth_result ): void {
+	public static function ensure_user_org_membership( int $wp_user_id, array $auth_result ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		$workos_org_id = \WorkOS\Config::get_organization_id();
 		if ( empty( $workos_org_id ) ) {
 			return;

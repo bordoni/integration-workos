@@ -38,15 +38,17 @@ class AdminBar {
 		$env   = Config::get_active_environment();
 		$label = Config::get_environments()[ $env ] ?? $env;
 
-		$admin_bar->add_node( [
-			'id'     => 'workos-environment',
-			'parent' => 'top-secondary',
-			'title'  => sprintf( 'WorkOS: %s', esc_html( $label ) ),
-			'href'   => esc_url( admin_url( 'admin.php?page=workos' ) ),
-			'meta'   => [
-				'class' => 'workos-env-' . $env,
-			],
-		] );
+		$admin_bar->add_node(
+			[
+				'id'     => 'workos-environment',
+				'parent' => 'top-secondary',
+				'title'  => sprintf( 'WorkOS: %s', esc_html( $label ) ),
+				'href'   => esc_url( admin_url( 'admin.php?page=workos' ) ),
+				'meta'   => [
+					'class' => 'workos-env-' . $env,
+				],
+			]
+		);
 	}
 
 	/**
