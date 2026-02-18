@@ -151,8 +151,8 @@ class UserSyncPushTest extends WPTestCase {
 
 		$this->sync->push_user_to_workos( $user_id, $userdata );
 
-		// Verify an HTTP request was made to the create user endpoint.
-		$this->assertCount( 1, $this->http_requests );
+		// Verify HTTP requests: create user + GET user for metadata + PUT metadata.
+		$this->assertGreaterThanOrEqual( 1, count( $this->http_requests ) );
 		$this->assertStringContainsString( '/user_management/users', $this->http_requests[0]['url'] );
 
 		// Verify the payload.

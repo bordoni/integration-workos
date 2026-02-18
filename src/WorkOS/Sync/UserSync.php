@@ -33,6 +33,9 @@ class UserSync {
 		add_action( 'workos_webhook_user.updated', [ $this, 'handle_user_updated' ] );
 		add_action( 'workos_webhook_user.created', [ $this, 'handle_user_created' ] );
 		add_action( 'workos_webhook_user.deleted', [ $this, 'handle_user_deleted' ] );
+
+		// Sync platform metadata on login.
+		add_action( 'workos_user_authenticated', [ $this, 'sync_metadata_on_login' ], 10, 2 );
 	}
 
 	/**
@@ -223,6 +226,8 @@ class UserSync {
 
 		if ( ! empty( $result['id'] ) ) {
 			self::link_user( $user_id, $result );
+			self::ensure_workos_org_membership( $result['id'] );
+			self::update_platform_metadata( $result['id'], $user_id );
 		}
 	}
 
@@ -278,6 +283,8 @@ class UserSync {
 
 		if ( ! empty( $result['id'] ) ) {
 			self::link_user( $user_id, $result );
+			self::ensure_workos_org_membership( $result['id'] );
+			self::update_platform_metadata( $result['id'], $user_id );
 		}
 
 		return $result;
@@ -357,7 +364,12 @@ class UserSync {
 		self::$syncing = true;
 
 		$workos_user = $event['data'] ?? [];
-		self::find_or_create_wp_user( $workos_user );
+		$wp_user     = self::find_or_create_wp_user( $workos_user );
+
+		if ( ! is_wp_error( $wp_user ) && $wp_user instanceof \WP_User ) {
+			\WorkOS\Organization\Manager::ensure_user_org_membership( $wp_user->ID, [] );
+			self::update_platform_metadata( $workos_user['id'] ?? '', $wp_user->ID );
+		}
 
 		self::$syncing = false;
 	}
@@ -381,6 +393,103 @@ class UserSync {
 		}
 
 		self::deprovision_user( $wp_user_id );
+	}
+
+	// -------------------------------------------------------------------------
+	// WorkOS org membership + platform metadata
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Ensure a WorkOS user has an organization membership for the configured org.
+	 *
+	 * Creates the membership via API if none exists. Logs errors silently.
+	 *
+	 * @param string $workos_user_id WorkOS user ID.
+	 */
+	public static function ensure_workos_org_membership( string $workos_user_id ): void {
+		if ( empty( $workos_user_id ) ) {
+			return;
+		}
+
+		$org_id = \WorkOS\Config::get_organization_id();
+		if ( empty( $org_id ) ) {
+			return;
+		}
+
+		// Check if the user already has a membership in this org.
+		$memberships = workos()->api()->list_organization_memberships(
+			[
+				'user_id'         => $workos_user_id,
+				'organization_id' => $org_id,
+			]
+		);
+
+		if ( ! is_wp_error( $memberships ) && ! empty( $memberships['data'] ) ) {
+			return;
+		}
+
+		$result = workos()->api()->create_organization_membership( $workos_user_id, $org_id );
+
+		if ( is_wp_error( $result ) ) {
+			workos_log( 'Failed to create org membership for WorkOS user ' . $workos_user_id . ': ' . $result->get_error_message(), 'error' );
+		}
+	}
+
+	/**
+	 * Write the WP user ID to WorkOS user metadata.
+	 *
+	 * Key format: puid:{site_key} — allows multiple WP sites to share one WorkOS tenant.
+	 * Fetches existing metadata first to preserve other sites' keys.
+	 *
+	 * @param string $workos_user_id WorkOS user ID.
+	 * @param int    $wp_user_id     WordPress user ID.
+	 */
+	public static function update_platform_metadata( string $workos_user_id, int $wp_user_id ): void {
+		if ( empty( $workos_user_id ) || empty( $wp_user_id ) ) {
+			return;
+		}
+
+		$meta_key = 'puid:' . \WorkOS\Config::get_site_key();
+
+		// Fetch existing user to get current metadata.
+		$workos_user = workos()->api()->get_user( $workos_user_id );
+		if ( is_wp_error( $workos_user ) ) {
+			workos_log( 'Failed to fetch WorkOS user ' . $workos_user_id . ' for metadata update: ' . $workos_user->get_error_message(), 'error' );
+			return;
+		}
+
+		$metadata = $workos_user['metadata'] ?? [];
+
+		// Skip if already set to the correct value.
+		if ( isset( $metadata[ $meta_key ] ) && (string) $metadata[ $meta_key ] === (string) $wp_user_id ) {
+			return;
+		}
+
+		$metadata[ $meta_key ] = (string) $wp_user_id;
+
+		$result = workos()->api()->update_user( $workos_user_id, [ 'metadata' => $metadata ] );
+
+		if ( is_wp_error( $result ) ) {
+			workos_log( 'Failed to update metadata for WorkOS user ' . $workos_user_id . ': ' . $result->get_error_message(), 'error' );
+		}
+	}
+
+	/**
+	 * Sync organization membership and platform metadata on login.
+	 *
+	 * Hooked to `workos_user_authenticated`.
+	 *
+	 * @param int   $wp_user_id  WordPress user ID.
+	 * @param array $auth_result Full WorkOS auth response.
+	 */
+	public function sync_metadata_on_login( int $wp_user_id, array $auth_result ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		$workos_user_id = get_user_meta( $wp_user_id, '_workos_user_id', true );
+		if ( empty( $workos_user_id ) ) {
+			return;
+		}
+
+		self::ensure_workos_org_membership( $workos_user_id );
+		self::update_platform_metadata( $workos_user_id, $wp_user_id );
 	}
 
 	/**

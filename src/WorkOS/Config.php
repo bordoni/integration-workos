@@ -171,6 +171,17 @@ class Config {
 	}
 
 	/**
+	 * Get a site key for use in WorkOS metadata.
+	 *
+	 * Returns the site URL without protocol, e.g. "example.com" or "sub.example.com/path".
+	 *
+	 * @return string
+	 */
+	public static function get_site_key(): string {
+		return preg_replace( '#^https?://#', '', untrailingslashit( home_url() ) );
+	}
+
+	/**
 	 * Get a setting value with environment-aware precedence:
 	 *
 	 * 1. Env-specific constant: WORKOS_{ENV}_{SETTING}

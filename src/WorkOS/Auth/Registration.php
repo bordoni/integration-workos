@@ -64,12 +64,17 @@ class Registration {
 	private function get_signup_url(): string {
 		$state = wp_create_nonce( 'workos_auth' ) . '|' . admin_url();
 
-		return workos()->api()->get_authorization_url(
-			[
-				'redirect_uri' => Login::get_callback_url(),
-				'state'        => $state,
-				'provider'     => 'authkit',
-			]
-		);
+		$args = [
+			'redirect_uri' => Login::get_callback_url(),
+			'state'        => $state,
+			'provider'     => 'authkit',
+		];
+
+		$org_id = \WorkOS\Config::get_organization_id();
+		if ( $org_id ) {
+			$args['organization_id'] = $org_id;
+		}
+
+		return workos()->api()->get_authorization_url( $args );
 	}
 }

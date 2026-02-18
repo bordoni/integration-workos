@@ -233,6 +233,26 @@ class Client {
 		return $this->get( '/user_management/organization_memberships', $params );
 	}
 
+	/**
+	 * Create an organization membership.
+	 *
+	 * @param string $user_id         WorkOS user ID.
+	 * @param string $organization_id WorkOS organization ID.
+	 * @param string $role_slug       Role slug (default 'member').
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function create_organization_membership( string $user_id, string $organization_id, string $role_slug = 'member' ) {
+		return $this->post(
+			'/user_management/organization_memberships',
+			[
+				'user_id'         => $user_id,
+				'organization_id' => $organization_id,
+				'role_slug'       => $role_slug,
+			]
+		);
+	}
+
 	// -------------------------------------------------------------------------
 	// Audit Logs
 	// -------------------------------------------------------------------------
