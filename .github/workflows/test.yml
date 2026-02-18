@@ -23,7 +23,9 @@ jobs:
           tools: composer
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-scripts
+        run: |
+          composer install --no-interaction --prefer-dist --no-scripts
+          mkdir -p vendor/prefixed && echo '<?php' > vendor/prefixed/autoload.php
         env:
           COMPOSER_NO_AUDIT: 1
 
