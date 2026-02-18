@@ -272,6 +272,42 @@ class UserSync {
 	}
 
 	/**
+	 * Re-sync a linked WordPress user from WorkOS.
+	 *
+	 * Fetches the latest profile data from WorkOS and updates the local WP user.
+	 * Intended for manual re-sync when profile data drifts or webhooks are missed.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 *
+	 * @return array|\WP_Error WorkOS user data on success, WP_Error on failure.
+	 */
+	public static function resync_from_workos( int $user_id ) {
+		if ( self::$syncing ) {
+			return new \WP_Error( 'workos_sync_in_progress', __( 'A sync operation is already in progress.', 'workos' ) );
+		}
+
+		if ( ! workos()->is_enabled() ) {
+			return new \WP_Error( 'workos_not_configured', __( 'WorkOS is not configured.', 'workos' ) );
+		}
+
+		$workos_id = get_user_meta( $user_id, '_workos_user_id', true );
+		if ( ! $workos_id ) {
+			return new \WP_Error( 'workos_not_linked', __( 'User is not linked to WorkOS.', 'workos' ) );
+		}
+
+		$result = workos()->api()->get_user( $workos_id );
+
+		if ( is_wp_error( $result ) ) {
+			workos_log( 'Failed to re-sync user #' . $user_id . ' from WorkOS: ' . $result->get_error_message(), 'error' );
+			return $result;
+		}
+
+		self::update_wp_user_from_workos( $user_id, $result );
+
+		return $result;
+	}
+
+	/**
 	 * Handle user.updated webhook: sync WorkOS -> WP.
 	 *
 	 * @param array $event Webhook event.

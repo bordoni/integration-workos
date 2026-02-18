@@ -22,6 +22,7 @@ class Manager {
 		add_action( 'workos_webhook_organization.updated', [ $this, 'handle_org_updated' ] );
 		add_action( 'workos_webhook_organization_membership.created', [ $this, 'handle_membership_created' ] );
 		add_action( 'workos_webhook_organization_membership.deleted', [ $this, 'handle_membership_deleted' ] );
+		add_action( 'workos_user_authenticated', [ self::class, 'ensure_user_org_membership' ], 10, 2 );
 	}
 
 	/**
@@ -105,6 +106,48 @@ class Manager {
 		}
 
 		self::remove_membership( $local_org->id, $wp_user_id );
+	}
+
+	// -------------------------------------------------------------------------
+	// Login membership sync
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Ensure the authenticated user has a local org membership for the configured organization.
+	 *
+	 * Hooked to `workos_user_authenticated` so it fires on both redirect and headless login.
+	 *
+	 * @param int   $wp_user_id  WordPress user ID.
+	 * @param array $auth_result Full WorkOS auth response.
+	 */
+	public static function ensure_user_org_membership( int $wp_user_id, array $auth_result ): void {
+		$workos_org_id = \WorkOS\Config::get_organization_id();
+		if ( empty( $workos_org_id ) ) {
+			return;
+		}
+
+		$local_org = self::get_by_workos_id( $workos_org_id );
+
+		// If the local org doesn't exist yet, fetch from WorkOS API and upsert.
+		if ( ! $local_org ) {
+			$org_data = workos()->api()->get_organization( $workos_org_id );
+			if ( ! is_wp_error( $org_data ) && ! empty( $org_data['id'] ) ) {
+				self::upsert_organization( $org_data );
+				$local_org = self::get_by_workos_id( $workos_org_id );
+			}
+		}
+
+		if ( ! $local_org ) {
+			return;
+		}
+
+		self::add_membership(
+			(int) $local_org->id,
+			$wp_user_id,
+			[
+				'workos_role' => 'member',
+			]
+		);
 	}
 
 	// -------------------------------------------------------------------------
