@@ -35,8 +35,10 @@ class Staging extends Options {
 			'allow_password_fallback' => true,
 			'deprovision_action'      => 'deactivate',
 			'reassign_user'           => 0,
-			'role_map'                => [],
-			'audit_logging_enabled'   => false,
+			'role_map'                    => [],
+			'redirect_urls'               => [],
+			'redirect_first_login_only'   => true,
+			'audit_logging_enabled'       => false,
 		];
 	}
 }

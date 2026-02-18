@@ -36,9 +36,6 @@ class Login {
 
 		// Logout: clear WorkOS session.
 		add_action( 'wp_logout', [ $this, 'handle_logout' ] );
-
-		// Login redirect.
-		add_filter( 'login_redirect', [ $this, 'login_redirect' ], 10, 3 );
 	}
 
 	/**
@@ -254,6 +251,7 @@ class Login {
 		 */
 		do_action( 'wp_login', $wp_user->user_login, $wp_user );
 
+		$redirect_to = Redirect::resolve( $redirect_to, $wp_user );
 		wp_safe_redirect( $redirect_to );
 		exit;
 	}
@@ -301,27 +299,6 @@ class Login {
 		// Clean up stored tokens.
 		delete_user_meta( $user_id, '_workos_access_token' );
 		delete_user_meta( $user_id, '_workos_refresh_token' );
-	}
-
-	/**
-	 * Control login redirect.
-	 *
-	 * @param string   $redirect_to           Default redirect.
-	 * @param string   $requested_redirect_to Requested redirect.
-	 * @param \WP_User $user                  User.
-	 *
-	 * @return string
-	 */
-	public function login_redirect( string $redirect_to, string $requested_redirect_to, $user ): string {
-		if ( ! $user instanceof \WP_User ) {
-			return $redirect_to;
-		}
-
-		if ( ! get_user_meta( $user->ID, '_workos_user_id', true ) ) {
-			return $redirect_to;
-		}
-
-		return $requested_redirect_to ? $requested_redirect_to : admin_url();
 	}
 
 	/**

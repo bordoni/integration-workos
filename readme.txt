@@ -17,6 +17,7 @@ WorkOS Identity integrates your WordPress site with [WorkOS](https://workos.com)
 * **Single Sign-On (SSO)** — AuthKit redirect and headless API authentication flows.
 * **Directory Sync** — Automatic user provisioning and deprovisioning via SCIM.
 * **Role Mapping** — Map WorkOS organization roles to WordPress roles.
+* **Role-Based Login Redirects** — Send users to different URLs after login based on their WordPress role.
 * **Organization Management** — Multi-tenant organization support.
 * **Audit Logging** — Forward WordPress events to WorkOS Audit Logs.
 * **REST API Authentication** — Verify WorkOS access tokens for headless/API usage.
@@ -37,6 +38,113 @@ Sign up at [workos.com](https://workos.com) and find your API Key and Client ID 
 = Can users still log in with passwords? =
 
 Yes, if "Password Fallback" is enabled in settings. Users can access the standard login form via `?fallback=1`.
+
+== Hooks Reference ==
+
+= Filters =
+
+**`workos_redirect_urls`**
+
+Filter the full role-to-URL redirect map from settings. Allows adding, removing, or overriding entries programmatically.
+
+Parameters:
+
+* `array $map` — Associative array of WordPress role slug to redirect URL.
+
+Example:
+
+`add_filter( 'workos_redirect_urls', function ( $map ) {
+    $map['subscriber'] = home_url( '/welcome' );
+    return $map;
+} );`
+
+**`workos_redirect_url`**
+
+Filter the final redirect URL for a specific user. Return an empty string to skip the role-based redirect.
+
+Parameters:
+
+* `string $url` — The role-based redirect URL (empty if no match).
+* `WP_User $user` — The authenticated user.
+* `string $role` — The user's primary WordPress role.
+* `bool $is_first_login` — Whether this is the user's first login via WorkOS.
+
+Example:
+
+`add_filter( 'workos_redirect_url', function ( $url, $user, $role, $is_first_login ) {
+    if ( $role === 'editor' ) {
+        return home_url( '/editor-guide' );
+    }
+    return $url;
+}, 10, 4 );`
+
+**`workos_redirect_should_apply`**
+
+Whether the role-based redirect should apply at all for this request. Return `false` to skip entirely.
+
+Parameters:
+
+* `bool $should_apply` — Whether to apply the role-based redirect (default `true`).
+* `WP_User $user` — The authenticated user.
+* `string $requested_redirect` — The current redirect URL.
+
+Example:
+
+`add_filter( 'workos_redirect_should_apply', function ( $should_apply, $user ) {
+    // Never redirect administrators.
+    if ( in_array( 'administrator', $user->roles, true ) ) {
+        return false;
+    }
+    return $should_apply;
+}, 10, 2 );`
+
+**`workos_redirect_is_explicit`**
+
+Whether the current `redirect_to` value is considered "explicit" (user-initiated). By default, any `redirect_to` that is not `admin_url()` or empty is treated as explicit, meaning the role-based redirect is skipped in favor of the user's intended destination.
+
+Parameters:
+
+* `bool $is_explicit` — Whether the redirect is explicit.
+* `string $redirect_to` — The redirect URL.
+* `WP_User $user` — The authenticated user.
+
+**`workos_redirect_first_login_only`**
+
+Override the "first login only" admin setting programmatically.
+
+Parameters:
+
+* `bool $first_login_only` — Whether to redirect only on first login.
+
+= Actions =
+
+**`workos_user_created`**
+
+Fires when a brand-new WordPress user is created via WorkOS authentication. Does NOT fire for email-match auto-links (existing users matched by email).
+
+Parameters:
+
+* `int $user_id` — WordPress user ID.
+* `array $workos_user` — WorkOS user data array.
+
+**`workos_redirect_before`**
+
+Fires just before a role-based redirect is applied.
+
+Parameters:
+
+* `string $url` — The redirect URL.
+* `WP_User $user` — The authenticated user.
+* `bool $is_first_login` — Whether this is the user's first login via WorkOS.
+
+**`workos_redirect_skipped`**
+
+Fires when a role-based redirect is skipped. Useful for logging or debugging redirect behavior.
+
+Parameters:
+
+* `WP_User $user` — The authenticated user.
+* `string $reason` — Reason the redirect was skipped. One of: `filtered_out`, `explicit_redirect`, `not_first_login`, `no_matching_role_url`.
 
 == Changelog ==
 

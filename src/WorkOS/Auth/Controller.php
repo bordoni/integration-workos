@@ -23,6 +23,9 @@ class Controller extends BaseController {
 		$this->container->singleton( Login::class );
 		$this->container->get( Login::class );
 
+		$this->container->singleton( Redirect::class );
+		$this->container->get( Redirect::class );
+
 		$this->container->singleton( Registration::class );
 		$this->container->get( Registration::class );
 

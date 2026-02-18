@@ -523,6 +523,36 @@ class Settings {
 			[ 'name' => $this->env_option( 'reassign_user' ) ]
 		);
 
+		// --- Login Redirects section ---
+		add_settings_section(
+			'workos_redirects',
+			__( 'Login Redirects', 'workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Redirect users to a specific URL after login, based on their WordPress role.', 'workos' ) . '</p>';
+			},
+			self::USERS_PAGE
+		);
+
+		add_settings_field(
+			'workos_env_redirect_first_login_only',
+			__( 'First Login Only', 'workos' ),
+			[ $this, 'render_checkbox' ],
+			self::USERS_PAGE,
+			'workos_redirects',
+			[
+				'name'  => $this->env_option( 'redirect_first_login_only' ),
+				'label' => __( 'Only redirect on the first login. Subsequent logins go to the dashboard.', 'workos' ),
+			]
+		);
+
+		add_settings_field(
+			'workos_env_redirect_urls',
+			__( 'Redirect URLs', 'workos' ),
+			[ $this, 'render_redirect_urls' ],
+			self::USERS_PAGE,
+			'workos_redirects'
+		);
+
 		// --- Role Mapping section ---
 		add_settings_section(
 			'workos_roles',
@@ -1210,6 +1240,102 @@ class Settings {
 	}
 
 	/**
+	 * Render the redirect URLs table for the Users tab.
+	 */
+	public function render_redirect_urls(): void {
+		$env      = $this->get_editing_environment();
+		$options  = get_option( "workos_{$env}", [] );
+		$map      = is_array( $options['redirect_urls'] ?? null ) ? $options['redirect_urls'] : [];
+		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+
+		echo '<table id="workos-redirect-urls-table" class="widefat"><thead><tr>';
+		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Redirect URL', 'workos' ) . '</th>';
+		echo '</tr></thead><tbody>';
+
+		foreach ( $map as $role => $url ) {
+			if ( ! isset( $wp_roles[ $role ] ) ) {
+				continue;
+			}
+
+			echo '<tr class="workos-redirect-url-row"><td>';
+			printf( '<select name="workos_%s[redirect_urls][keys][]">', esc_attr( $env ) );
+			foreach ( $wp_roles as $slug => $name ) {
+				printf(
+					'<option value="%s" %s>%s</option>',
+					esc_attr( $slug ),
+					selected( $role, $slug, false ),
+					esc_html( $name )
+				);
+			}
+			echo '</select>';
+			echo '</td><td>';
+			printf(
+				'<input type="url" name="workos_%s[redirect_urls][values][]" value="%s" class="regular-text" placeholder="%s" />',
+				esc_attr( $env ),
+				esc_attr( $url ),
+				esc_attr__( 'https://example.com/welcome', 'workos' )
+			);
+			echo '</td></tr>';
+		}
+
+		// Empty row for adding new redirects.
+		echo '<tr class="workos-redirect-url-row"><td>';
+		printf( '<select name="workos_%s[redirect_urls][keys][]">', esc_attr( $env ) );
+		echo '<option value="">' . esc_html__( '— Select Role —', 'workos' ) . '</option>';
+		foreach ( $wp_roles as $slug => $name ) {
+			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
+		}
+		echo '</select>';
+		echo '</td><td>';
+		printf(
+			'<input type="url" name="workos_%s[redirect_urls][values][]" value="" class="regular-text" placeholder="%s" />',
+			esc_attr( $env ),
+			esc_attr__( 'https://example.com/welcome', 'workos' )
+		);
+		echo '</td></tr>';
+
+		echo '</tbody></table>';
+
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter the URL to redirect users to after login, per role. Leave empty to use the default dashboard.', 'workos' ) . '</p>';
+	}
+
+	/**
+	 * Sanitize the redirect URLs map from the form submission.
+	 *
+	 * @param mixed $input Raw form input.
+	 *
+	 * @return array Sanitized redirect URL map.
+	 */
+	public function sanitize_redirect_urls( $input ): array {
+		if ( ! is_array( $input ) || empty( $input['keys'] ) || empty( $input['values'] ) ) {
+			if ( is_array( $input ) && ! isset( $input['keys'] ) ) {
+				$sanitized = [];
+				foreach ( $input as $key => $value ) {
+					$key   = sanitize_text_field( $key );
+					$value = sanitize_url( $value );
+					if ( $key && $value ) {
+						$sanitized[ $key ] = $value;
+					}
+				}
+				return $sanitized;
+			}
+			return [];
+		}
+
+		$map = [];
+		foreach ( $input['keys'] as $i => $key ) {
+			$key   = sanitize_text_field( $key );
+			$value = sanitize_url( $input['values'][ $i ] ?? '' );
+			if ( $key && $value ) {
+				$map[ $key ] = $value;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
 	 * Sanitize an environment options array (production or staging).
 	 *
 	 * Uses merge semantics: reads existing option from DB, sanitizes each
@@ -1244,7 +1370,7 @@ class Settings {
 		}
 
 		// Boolean fields.
-		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled' ];
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'redirect_first_login_only' ];
 		foreach ( $bool_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );
@@ -1259,6 +1385,11 @@ class Settings {
 		// Role map.
 		if ( isset( $input['role_map'] ) ) {
 			$sanitized['role_map'] = $this->sanitize_role_map( $input['role_map'] );
+		}
+
+		// Redirect URLs.
+		if ( isset( $input['redirect_urls'] ) ) {
+			$sanitized['redirect_urls'] = $this->sanitize_redirect_urls( $input['redirect_urls'] );
 		}
 
 		return array_merge( $existing, $sanitized );

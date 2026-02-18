@@ -99,6 +99,18 @@ class UserSync {
 
 		self::link_user( $user_id, $workos_user );
 
+		update_user_meta( $user_id, '_workos_first_login', '1' );
+
+		/**
+		 * Fires when a brand-new WP user is created via WorkOS authentication.
+		 *
+		 * Does NOT fire for email-match auto-links.
+		 *
+		 * @param int   $user_id     WP user ID.
+		 * @param array $workos_user WorkOS user data.
+		 */
+		do_action( 'workos_user_created', $user_id, $workos_user );
+
 		return get_user_by( 'id', $user_id );
 	}
 
