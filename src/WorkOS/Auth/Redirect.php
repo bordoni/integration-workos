@@ -107,15 +107,23 @@ class Redirect {
 			return $redirect_to;
 		}
 
-		// Check "first login only" setting.
-		$first_login_only = self::is_first_login_only();
+		// Look up role-based redirect entry.
+		$redirect_map = self::get_redirect_urls();
+		$role         = self::get_primary_role( $user );
+		$entry        = $redirect_map[ $role ] ?? [];
+
+		// Support both structured entries and legacy string values.
+		$role_url          = is_array( $entry ) ? ( $entry['url'] ?? '' ) : (string) $entry;
+		$first_login_only  = is_array( $entry ) ? ! empty( $entry['first_login_only'] ) : false;
 
 		/**
-		 * Override the "first login only" admin setting programmatically.
+		 * Override the per-entry "first login only" setting programmatically.
 		 *
-		 * @param bool $first_login_only Whether to redirect only on first login.
+		 * @param bool     $first_login_only Whether to redirect only on first login.
+		 * @param string   $role             The user's primary WP role.
+		 * @param \WP_User $user             The authenticated user.
 		 */
-		$first_login_only = apply_filters( 'workos_redirect_first_login_only', $first_login_only );
+		$first_login_only = apply_filters( 'workos_redirect_first_login_only', $first_login_only, $role, $user );
 
 		if ( $first_login_only && ! $is_first_login ) {
 			/** This action is documented above. */
@@ -123,11 +131,6 @@ class Redirect {
 
 			return ! empty( $redirect_to ) ? $redirect_to : admin_url();
 		}
-
-		// Look up role-based redirect URL.
-		$redirect_map = self::get_redirect_urls();
-		$role         = self::get_primary_role( $user );
-		$role_url     = $redirect_map[ $role ] ?? '';
 
 		/**
 		 * Final redirect URL for a specific user.
@@ -142,6 +145,11 @@ class Redirect {
 		$role_url = apply_filters( 'workos_redirect_url', $role_url, $user, $role, $is_first_login );
 
 		if ( ! empty( $role_url ) ) {
+			// Convert relative paths to absolute URLs.
+			if ( ! preg_match( '#^https?://#i', $role_url ) ) {
+				$role_url = home_url( $role_url );
+			}
+
 			/**
 			 * Fires just before the role-based redirect is applied.
 			 *
@@ -163,9 +171,12 @@ class Redirect {
 	}
 
 	/**
-	 * Get the role→URL redirect map from the active environment options.
+	 * Get the role→redirect entry map from the active environment options.
 	 *
-	 * @return array<string, string> Role slug → redirect URL.
+	 * Each entry is an array with 'url' and 'first_login_only' keys.
+	 * Legacy string values are normalized to the structured format.
+	 *
+	 * @return array<string, array{url: string, first_login_only: bool}> Role slug → redirect entry.
 	 */
 	public static function get_redirect_urls(): array {
 		$options = self::get_env_options();
@@ -175,12 +186,26 @@ class Redirect {
 			$map = [];
 		}
 
+		// Legacy global setting — used as default for old-format string entries.
+		$global_first_login = (bool) $options->get( 'redirect_first_login_only', false );
+
+		// Normalize legacy string entries to structured format.
+		foreach ( $map as $role => $entry ) {
+			if ( is_string( $entry ) ) {
+				$map[ $role ] = [
+					'url'              => $entry,
+					'first_login_only' => $global_first_login,
+				];
+			}
+		}
+
 		/**
-		 * The full role→URL map from settings.
+		 * The full role→redirect entry map from settings.
 		 *
+		 * Each entry is an array with 'url' (string) and 'first_login_only' (bool).
 		 * Allows adding/removing/overriding entries programmatically.
 		 *
-		 * @param array $map Role slug → redirect URL.
+		 * @param array $map Role slug → redirect entry array.
 		 */
 		return apply_filters( 'workos_redirect_urls', $map );
 	}
@@ -203,16 +228,6 @@ class Redirect {
 	 */
 	public static function clear_first_login( int $user_id ): void {
 		delete_user_meta( $user_id, '_workos_first_login' );
-	}
-
-	/**
-	 * Check if the "first login only" setting is enabled.
-	 *
-	 * @return bool
-	 */
-	private static function is_first_login_only(): bool {
-		$options = self::get_env_options();
-		return (bool) $options->get( 'redirect_first_login_only', true );
 	}
 
 	/**

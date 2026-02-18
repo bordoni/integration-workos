@@ -195,6 +195,7 @@ class Settings {
 
 		if ( 'users' === $current_tab ) {
 			$this->enqueue_role_mapping_assets();
+			$this->enqueue_redirect_urls_assets();
 		}
 	}
 
@@ -228,6 +229,45 @@ class Settings {
 		wp_add_inline_script(
 			'workos-role-mapping',
 			'window.workosRoleMapping = ' . wp_json_encode( [ 'wpRoles' => $wp_roles ] ) . ';',
+			'before'
+		);
+	}
+
+	/**
+	 * Enqueue redirect-urls script and styles on the Users tab.
+	 */
+	private function enqueue_redirect_urls_assets(): void {
+		$asset_file = WORKOS_DIR . 'build/redirect-urls.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'workos-redirect-urls',
+			WORKOS_URL . 'build/redirect-urls.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		wp_enqueue_style(
+			'workos-redirect-urls',
+			WORKOS_URL . 'build/redirect-urls.css',
+			[],
+			$asset['version']
+		);
+
+		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		wp_add_inline_script(
+			'workos-redirect-urls',
+			'window.workosRedirectUrls = ' . wp_json_encode(
+				[
+					'wpRoles' => $wp_roles,
+					'env'     => $this->get_editing_environment(),
+				]
+			) . ';',
 			'before'
 		);
 	}
@@ -529,28 +569,9 @@ class Settings {
 			__( 'Login Redirects', 'workos' ),
 			function () {
 				echo '<p>' . esc_html__( 'Redirect users to a specific URL after login, based on their WordPress role.', 'workos' ) . '</p>';
+				$this->render_redirect_urls();
 			},
 			self::USERS_PAGE
-		);
-
-		add_settings_field(
-			'workos_env_redirect_first_login_only',
-			__( 'First Login Only', 'workos' ),
-			[ $this, 'render_checkbox' ],
-			self::USERS_PAGE,
-			'workos_redirects',
-			[
-				'name'  => $this->env_option( 'redirect_first_login_only' ),
-				'label' => __( 'Only redirect on the first login. Subsequent logins go to the dashboard.', 'workos' ),
-			]
-		);
-
-		add_settings_field(
-			'workos_env_redirect_urls',
-			__( 'Redirect URLs', 'workos' ),
-			[ $this, 'render_redirect_urls' ],
-			self::USERS_PAGE,
-			'workos_redirects'
 		);
 
 		// --- Role Mapping section ---
@@ -1189,6 +1210,7 @@ class Settings {
 		echo '<table id="workos-role-map-table" class="widefat"><thead><tr>';
 		echo '<th>' . esc_html__( 'WorkOS Role', 'workos' ) . '</th>';
 		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
+		echo '<th class="workos-role-map-actions"></th>';
 		echo '</tr></thead><tbody>';
 
 		foreach ( $map as $workos_role => $wp_role ) {
@@ -1245,21 +1267,42 @@ class Settings {
 	public function render_redirect_urls(): void {
 		$env      = $this->get_editing_environment();
 		$options  = get_option( "workos_{$env}", [] );
-		$map      = is_array( $options['redirect_urls'] ?? null ) ? $options['redirect_urls'] : [];
+		$raw_map  = is_array( $options['redirect_urls'] ?? null ) ? $options['redirect_urls'] : [];
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+
+		// Legacy global setting — used as default when normalizing old-format entries.
+		$global_first_login = ! empty( $options['redirect_first_login_only'] );
+
+		// Normalize entries: legacy string values become arrays.
+		$map = [];
+		foreach ( $raw_map as $role => $entry ) {
+			if ( ! isset( $wp_roles[ $role ] ) ) {
+				continue;
+			}
+			if ( is_string( $entry ) ) {
+				$map[ $role ] = [
+					'url'              => $entry,
+					'first_login_only' => $global_first_login,
+				];
+			} elseif ( is_array( $entry ) ) {
+				$map[ $role ] = $entry;
+			}
+		}
 
 		echo '<table id="workos-redirect-urls-table" class="widefat"><thead><tr>';
 		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
 		echo '<th>' . esc_html__( 'Redirect URL', 'workos' ) . '</th>';
+		echo '<th class="workos-redirect-url-first-login">' . esc_html__( 'First Login Only', 'workos' ) . '</th>';
+		echo '<th class="workos-redirect-url-actions"></th>';
 		echo '</tr></thead><tbody>';
 
-		foreach ( $map as $role => $url ) {
-			if ( ! isset( $wp_roles[ $role ] ) ) {
-				continue;
-			}
+		$i = 0;
+		foreach ( $map as $role => $entry ) {
+			$url         = $entry['url'] ?? '';
+			$first_login = ! empty( $entry['first_login_only'] );
 
 			echo '<tr class="workos-redirect-url-row"><td>';
-			printf( '<select name="workos_%s[redirect_urls][keys][]">', esc_attr( $env ) );
+			printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), $i );
 			foreach ( $wp_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
@@ -1271,17 +1314,31 @@ class Settings {
 			echo '</select>';
 			echo '</td><td>';
 			printf(
-				'<input type="url" name="workos_%s[redirect_urls][values][]" value="%s" class="regular-text" placeholder="%s" />',
+				'<input type="text" name="workos_%s[redirect_urls][values][%d]" value="%s" class="regular-text" placeholder="%s" />',
 				esc_attr( $env ),
+				$i,
 				esc_attr( $url ),
-				esc_attr__( 'https://example.com/welcome', 'workos' )
+				esc_attr__( '/welcome', 'workos' )
+			);
+			echo '</td><td class="workos-redirect-url-first-login">';
+			printf(
+				'<input type="hidden" name="workos_%s[redirect_urls][first_login][%d]" value="0" />',
+				esc_attr( $env ),
+				$i
+			);
+			printf(
+				'<input type="checkbox" name="workos_%s[redirect_urls][first_login][%d]" value="1" %s />',
+				esc_attr( $env ),
+				$i,
+				checked( $first_login, true, false )
 			);
 			echo '</td></tr>';
+			++$i;
 		}
 
-		// Empty row for adding new redirects.
+		// Empty row for adding new redirects (no-JS fallback).
 		echo '<tr class="workos-redirect-url-row"><td>';
-		printf( '<select name="workos_%s[redirect_urls][keys][]">', esc_attr( $env ) );
+		printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), $i );
 		echo '<option value="">' . esc_html__( '— Select Role —', 'workos' ) . '</option>';
 		foreach ( $wp_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
@@ -1289,15 +1346,33 @@ class Settings {
 		echo '</select>';
 		echo '</td><td>';
 		printf(
-			'<input type="url" name="workos_%s[redirect_urls][values][]" value="" class="regular-text" placeholder="%s" />',
+			'<input type="text" name="workos_%s[redirect_urls][values][%d]" value="" class="regular-text" placeholder="%s" />',
 			esc_attr( $env ),
-			esc_attr__( 'https://example.com/welcome', 'workos' )
+			$i,
+			esc_attr__( '/welcome', 'workos' )
+		);
+		echo '</td><td class="workos-redirect-url-first-login">';
+		printf(
+			'<input type="hidden" name="workos_%s[redirect_urls][first_login][%d]" value="0" />',
+			esc_attr( $env ),
+			$i
+		);
+		printf(
+			'<input type="checkbox" name="workos_%s[redirect_urls][first_login][%d]" value="1" />',
+			esc_attr( $env ),
+			$i
 		);
 		echo '</td></tr>';
 
 		echo '</tbody></table>';
 
-		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter the URL to redirect users to after login, per role. Leave empty to use the default dashboard.', 'workos' ) . '</p>';
+		// Add Redirect button — hidden until JS loads.
+		echo '<button type="button" id="workos-redirect-urls-add" class="button" style="display:none">';
+		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
+		echo esc_html__( 'Add Redirect', 'workos' );
+		echo '</button>';
+
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /welcome) to redirect users to after login, per role. Leave empty to use the default dashboard.', 'workos' ) . '</p>';
 	}
 
 	/**
@@ -1310,12 +1385,29 @@ class Settings {
 	public function sanitize_redirect_urls( $input ): array {
 		if ( ! is_array( $input ) || empty( $input['keys'] ) || empty( $input['values'] ) ) {
 			if ( is_array( $input ) && ! isset( $input['keys'] ) ) {
+				// Existing flat or structured map from DB — pass through.
 				$sanitized = [];
 				foreach ( $input as $key => $value ) {
-					$key   = sanitize_text_field( $key );
-					$value = sanitize_url( $value );
-					if ( $key && $value ) {
-						$sanitized[ $key ] = $value;
+					$key = sanitize_text_field( $key );
+					if ( ! $key ) {
+						continue;
+					}
+					if ( is_array( $value ) ) {
+						$url = sanitize_text_field( $value['url'] ?? '' );
+						if ( $url ) {
+							$sanitized[ $key ] = [
+								'url'              => $url,
+								'first_login_only' => rest_sanitize_boolean( $value['first_login_only'] ?? false ),
+							];
+						}
+					} else {
+						$value = sanitize_text_field( $value );
+						if ( $value ) {
+							$sanitized[ $key ] = [
+								'url'              => $value,
+								'first_login_only' => false,
+							];
+						}
 					}
 				}
 				return $sanitized;
@@ -1326,9 +1418,12 @@ class Settings {
 		$map = [];
 		foreach ( $input['keys'] as $i => $key ) {
 			$key   = sanitize_text_field( $key );
-			$value = sanitize_url( $input['values'][ $i ] ?? '' );
+			$value = sanitize_text_field( $input['values'][ $i ] ?? '' );
 			if ( $key && $value ) {
-				$map[ $key ] = $value;
+				$map[ $key ] = [
+					'url'              => $value,
+					'first_login_only' => rest_sanitize_boolean( $input['first_login'][ $i ] ?? false ),
+				];
 			}
 		}
 
@@ -1370,7 +1465,7 @@ class Settings {
 		}
 
 		// Boolean fields.
-		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'redirect_first_login_only' ];
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled' ];
 		foreach ( $bool_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );

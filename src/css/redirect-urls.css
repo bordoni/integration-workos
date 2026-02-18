@@ -1,0 +1,73 @@
+/**
+ * Redirect URLs table styles.
+ *
+ * @package WorkOS
+ */
+
+#workos-redirect-urls-table {
+	max-width: 700px;
+	margin-top: 12px;
+}
+
+#workos-redirect-urls-table input.regular-text {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+#workos-redirect-urls-table select {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.workos-redirect-url-first-login {
+	white-space: nowrap;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.workos-redirect-url-actions {
+	width: 40px;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.workos-redirect-url-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid #dcdcde;
+	border-radius: 50%;
+	background: #fff;
+	color: #d63638;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.workos-redirect-url-remove:hover {
+	background: #d63638;
+	border-color: #d63638;
+	color: #fff;
+}
+
+.workos-redirect-url-remove .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+#workos-redirect-urls-add {
+	display: inline-flex;
+	align-items: center;
+	margin-top: 8px;
+}
+
+#workos-redirect-urls-add .dashicons {
+	margin-right: 4px;
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	line-height: 1;
+}

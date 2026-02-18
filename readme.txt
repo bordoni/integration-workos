@@ -45,16 +45,16 @@ Yes, if "Password Fallback" is enabled in settings. Users can access the standar
 
 **`workos_redirect_urls`**
 
-Filter the full role-to-URL redirect map from settings. Allows adding, removing, or overriding entries programmatically.
+Filter the full role-to-redirect entry map from settings. Each entry is an array with `url` (string) and `first_login_only` (bool). Allows adding, removing, or overriding entries programmatically.
 
 Parameters:
 
-* `array $map` — Associative array of WordPress role slug to redirect URL.
+* `array $map` — Associative array of WordPress role slug to redirect entry (`['url' => string, 'first_login_only' => bool]`).
 
 Example:
 
 `add_filter( 'workos_redirect_urls', function ( $map ) {
-    $map['subscriber'] = home_url( '/welcome' );
+    $map['subscriber'] = [ 'url' => '/welcome', 'first_login_only' => true ];
     return $map;
 } );`
 
@@ -73,7 +73,7 @@ Example:
 
 `add_filter( 'workos_redirect_url', function ( $url, $user, $role, $is_first_login ) {
     if ( $role === 'editor' ) {
-        return home_url( '/editor-guide' );
+        return '/editor-guide';
     }
     return $url;
 }, 10, 4 );`
@@ -110,11 +110,13 @@ Parameters:
 
 **`workos_redirect_first_login_only`**
 
-Override the "first login only" admin setting programmatically.
+Override the per-entry "first login only" setting programmatically.
 
 Parameters:
 
 * `bool $first_login_only` — Whether to redirect only on first login.
+* `string $role` — The user's primary WordPress role.
+* `WP_User $user` — The authenticated user.
 
 = Actions =
 
