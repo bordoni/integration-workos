@@ -23,7 +23,12 @@ jobs:
           tools: composer
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
+        run: composer install --no-interaction --prefer-dist --no-scripts
+        env:
+          COMPOSER_NO_AUDIT: 1
+
+      - name: Configure PHPCS standards
+        run: vendor/bin/phpcs --config-set installed_paths vendor/phpcompatibility/php-compatibility,vendor/phpcompatibility/phpcompatibility-paragonie,vendor/phpcompatibility/phpcompatibility-wp,vendor/phpcsstandards/phpcsextra,vendor/phpcsstandards/phpcsutils,vendor/wp-coding-standards/wpcs
 
       - name: Run PHPCS
         run: vendor/bin/phpcs
