@@ -258,6 +258,21 @@ class Client {
 	}
 
 	// -------------------------------------------------------------------------
+	// Events
+	// -------------------------------------------------------------------------
+
+	/**
+	 * List events.
+	 *
+	 * @param array $params Query params (events[], organization_id, after, range_start, limit).
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function list_events( array $params = [] ) {
+		return $this->get( '/events', $params );
+	}
+
+	// -------------------------------------------------------------------------
 	// Webhook Verification
 	// -------------------------------------------------------------------------
 

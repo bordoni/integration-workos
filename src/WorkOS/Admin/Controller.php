@@ -34,6 +34,9 @@ class Controller extends BaseController {
 
 		$this->container->singleton( UserList::class );
 		$this->container->get( UserList::class );
+
+		$this->container->singleton( UserProfile::class );
+		$this->container->get( UserProfile::class );
 	}
 
 	/**
