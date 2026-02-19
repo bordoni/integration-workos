@@ -36,6 +36,9 @@ class Login {
 
 		// Logout: clear WorkOS session.
 		add_action( 'wp_logout', [ $this, 'handle_logout' ] );
+
+		// Allow redirect to WorkOS API for session logout.
+		add_filter( 'allowed_redirect_hosts', [ $this, 'allow_workos_redirect' ] );
 	}
 
 	/**
@@ -82,6 +85,7 @@ class Login {
 			'redirect_uri' => self::get_callback_url(),
 			'state'        => $state,
 			'provider'     => 'authkit',
+			'screen_hint'  => 'sign-in',
 		];
 
 		$org_id = \WorkOS\Config::get_organization_id();
@@ -297,10 +301,10 @@ class Login {
 
 	/**
 	 * Handle logout — clear local tokens and revoke WorkOS session.
+	 *
+	 * @param int $user_id User ID passed by the wp_logout action.
 	 */
-	public function handle_logout(): void {
-		$user_id = get_current_user_id();
-
+	public function handle_logout( int $user_id ): void {
 		$access_token = get_user_meta( $user_id, '_workos_access_token', true );
 
 		// Clean up stored tokens.
@@ -310,11 +314,29 @@ class Login {
 		// Extract session ID from JWT and redirect to WorkOS logout.
 		$session_id = $access_token ? self::extract_session_id( $access_token ) : '';
 		if ( $session_id ) {
-			$logout_url = self::get_workos_logout_url( $session_id );
 			// Use logout_redirect filter at priority 20 (after LogoutRedirect at 10)
 			// to ensure WorkOS session revocation always wins when a session exists.
-			add_filter( 'logout_redirect', fn( $redirect_to ) => $logout_url, 20 );
+			// Capture the role-based redirect URL from $redirect_to and pass it as return_to.
+			add_filter(
+				'logout_redirect',
+				function ( $redirect_to ) use ( $session_id ) {
+					return self::get_workos_logout_url( $session_id, $redirect_to );
+				},
+				20
+			);
 		}
+	}
+
+	/**
+	 * Allow redirects to the WorkOS API domain.
+	 *
+	 * @param array $hosts Allowed redirect hosts.
+	 *
+	 * @return array
+	 */
+	public function allow_workos_redirect( array $hosts ): array {
+		$hosts[] = 'api.workos.com';
+		return $hosts;
 	}
 
 	/**
@@ -354,11 +376,16 @@ class Login {
 	 * Build the WorkOS session logout URL.
 	 *
 	 * @param string $session_id WorkOS session ID.
+	 * @param string $return_to  Optional URL to return to after WorkOS logout.
 	 *
 	 * @return string Full logout URL.
 	 */
-	private static function get_workos_logout_url( string $session_id ): string {
-		return 'https://api.workos.com/user_management/sessions/logout?' . http_build_query( [ 'session_id' => $session_id ] );
+	private static function get_workos_logout_url( string $session_id, string $return_to = '' ): string {
+		$params = [ 'session_id' => $session_id ];
+		if ( $return_to ) {
+			$params['return_to'] = $return_to;
+		}
+		return 'https://api.workos.com/user_management/sessions/logout?' . http_build_query( $params );
 	}
 
 	/**

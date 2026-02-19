@@ -68,6 +68,7 @@ class Registration {
 			'redirect_uri' => Login::get_callback_url(),
 			'state'        => $state,
 			'provider'     => 'authkit',
+			'screen_hint'  => 'sign-up',
 		];
 
 		$org_id = \WorkOS\Config::get_organization_id();

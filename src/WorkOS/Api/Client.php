@@ -70,6 +70,9 @@ class Client {
 	 *     @type string $provider        Provider, e.g. 'authkit'.
 	 *     @type string $connection_id   Specific SSO connection.
 	 *     @type string $organization_id Target organization.
+	 *     @type string $screen_hint     AuthKit screen: 'sign-in' or 'sign-up'.
+	 *     @type string $login_hint      Pre-fill the email field.
+	 *     @type string $domain_hint     Route to a specific organization domain.
 	 * }
 	 *
 	 * @return string Authorization URL.
@@ -84,6 +87,9 @@ class Client {
 				'provider'        => $args['provider'] ?? 'authkit',
 				'connection_id'   => $args['connection_id'] ?? '',
 				'organization_id' => $args['organization_id'] ?? '',
+				'screen_hint'     => $args['screen_hint'] ?? '',
+				'login_hint'      => $args['login_hint'] ?? '',
+				'domain_hint'     => $args['domain_hint'] ?? '',
 			]
 		);
 
