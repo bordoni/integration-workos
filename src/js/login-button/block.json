@@ -1,0 +1,89 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "workos/login-button",
+	"version": "1.0.0",
+	"title": "WorkOS Login Button",
+	"category": "widgets",
+	"icon": "lock",
+	"description": "Display a WorkOS login or logout button.",
+	"keywords": [ "login", "auth", "workos", "sso" ],
+	"textdomain": "workos",
+	"supports": {
+		"html": false,
+		"multiple": true
+	},
+	"attributes": {
+		"mode": {
+			"type": "string",
+			"default": "auto"
+		},
+		"redirect_to": {
+			"type": "string",
+			"default": ""
+		},
+		"logged_in_display": {
+			"type": "string",
+			"default": "hide"
+		},
+		"button_text": {
+			"type": "string",
+			"default": ""
+		},
+		"logout_text": {
+			"type": "string",
+			"default": ""
+		},
+		"alignment": {
+			"type": "string",
+			"default": "left"
+		},
+		"size": {
+			"type": "string",
+			"default": "medium"
+		},
+		"style": {
+			"type": "string",
+			"default": "filled"
+		},
+		"bg_color": {
+			"type": "string",
+			"default": ""
+		},
+		"text_color": {
+			"type": "string",
+			"default": ""
+		},
+		"border_color": {
+			"type": "string",
+			"default": ""
+		},
+		"border_radius": {
+			"type": "string",
+			"default": ""
+		},
+		"show_icon": {
+			"type": "boolean",
+			"default": false
+		},
+		"show_registration": {
+			"type": "boolean",
+			"default": false
+		},
+		"show_password_fallback": {
+			"type": "boolean",
+			"default": false
+		},
+		"registration_text": {
+			"type": "string",
+			"default": ""
+		},
+		"password_fallback_text": {
+			"type": "string",
+			"default": ""
+		}
+	},
+	"editorScript": "file:../../../build/login-button.js",
+	"editorStyle": "file:../../css/login-button-editor.css",
+	"style": "file:../../css/login-button.css"
+}

@@ -16,6 +16,7 @@ use WorkOS\Webhook\Controller as WebhookController;
 use WorkOS\Sync\Controller as SyncController;
 use WorkOS\Organization\Controller as OrganizationController;
 use WorkOS\CLI\Controller as CLIController;
+use WorkOS\UI\Controller as UIController;
 
 /**
  * Main controller — registers all feature controllers.
@@ -35,6 +36,7 @@ class Controller extends BaseController {
 		$this->container->register( SyncController::class );
 		$this->container->register( OrganizationController::class );
 		$this->container->register( CLIController::class );
+		$this->container->register( UIController::class );
 
 		// Admin bar shows on both admin and frontend, so register at the main level.
 		$this->container->singleton( AdminBar::class );

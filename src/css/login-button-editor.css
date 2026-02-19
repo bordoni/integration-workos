@@ -1,0 +1,13 @@
+/**
+ * WorkOS Login Button — Editor-specific overrides
+ */
+
+/* Prevent link navigation in the editor preview */
+.wp-block-workos-login-button a {
+	pointer-events: none;
+}
+
+/* Ensure the block preview has consistent spacing */
+.wp-block-workos-login-button .workos-login-button {
+	margin: 0;
+}

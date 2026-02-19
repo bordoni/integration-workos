@@ -1,0 +1,212 @@
+/**
+ * WorkOS Login Button — Frontend Styles
+ *
+ * BEM naming: .workos-login-button
+ */
+
+/* Container */
+.workos-login-button {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+/* Alignment modifiers */
+.workos-login-button--left {
+	align-items: flex-start;
+}
+
+.workos-login-button--center {
+	align-items: center;
+}
+
+.workos-login-button--right {
+	align-items: flex-end;
+}
+
+/* Button base */
+.workos-login-button__btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	border: 2px solid transparent;
+	font-weight: 600;
+	line-height: 1;
+	text-decoration: none;
+	cursor: pointer;
+	transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+	box-sizing: border-box;
+}
+
+.workos-login-button__btn:hover {
+	opacity: 0.85;
+}
+
+.workos-login-button__btn:focus-visible {
+	outline: 2px solid #2563eb;
+	outline-offset: 2px;
+}
+
+/* Size modifiers */
+.workos-login-button--small .workos-login-button__btn,
+.workos-login-button--small .workos-login-button__submit {
+	padding: 6px 14px;
+	font-size: 13px;
+	border-radius: 4px;
+}
+
+.workos-login-button--medium .workos-login-button__btn,
+.workos-login-button--medium .workos-login-button__submit {
+	padding: 10px 20px;
+	font-size: 15px;
+	border-radius: 6px;
+}
+
+.workos-login-button--large .workos-login-button__btn,
+.workos-login-button--large .workos-login-button__submit {
+	padding: 14px 28px;
+	font-size: 17px;
+	border-radius: 8px;
+}
+
+/* Style modifiers: filled */
+.workos-login-button__btn--filled {
+	background-color: #2563eb;
+	color: #ffffff;
+	border-color: #2563eb;
+}
+
+/* Style modifiers: outline */
+.workos-login-button__btn--outline {
+	background-color: transparent;
+	color: #2563eb;
+	border-color: #2563eb;
+}
+
+/* Style modifiers: link */
+.workos-login-button__btn--link {
+	background-color: transparent;
+	color: #2563eb;
+	border-color: transparent;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.workos-login-button__btn--link:hover {
+	text-decoration: underline;
+	opacity: 1;
+}
+
+/* Icon */
+.workos-login-button__icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.workos-login-button__icon svg {
+	width: 1em;
+	height: 1em;
+}
+
+/* Headless form */
+.workos-login-button__form {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	max-width: 320px;
+}
+
+.workos-login-button__label {
+	font-size: 13px;
+	font-weight: 600;
+	color: #374151;
+}
+
+.workos-login-button__input {
+	width: 100%;
+	padding: 8px 12px;
+	font-size: 14px;
+	line-height: 1.5;
+	border: 1px solid #d1d5db;
+	border-radius: 6px;
+	background-color: #ffffff;
+	color: #111827;
+	box-sizing: border-box;
+}
+
+.workos-login-button__input:focus {
+	outline: none;
+	border-color: #2563eb;
+	box-shadow: 0 0 0 1px #2563eb;
+}
+
+.workos-login-button__submit {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 600;
+	line-height: 1;
+	cursor: pointer;
+	border: 2px solid transparent;
+	transition: opacity 0.15s ease;
+	box-sizing: border-box;
+	margin-top: 4px;
+}
+
+.workos-login-button__submit:hover {
+	opacity: 0.85;
+}
+
+/* Error message */
+.workos-login-button__error {
+	font-size: 13px;
+	color: #dc2626;
+	min-height: 0;
+}
+
+.workos-login-button__error:empty {
+	display: none;
+}
+
+/* Links */
+.workos-login-button__links {
+	display: flex;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+.workos-login-button__link {
+	font-size: 13px;
+	color: #2563eb;
+	text-decoration: none;
+}
+
+.workos-login-button__link:hover {
+	text-decoration: underline;
+}
+
+/* Logged-in user info */
+.workos-login-button__user {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.workos-login-button__avatar {
+	border-radius: 50%;
+}
+
+.workos-login-button__name {
+	font-size: 14px;
+	font-weight: 500;
+	color: #374151;
+}
+
+/* Loading state */
+.workos-login-button__form[aria-busy="true"] .workos-login-button__submit {
+	opacity: 0.6;
+	pointer-events: none;
+}

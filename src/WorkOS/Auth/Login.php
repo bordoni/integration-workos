@@ -367,7 +367,7 @@ class Login {
 	 * @param int   $user_id WP user ID.
 	 * @param array $result  WorkOS auth response.
 	 */
-	private static function store_tokens( int $user_id, array $result ): void {
+	public static function store_tokens( int $user_id, array $result ): void {
 		if ( ! empty( $result['access_token'] ) ) {
 			update_user_meta( $user_id, '_workos_access_token', $result['access_token'] );
 		}
