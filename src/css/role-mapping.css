@@ -65,3 +65,55 @@
 	height: 16px;
 	line-height: 1;
 }
+
+/* Out-of-sync warning banner (PHP-rendered). */
+#workos-role-sync-warning {
+	max-width: 700px;
+	margin-bottom: 12px;
+}
+
+/* JS change-detection warning. */
+.workos-role-map-change-warning {
+	max-width: 700px;
+	margin-top: 8px;
+	padding: 8px 12px;
+	border-left: 4px solid #dba617;
+	background: #fcf9e8;
+	color: #50575e;
+}
+
+.workos-role-map-change-warning p {
+	margin: 0;
+}
+
+.workos-role-map-change-warning a {
+	color: #2271b1;
+}
+
+/* Duplicate WorkOS role row highlight. */
+.workos-role-map-row-duplicate td:first-child {
+	border-left: 4px solid #d63638;
+	background: #fcf0f1;
+}
+
+/* Duplicate WorkOS role warning banner. */
+.workos-role-map-duplicate-warning {
+	max-width: 700px;
+	margin-top: 8px;
+	padding: 8px 12px;
+	border-left: 4px solid #d63638;
+	background: #fcf0f1;
+	color: #50575e;
+}
+
+.workos-role-map-duplicate-warning p {
+	margin: 0;
+}
+
+/* Role mismatch indicator in users list. */
+.workos-role-mismatch {
+	display: inline-block;
+	margin-top: 4px;
+	color: #dba617;
+	font-size: 12px;
+}
