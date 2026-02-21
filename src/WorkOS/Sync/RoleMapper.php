@@ -152,7 +152,7 @@ class RoleMapper {
 	 * @param string $role      New WP role.
 	 * @param array  $old_roles Previous WP roles.
 	 */
-	public function push_role_to_workos( int $user_id, string $role, array $old_roles ): void {
+	public function push_role_to_workos( int $user_id, string $role, array $old_roles ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		// Prevent loop: skip if this role change originated from WorkOS sync.
 		if ( self::$syncing || UserSync::is_syncing() ) {
 			return;
@@ -246,7 +246,7 @@ class RoleMapper {
 		$mem_table   = $wpdb->prefix . 'workos_org_memberships';
 		$memberships = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT user_id, workos_membership_id, workos_role FROM {$mem_table} WHERE org_id = %d",
+				"SELECT user_id, workos_membership_id, workos_role FROM {$mem_table} WHERE org_id = %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				$local_org->id
 			)
 		);
@@ -389,7 +389,7 @@ class RoleMapper {
 
 		$memberships = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT user_id, workos_role FROM {$mem_table} WHERE org_id = %d AND workos_role != ''",
+				"SELECT user_id, workos_role FROM {$mem_table} WHERE org_id = %d AND workos_role != ''", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				$local_org->id
 			)
 		);
