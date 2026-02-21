@@ -226,10 +226,17 @@ class Settings {
 			$asset['version']
 		);
 
-		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$wp_roles     = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$workos_roles = $this->get_workos_org_roles();
 		wp_add_inline_script(
 			'workos-role-mapping',
-			'window.workosRoleMapping = ' . wp_json_encode( [ 'wpRoles' => $wp_roles ] ) . ';',
+			'window.workosRoleMapping = ' . wp_json_encode(
+				[
+					'wpRoles'     => $wp_roles,
+					'workosRoles' => $workos_roles,
+					'env'         => $this->get_editing_environment(),
+				]
+			) . ';',
 			'before'
 		);
 	}
@@ -1259,12 +1266,87 @@ class Settings {
 	}
 
 	/**
+	 * Fetch WorkOS organization roles for the editing environment.
+	 *
+	 * Calls the WorkOS API and caches the result in a 5-minute transient.
+	 * Returns a slug => name map, or empty array on error.
+	 *
+	 * @return array<string, string> WorkOS role slug => role name.
+	 */
+	private function get_workos_org_roles(): array {
+		$env     = $this->get_editing_environment();
+		$options = get_option( "workos_{$env}", [] );
+		$org_id  = $options['organization_id'] ?? '';
+
+		if ( empty( $org_id ) ) {
+			return [];
+		}
+
+		$cache_key = 'workos_org_roles_' . $org_id;
+		$cached    = get_transient( $cache_key );
+
+		if ( false !== $cached ) {
+			return is_array( $cached ) ? $cached : [];
+		}
+
+		if ( ! workos()->is_enabled() ) {
+			return [];
+		}
+
+		$result = workos()->api()->list_organization_roles( $org_id );
+
+		if ( is_wp_error( $result ) || empty( $result['data'] ) ) {
+			// Cache empty result briefly to avoid repeated failing calls.
+			set_transient( $cache_key, [], MINUTE_IN_SECONDS );
+			return [];
+		}
+
+		$roles = [];
+		foreach ( $result['data'] as $role ) {
+			$slug = $role['slug'] ?? '';
+			$name = $role['name'] ?? $slug;
+			if ( $slug ) {
+				$roles[ $slug ] = $name;
+			}
+		}
+
+		set_transient( $cache_key, $roles, 5 * MINUTE_IN_SECONDS );
+
+		return $roles;
+	}
+
+	/**
 	 * Render the role mapping table.
 	 */
 	public function render_role_map(): void {
-		$map      = \WorkOS\Sync\RoleMapper::get_role_map();
-		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
-		$env      = $this->get_editing_environment();
+		$map          = \WorkOS\Sync\RoleMapper::get_role_map();
+		$wp_roles     = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$workos_roles = $this->get_workos_org_roles();
+		$env          = $this->get_editing_environment();
+		$has_dropdown = ! empty( $workos_roles );
+
+		// Out-of-sync warning banner.
+		$out_of_sync = \WorkOS\Sync\RoleMapper::get_out_of_sync_users();
+		if ( ! empty( $out_of_sync ) ) {
+			$count = count( $out_of_sync );
+			printf(
+				'<div class="notice notice-warning inline" id="workos-role-sync-warning"><p>%s <a href="%s">%s</a></p></div>',
+				esc_html(
+					sprintf(
+						/* translators: %d: number of out-of-sync users */
+						_n(
+							'%d user has a WordPress role that doesn\'t match their WorkOS role mapping.',
+							'%d users have a WordPress role that doesn\'t match their WorkOS role mapping.',
+							$count,
+							'workos'
+						),
+						$count
+					)
+				),
+				esc_url( admin_url( 'users.php?workos_sync_status=out_of_sync' ) ),
+				esc_html__( 'View affected users', 'workos' )
+			);
+		}
 
 		echo '<table id="workos-role-map-table" class="widefat"><thead><tr>';
 		echo '<th>' . esc_html__( 'WorkOS Role', 'workos' ) . '</th>';
@@ -1274,13 +1356,28 @@ class Settings {
 
 		foreach ( $map as $workos_role => $wp_role ) {
 			echo '<tr class="workos-role-map-row"><td>';
-			printf(
-				'<input type="text" name="workos_%s[role_map][keys][]" value="%s" class="regular-text" />',
-				esc_attr( $env ),
-				esc_attr( $workos_role )
-			);
+			if ( $has_dropdown ) {
+				printf( '<select name="workos_%s[role_map][keys][]">', esc_attr( $env ) );
+				echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
+				foreach ( $workos_roles as $slug => $name ) {
+					printf(
+						'<option value="%s" %s>%s</option>',
+						esc_attr( $slug ),
+						selected( $workos_role, $slug, false ),
+						esc_html( $name )
+					);
+				}
+				echo '</select>';
+			} else {
+				printf(
+					'<input type="text" name="workos_%s[role_map][keys][]" value="%s" class="regular-text" />',
+					esc_attr( $env ),
+					esc_attr( $workos_role )
+				);
+			}
 			echo '</td><td>';
 			printf( '<select name="workos_%s[role_map][values][]">', esc_attr( $env ) );
+			echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
 			foreach ( $wp_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
@@ -1295,14 +1392,23 @@ class Settings {
 
 		// Empty row for no-JS fallback.
 		echo '<tr class="workos-role-map-row"><td>';
-		printf(
-			'<input type="text" name="workos_%s[role_map][keys][]" value="" class="regular-text" placeholder="%s" />',
-			esc_attr( $env ),
-			esc_attr__( 'New WorkOS role...', 'workos' )
-		);
+		if ( $has_dropdown ) {
+			printf( '<select name="workos_%s[role_map][keys][]">', esc_attr( $env ) );
+			echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
+			foreach ( $workos_roles as $slug => $name ) {
+				printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
+			}
+			echo '</select>';
+		} else {
+			printf(
+				'<input type="text" name="workos_%s[role_map][keys][]" value="" class="regular-text" placeholder="%s" />',
+				esc_attr( $env ),
+				esc_attr__( 'New WorkOS role...', 'workos' )
+			);
+		}
 		echo '</td><td>';
 		printf( '<select name="workos_%s[role_map][values][]">', esc_attr( $env ) );
-		echo '<option value="">' . esc_html__( '— Select —', 'workos' ) . '</option>';
+		echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
 		foreach ( $wp_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
 		}

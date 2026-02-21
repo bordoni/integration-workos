@@ -105,7 +105,7 @@ import '../css/role-mapping.css';
 
 		const blank       = document.createElement( 'option' );
 		blank.value       = '';
-		blank.textContent = '\u2014 Select \u2014';
+		blank.textContent = '\u2014 No Role \u2014';
 		select.appendChild( blank );
 
 		Object.keys( wpRoles ).forEach(
@@ -132,7 +132,7 @@ import '../css/role-mapping.css';
 
 			const blank       = document.createElement( 'option' );
 			blank.value       = '';
-			blank.textContent = '\u2014 Select \u2014';
+			blank.textContent = '\u2014 No Role \u2014';
 			select.appendChild( blank );
 
 			Object.keys( workosRoles ).forEach(
@@ -297,6 +297,7 @@ import '../css/role-mapping.css';
 		} );
 	}
 
-	// Initial visibility check.
+	// Initial visibility and duplicate checks.
 	updateRemoveButtons();
+	validateDuplicates();
 } )();
