@@ -44,9 +44,13 @@ class Controller extends BaseController {
 	}
 
 	/**
-	 * Register the classic widget.
+	 * Register the classic widget only when the block editor is unavailable.
 	 */
 	public function register_widget(): void {
+		if ( function_exists( 'register_block_type' ) ) {
+			return;
+		}
+
 		register_widget( Widget::class );
 	}
 

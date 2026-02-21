@@ -39,6 +39,7 @@ class Settings {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'admin_init', [ $this, 'handle_activate_environment' ] );
 		add_action( 'admin_post_workos_create_org', [ $this, 'handle_create_org' ] );
+		add_action( 'admin_post_workos_sync_roles_to_workos', [ $this, 'handle_sync_roles_to_workos' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_filter( 'plugin_action_links_' . WORKOS_BASENAME, [ $this, 'action_links' ] );
 
@@ -986,6 +987,65 @@ class Settings {
 	}
 
 	/**
+	 * Handle bulk sync of WP roles to WorkOS (admin_post action).
+	 */
+	public function handle_sync_roles_to_workos(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'workos' ) );
+		}
+
+		check_admin_referer( 'workos_sync_roles_to_workos' );
+
+		$env = sanitize_text_field( wp_unslash( $_POST['editing_env'] ?? Config::get_active_environment() ) );
+		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
+			$env = Config::get_active_environment();
+		}
+
+		$redirect_url = add_query_arg(
+			[
+				'page' => 'workos',
+				'tab'  => 'users',
+				'env'  => $env,
+			],
+			admin_url( 'admin.php' )
+		);
+
+		$counts = \WorkOS\Sync\RoleMapper::push_all_roles_to_workos();
+
+		if ( $counts['synced'] > 0 || ( 0 === $counts['failed'] ) ) {
+			add_settings_error(
+				'workos_messages',
+				'workos_sync_roles_success',
+				sprintf(
+					/* translators: 1: synced count, 2: skipped count, 3: failed count */
+					__( 'Role sync complete — %1$d updated, %2$d skipped, %3$d failed.', 'workos' ),
+					$counts['synced'],
+					$counts['skipped'],
+					$counts['failed']
+				),
+				'success'
+			);
+		} else {
+			add_settings_error(
+				'workos_messages',
+				'workos_sync_roles_error',
+				sprintf(
+					/* translators: 1: synced count, 2: skipped count, 3: failed count */
+					__( 'Role sync completed with errors — %1$d updated, %2$d skipped, %3$d failed.', 'workos' ),
+					$counts['synced'],
+					$counts['skipped'],
+					$counts['failed']
+				),
+				'error'
+			);
+		}
+
+		set_transient( 'settings_errors', get_settings_errors(), 30 );
+		wp_safe_redirect( add_query_arg( 'settings-updated', 'true', $redirect_url ) );
+		exit;
+	}
+
+	/**
 	 * Add a simple text/password settings field.
 	 *
 	 * @param string $name        Option name.
@@ -1422,6 +1482,19 @@ class Settings {
 		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
 		echo esc_html__( 'Add Mapping', 'workos' );
 		echo '</button>';
+
+		// Sync Roles to WorkOS button — only when plugin is enabled and org is configured.
+		if ( workos()->is_enabled() && ! empty( Config::get_organization_id() ) ) {
+			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline; margin-left:8px">';
+			wp_nonce_field( 'workos_sync_roles_to_workos' );
+			echo '<input type="hidden" name="action" value="workos_sync_roles_to_workos" />';
+			echo '<input type="hidden" name="editing_env" value="' . esc_attr( $this->get_editing_environment() ) . '" />';
+			echo '<button type="submit" class="button">';
+			echo '<span class="dashicons dashicons-update" style="vertical-align:middle; margin-right:2px"></span> ';
+			echo esc_html__( 'Sync Roles to WorkOS', 'workos' );
+			echo '</button>';
+			echo '</form>';
+		}
 
 		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'The "member" role is used as the default fallback.', 'workos' ) . '</p>';
 	}

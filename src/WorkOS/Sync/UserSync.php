@@ -416,6 +416,8 @@ class UserSync {
 			return;
 		}
 
+		$wp_user_id = self::get_wp_user_id_by_workos_id( $workos_user_id );
+
 		// Check if the user already has a membership in this org.
 		$memberships = workos()->api()->list_organization_memberships(
 			[
@@ -425,6 +427,11 @@ class UserSync {
 		);
 
 		if ( ! is_wp_error( $memberships ) && ! empty( $memberships['data'] ) ) {
+			// Store the existing membership ID locally.
+			$membership_id = $memberships['data'][0]['id'] ?? '';
+			if ( $wp_user_id && ! empty( $membership_id ) ) {
+				\WorkOS\Organization\Manager::store_membership_id( $wp_user_id, $org_id, $membership_id );
+			}
 			return;
 		}
 
@@ -432,6 +439,13 @@ class UserSync {
 
 		if ( is_wp_error( $result ) ) {
 			workos_log( 'Failed to create org membership for WorkOS user ' . $workos_user_id . ': ' . $result->get_error_message(), 'error' );
+			return;
+		}
+
+		// Store the newly created membership ID locally.
+		$membership_id = $result['id'] ?? '';
+		if ( $wp_user_id && ! empty( $membership_id ) ) {
+			\WorkOS\Organization\Manager::store_membership_id( $wp_user_id, $org_id, $membership_id );
 		}
 	}
 

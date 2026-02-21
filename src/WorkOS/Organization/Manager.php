@@ -120,7 +120,7 @@ class Manager {
 	 * @param int   $wp_user_id  WordPress user ID.
 	 * @param array $auth_result Full WorkOS auth response.
 	 */
-	public static function ensure_user_org_membership( int $wp_user_id, array $auth_result ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+	public static function ensure_user_org_membership( int $wp_user_id, array $auth_result ): void {
 		$workos_org_id = \WorkOS\Config::get_organization_id();
 		if ( empty( $workos_org_id ) ) {
 			return;
@@ -141,12 +141,23 @@ class Manager {
 			return;
 		}
 
+		// Extract role and membership ID from auth result when available.
+		$membership    = $auth_result['organization_membership'] ?? [];
+		$workos_role   = $membership['role'] ?? $auth_result['role'] ?? 'member';
+		$membership_id = $membership['id'] ?? '';
+
+		$extra = [
+			'workos_role' => $workos_role,
+		];
+
+		if ( ! empty( $membership_id ) ) {
+			$extra['workos_membership_id'] = $membership_id;
+		}
+
 		self::add_membership(
 			(int) $local_org->id,
 			$wp_user_id,
-			[
-				'workos_role' => 'member',
-			]
+			$extra
 		);
 	}
 
@@ -371,6 +382,93 @@ class Manager {
 				ORDER BY o.name",
 				$user_id
 			)
+		);
+	}
+
+	/**
+	 * Get the WorkOS membership ID for a user in a given WorkOS organization.
+	 *
+	 * @param int    $wp_user_id   WordPress user ID.
+	 * @param string $workos_org_id WorkOS organization ID.
+	 *
+	 * @return string WorkOS membership ID, or empty string if not found.
+	 */
+	public static function get_membership_id_for_user( int $wp_user_id, string $workos_org_id ): string {
+		global $wpdb;
+		$org_table = $wpdb->prefix . 'workos_organizations';
+		$mem_table = $wpdb->prefix . 'workos_org_memberships';
+
+		$membership_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT m.workos_membership_id FROM {$mem_table} m
+				INNER JOIN {$org_table} o ON m.org_id = o.id
+				WHERE m.user_id = %d AND o.workos_org_id = %s",
+				$wp_user_id,
+				$workos_org_id
+			)
+		);
+
+		return $membership_id ? $membership_id : '';
+	}
+
+	/**
+	 * Store a WorkOS membership ID on an existing local membership record.
+	 *
+	 * @param int    $wp_user_id    WordPress user ID.
+	 * @param string $workos_org_id WorkOS organization ID.
+	 * @param string $membership_id WorkOS membership ID.
+	 */
+	public static function store_membership_id( int $wp_user_id, string $workos_org_id, string $membership_id ): void {
+		global $wpdb;
+		$org_table = $wpdb->prefix . 'workos_organizations';
+		$mem_table = $wpdb->prefix . 'workos_org_memberships';
+
+		$local_org = self::get_by_workos_id( $workos_org_id );
+		if ( ! $local_org ) {
+			return;
+		}
+
+		$wpdb->update(
+			$mem_table,
+			[ 'workos_membership_id' => $membership_id ],
+			[
+				'org_id'  => $local_org->id,
+				'user_id' => $wp_user_id,
+			],
+			[ '%s' ],
+			[ '%d', '%d' ]
+		);
+	}
+
+	/**
+	 * Update both workos_role and wp_role on a local membership record.
+	 *
+	 * @param int    $wp_user_id    WordPress user ID.
+	 * @param string $workos_org_id WorkOS organization ID.
+	 * @param string $workos_role   WorkOS role slug.
+	 * @param string $wp_role       WordPress role slug.
+	 */
+	public static function update_membership_role( int $wp_user_id, string $workos_org_id, string $workos_role, string $wp_role ): void {
+		global $wpdb;
+		$mem_table = $wpdb->prefix . 'workos_org_memberships';
+
+		$local_org = self::get_by_workos_id( $workos_org_id );
+		if ( ! $local_org ) {
+			return;
+		}
+
+		$wpdb->update(
+			$mem_table,
+			[
+				'workos_role' => $workos_role,
+				'wp_role'     => $wp_role,
+			],
+			[
+				'org_id'  => $local_org->id,
+				'user_id' => $wp_user_id,
+			],
+			[ '%s', '%s' ],
+			[ '%d', '%d' ]
 		);
 	}
 

@@ -259,6 +259,33 @@ class Client {
 		);
 	}
 
+	/**
+	 * Update an organization membership (e.g. change role).
+	 *
+	 * @param string $membership_id WorkOS membership ID.
+	 * @param array  $data          Fields to update (e.g. role_slug).
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function update_organization_membership( string $membership_id, array $data ) {
+		return $this->put( "/user_management/organization_memberships/{$membership_id}", $data );
+	}
+
+	// -------------------------------------------------------------------------
+	// Organization Roles
+	// -------------------------------------------------------------------------
+
+	/**
+	 * List roles for an organization.
+	 *
+	 * @param string $organization_id WorkOS organization ID.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function list_organization_roles( string $organization_id ) {
+		return $this->get( "/organizations/{$organization_id}/roles" );
+	}
+
 	// -------------------------------------------------------------------------
 	// Audit Logs
 	// -------------------------------------------------------------------------

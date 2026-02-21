@@ -10,6 +10,7 @@
 
 namespace WorkOS\Admin;
 
+use WorkOS\Sync\RoleMapper;
 use WorkOS\Sync\UserSync;
 
 defined( 'ABSPATH' ) || exit;
@@ -30,6 +31,8 @@ class UserList {
 		add_action( 'admin_init', [ $this, 'handle_single_sync' ] );
 		add_action( 'admin_init', [ $this, 'handle_single_resync' ] );
 		add_action( 'admin_notices', [ $this, 'render_notices' ] );
+		add_filter( 'views_users', [ $this, 'add_out_of_sync_view' ] );
+		add_action( 'pre_get_users', [ $this, 'filter_out_of_sync_users' ] );
 	}
 
 	/**
@@ -122,7 +125,57 @@ class UserList {
 
 		$html .= '</div>';
 
+		// Role mismatch indicator.
+		$html .= $this->render_role_mismatch_indicator( $user_id );
+
 		return $html;
+	}
+
+	/**
+	 * Render a role mismatch indicator if the user's WP role doesn't match the WorkOS mapping.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 *
+	 * @return string HTML indicator or empty string.
+	 */
+	private function render_role_mismatch_indicator( int $user_id ): string {
+		$user_orgs = \WorkOS\Organization\Manager::get_user_orgs( $user_id );
+		if ( empty( $user_orgs ) ) {
+			return '';
+		}
+
+		$user = get_user_by( 'id', $user_id );
+		if ( ! $user ) {
+			return '';
+		}
+
+		$role_map       = RoleMapper::get_role_map();
+		$actual_wp_role = ! empty( $user->roles ) ? $user->roles[0] : '';
+
+		foreach ( $user_orgs as $org ) {
+			$workos_role = $org->workos_role ?? '';
+			if ( empty( $workos_role ) ) {
+				continue;
+			}
+
+			$expected = $role_map[ $workos_role ] ?? $role_map['member'] ?? 'subscriber';
+			if ( $expected !== $actual_wp_role ) {
+				return sprintf(
+					'<br><span class="workos-role-mismatch" title="%s">&#x26A0; %s</span>',
+					esc_attr(
+						sprintf(
+							/* translators: 1: expected WP role, 2: actual WP role */
+							__( 'Expected: %1$s, Actual: %2$s', 'workos' ),
+							$expected,
+							$actual_wp_role
+						)
+					),
+					esc_html__( 'Role mismatch', 'workos' )
+				);
+			}
+		}
+
+		return '';
 	}
 
 	/**
@@ -171,8 +224,9 @@ class UserList {
 			return $actions;
 		}
 
-		$actions['workos_bulk_sync']   = __( 'Sync to WorkOS', 'workos' );
-		$actions['workos_bulk_resync'] = __( 'Re-sync from WorkOS', 'workos' );
+		$actions['workos_bulk_sync']       = __( 'Sync to WorkOS', 'workos' );
+		$actions['workos_bulk_resync']     = __( 'Re-sync from WorkOS', 'workos' );
+		$actions['workos_bulk_sync_roles'] = __( 'Sync Roles from WorkOS', 'workos' );
 		return $actions;
 	}
 
@@ -186,7 +240,7 @@ class UserList {
 	 * @return string Updated redirect URL with result query args.
 	 */
 	public function handle_bulk_action( string $redirect_url, string $action, array $user_ids ): string {
-		if ( ! in_array( $action, [ 'workos_bulk_sync', 'workos_bulk_resync' ], true ) ) {
+		if ( ! in_array( $action, [ 'workos_bulk_sync', 'workos_bulk_resync', 'workos_bulk_sync_roles' ], true ) ) {
 			return $redirect_url;
 		}
 
@@ -196,6 +250,10 @@ class UserList {
 
 		if ( 'workos_bulk_resync' === $action ) {
 			return $this->handle_bulk_resync( $redirect_url, $user_ids );
+		}
+
+		if ( 'workos_bulk_sync_roles' === $action ) {
+			return $this->handle_bulk_sync_roles( $redirect_url, $user_ids );
 		}
 
 		$synced  = 0;
@@ -358,6 +416,113 @@ class UserList {
 	}
 
 	/**
+	 * Handle the bulk "Sync Roles from WorkOS" action.
+	 *
+	 * Re-applies the role mapping for selected users based on their WorkOS role.
+	 *
+	 * @param string $redirect_url Redirect URL.
+	 * @param array  $user_ids     Selected user IDs.
+	 *
+	 * @return string Updated redirect URL with result query args.
+	 */
+	private function handle_bulk_sync_roles( string $redirect_url, array $user_ids ): string {
+		$synced  = 0;
+		$skipped = 0;
+
+		$role_mapper = new RoleMapper();
+
+		foreach ( $user_ids as $user_id ) {
+			$user_id   = absint( $user_id );
+			$user_orgs = \WorkOS\Organization\Manager::get_user_orgs( $user_id );
+
+			if ( empty( $user_orgs ) ) {
+				++$skipped;
+				continue;
+			}
+
+			$applied = false;
+			foreach ( $user_orgs as $org ) {
+				$workos_role = $org->workos_role ?? '';
+				if ( ! empty( $workos_role ) ) {
+					$role_mapper->apply_role( $user_id, $workos_role );
+					$applied = true;
+					break;
+				}
+			}
+
+			if ( $applied ) {
+				++$synced;
+			} else {
+				++$skipped;
+			}
+		}
+
+		return add_query_arg(
+			[
+				'workos_roles_synced'  => $synced,
+				'workos_roles_skipped' => $skipped,
+			],
+			$redirect_url
+		);
+	}
+
+	/**
+	 * Add an "Out of sync" view to the users list filter links.
+	 *
+	 * @param array $views Existing view links.
+	 *
+	 * @return array Modified view links.
+	 */
+	public function add_out_of_sync_view( array $views ): array {
+		if ( ! workos()->is_enabled() ) {
+			return $views;
+		}
+
+		$out_of_sync_ids = RoleMapper::get_out_of_sync_user_ids();
+		$count           = count( $out_of_sync_ids );
+
+		if ( 0 === $count ) {
+			return $views;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only.
+		$current = isset( $_GET['workos_sync_status'] ) && 'out_of_sync' === $_GET['workos_sync_status'];
+		$class   = $current ? ' class="current"' : '';
+
+		$views['workos_out_of_sync'] = sprintf(
+			'<a href="%s"%s>%s <span class="count">(%d)</span></a>',
+			esc_url( admin_url( 'users.php?workos_sync_status=out_of_sync' ) ),
+			$class,
+			esc_html__( 'Out of sync', 'workos' ),
+			$count
+		);
+
+		return $views;
+	}
+
+	/**
+	 * Filter the users query when the out-of-sync view is active.
+	 *
+	 * @param \WP_User_Query $query The user query.
+	 */
+	public function filter_out_of_sync_users( \WP_User_Query $query ): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Filter param, no data modification.
+		if ( empty( $_GET['workos_sync_status'] ) || 'out_of_sync' !== $_GET['workos_sync_status'] ) {
+			return;
+		}
+
+		$out_of_sync_ids = RoleMapper::get_out_of_sync_user_ids();
+
+		if ( empty( $out_of_sync_ids ) ) {
+			// No results — use impossible ID to return empty set.
+			$query->set( 'include', [ 0 ] );
+			return;
+		}
+
+		$query->set( 'include', $out_of_sync_ids );
+	}
+
+	/**
 	 * Render admin notices from sync operations.
 	 */
 	public function render_notices(): void {
@@ -448,6 +613,47 @@ class UserList {
 							'workos'
 						),
 						$skipped
+					)
+				)
+			);
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
+		$roles_synced = isset( $_GET['workos_roles_synced'] ) ? absint( $_GET['workos_roles_synced'] ) : 0;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
+		$roles_skipped = isset( $_GET['workos_roles_skipped'] ) ? absint( $_GET['workos_roles_skipped'] ) : 0;
+
+		if ( $roles_synced ) {
+			printf(
+				'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+				esc_html(
+					sprintf(
+						/* translators: %d: number of users whose roles were synced */
+						_n(
+							'%d user role synced from WorkOS mapping.',
+							'%d user roles synced from WorkOS mapping.',
+							$roles_synced,
+							'workos'
+						),
+						$roles_synced
+					)
+				)
+			);
+		}
+
+		if ( $roles_skipped ) {
+			printf(
+				'<div class="notice notice-info is-dismissible"><p>%s</p></div>',
+				esc_html(
+					sprintf(
+						/* translators: %d: number of users skipped during role sync */
+						_n(
+							'%d user skipped (no WorkOS role found).',
+							'%d users skipped (no WorkOS role found).',
+							$roles_skipped,
+							'workos'
+						),
+						$roles_skipped
 					)
 				)
 			);
