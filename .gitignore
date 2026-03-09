@@ -9,7 +9,7 @@
 *.cache
 *.log
 
-# Lock files (generated)
+# Lock files
 package-lock.json
 
 # IDE
