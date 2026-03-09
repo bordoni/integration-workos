@@ -29,7 +29,7 @@ class DirectorySyncTest extends WPTestCase {
 	public function setUp(): void {
 		parent::setUp();
 
-		update_option( 'workos_active_environment', 'production' );
+		\WorkOS\Config::set_active_environment( 'production' );
 		update_option( 'workos_production', [
 			'api_key'        => 'sk_test_fake',
 			'client_id'      => 'client_fake',
@@ -53,7 +53,7 @@ class DirectorySyncTest extends WPTestCase {
 	public function tearDown(): void {
 		remove_filter( 'pre_http_request', [ $this, 'block_http' ], 10 );
 		delete_option( 'workos_production' );
-		delete_option( 'workos_active_environment' );
+		\WorkOS\Config::set_active_environment( 'staging' );
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
 		$ref = new \ReflectionProperty( UserSync::class, 'syncing' );

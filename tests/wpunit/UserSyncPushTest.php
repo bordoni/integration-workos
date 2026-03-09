@@ -46,7 +46,7 @@ class UserSyncPushTest extends WPTestCase {
 		$this->mock_response = null;
 
 		// Make is_enabled() return true (requires api_key + client_id + environment_id).
-		update_option( 'workos_active_environment', 'production' );
+		\WorkOS\Config::set_active_environment( 'production' );
 		update_option( 'workos_production', [
 			'api_key'        => 'sk_test_fake',
 			'client_id'      => 'client_fake',
@@ -73,7 +73,7 @@ class UserSyncPushTest extends WPTestCase {
 	public function tearDown(): void {
 		remove_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10 );
 		delete_option( 'workos_production' );
-		delete_option( 'workos_active_environment' );
+		\WorkOS\Config::set_active_environment( 'staging' );
 
 		// Reset Options singletons so they re-read from DB.
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();

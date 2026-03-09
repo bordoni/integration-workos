@@ -47,7 +47,7 @@ class OptionsTest extends WPTestCase {
 		delete_option( 'workos_production' );
 		delete_option( 'workos_staging' );
 		delete_option( 'workos_global' );
-		delete_option( 'workos_active_environment' );
+		\WorkOS\Config::set_active_environment( 'staging' );
 
 		$this->production = new Production();
 		$this->staging    = new Staging();
@@ -61,7 +61,7 @@ class OptionsTest extends WPTestCase {
 		delete_option( 'workos_production' );
 		delete_option( 'workos_staging' );
 		delete_option( 'workos_global' );
-		delete_option( 'workos_active_environment' );
+		\WorkOS\Config::set_active_environment( 'staging' );
 
 		parent::tearDown();
 	}
@@ -398,7 +398,7 @@ class OptionsTest extends WPTestCase {
 		// Default active env is staging (new installs).
 		update_option( 'workos_staging', [ 'login_mode' => 'headless' ] );
 		\WorkOS\App::container()->get( Staging::class )->reset();
-		update_option( 'workos_active_environment', 'staging' );
+		\WorkOS\Config::set_active_environment( 'staging' );
 
 		$this->assertSame( 'headless', workos()->option( 'login_mode' ) );
 	}
@@ -407,7 +407,7 @@ class OptionsTest extends WPTestCase {
 	 * Test Plugin::option() reads from production when active.
 	 */
 	public function test_plugin_option_reads_production_when_active(): void {
-		update_option( 'workos_active_environment', 'production' );
+		\WorkOS\Config::set_active_environment( 'production' );
 		update_option( 'workos_production', [ 'login_mode' => 'headless' ] );
 		\WorkOS\App::container()->get( Production::class )->reset();
 

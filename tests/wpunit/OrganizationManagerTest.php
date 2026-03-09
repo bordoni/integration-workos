@@ -22,7 +22,7 @@ class OrganizationManagerTest extends WPTestCase {
 	public function setUp(): void {
 		parent::setUp();
 
-		update_option( 'workos_active_environment', 'production' );
+		\WorkOS\Config::set_active_environment( 'production' );
 		update_option( 'workos_production', [
 			'api_key'         => 'sk_test_fake',
 			'client_id'       => 'client_fake',
@@ -48,7 +48,7 @@ class OrganizationManagerTest extends WPTestCase {
 		$wpdb->query( "TRUNCATE TABLE {$wpdb->prefix}workos_organizations" );
 
 		delete_option( 'workos_production' );
-		delete_option( 'workos_active_environment' );
+		\WorkOS\Config::set_active_environment( 'staging' );
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
 		parent::tearDown();

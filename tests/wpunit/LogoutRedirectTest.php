@@ -21,7 +21,7 @@ class LogoutRedirectTest extends WPTestCase {
 	public function setUp(): void {
 		parent::setUp();
 
-		update_option( 'workos_active_environment', 'production' );
+		\WorkOS\Config::set_active_environment( 'production' );
 		update_option( 'workos_production', [
 			'api_key'        => 'sk_test_fake',
 			'client_id'      => 'client_fake',
@@ -39,7 +39,7 @@ class LogoutRedirectTest extends WPTestCase {
 		remove_all_filters( 'workos_logout_redirect_should_apply' );
 		remove_all_filters( 'workos_logout_redirect_urls' );
 		delete_option( 'workos_production' );
-		delete_option( 'workos_active_environment' );
+		\WorkOS\Config::set_active_environment( 'staging' );
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
 		parent::tearDown();
