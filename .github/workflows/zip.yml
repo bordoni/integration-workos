@@ -52,17 +52,12 @@ jobs:
       - name: Build assets
         run: bun run build
 
-      - name: Get version
-        run: |
-          VERSION=$(grep -oP "Version:\s*\K[0-9.]+" integration-workos.php)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
       - name: Set zip name
         run: |
           if [ "${{ inputs.production }}" = "true" ]; then
-            echo "ZIP_NAME=integration-workos-${{ env.VERSION }}" >> $GITHUB_ENV
+            echo "ZIP_NAME=integration-workos" >> $GITHUB_ENV
           else
-            echo "ZIP_NAME=integration-workos-${{ env.VERSION }}-dev-$(date +%Y%m%d)" >> $GITHUB_ENV
+            echo "ZIP_NAME=integration-workos-dev-$(date +%Y%m%d)" >> $GITHUB_ENV
           fi
 
       - name: Create plugin directory
@@ -78,10 +73,8 @@ jobs:
             --exclude='phpcs.xml.dist' \
             --exclude='.wp-env.json' \
             --exclude='.gitignore' \
-            --exclude='package.json' \
             --exclude='package-lock.json' \
             --exclude='bun.lock' \
-            --exclude='composer.json' \
             --exclude='composer.lock' \
             --exclude='codeception.yml' \
             --exclude='codeception.slic.yml' \

@@ -26,7 +26,7 @@ class Block {
 	 */
 	public function register(): void {
 		register_block_type(
-			WORKOS_DIR . 'src/js/login-button/block.json',
+			WORKOS_DIR . 'build/js/login-button',
 			[
 				'render_callback' => [ Renderer::class, 'render' ],
 			]
