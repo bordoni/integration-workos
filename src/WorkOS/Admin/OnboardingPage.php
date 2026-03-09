@@ -94,7 +94,7 @@ class OnboardingPage {
 			</p>
 
 			<div id="workos-onboarding-app">
-				<div style="margin:20px 0;">
+				<div class="workos-onboarding-actions">
 					<button type="button" class="button button-primary" id="workos-sync-all-btn">
 						<?php esc_html_e( 'Sync All Unlinked Users', 'integration-workos' ); ?>
 					</button>
@@ -104,21 +104,21 @@ class OnboardingPage {
 				</div>
 
 				<!-- Progress bar (hidden by default) -->
-				<div id="workos-onboarding-progress" style="display:none;margin:20px 0;max-width:600px;">
-					<div style="background:#f0f0f1;border-radius:4px;overflow:hidden;">
-						<div id="workos-progress-bar" style="background:#2271b1;height:24px;width:0;transition:width 0.3s;border-radius:4px;"></div>
+				<div id="workos-onboarding-progress" class="workos-progress-container">
+					<div class="workos-progress-bar-bg">
+						<div id="workos-progress-bar" class="workos-progress-bar-fill"></div>
 					</div>
-					<p id="workos-progress-text" style="margin:8px 0;color:#646970;"></p>
+					<p id="workos-progress-text" class="workos-progress-text"></p>
 				</div>
 
 				<table class="wp-list-table widefat fixed striped" id="workos-users-table">
 					<thead>
 						<tr>
-							<th style="width:200px;"><?php esc_html_e( 'Display Name', 'integration-workos' ); ?></th>
-							<th style="width:250px;"><?php esc_html_e( 'Email', 'integration-workos' ); ?></th>
-							<th style="width:120px;"><?php esc_html_e( 'WP Role', 'integration-workos' ); ?></th>
-							<th style="width:100px;"><?php esc_html_e( 'Status', 'integration-workos' ); ?></th>
-							<th style="width:100px;"><?php esc_html_e( 'Actions', 'integration-workos' ); ?></th>
+							<th class="workos-onboarding-col-name"><?php esc_html_e( 'Display Name', 'integration-workos' ); ?></th>
+							<th class="workos-onboarding-col-email"><?php esc_html_e( 'Email', 'integration-workos' ); ?></th>
+							<th class="workos-onboarding-col-role"><?php esc_html_e( 'WP Role', 'integration-workos' ); ?></th>
+							<th class="workos-onboarding-col-status"><?php esc_html_e( 'Status', 'integration-workos' ); ?></th>
+							<th class="workos-onboarding-col-actions"><?php esc_html_e( 'Actions', 'integration-workos' ); ?></th>
 						</tr>
 					</thead>
 					<tbody id="workos-users-tbody">
@@ -128,7 +128,7 @@ class OnboardingPage {
 					</tbody>
 				</table>
 
-				<div id="workos-users-pagination" style="margin-top:10px;"></div>
+				<div id="workos-users-pagination" class="workos-onboarding-pagination"></div>
 			</div>
 		</div>
 		<?php

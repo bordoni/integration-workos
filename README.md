@@ -24,16 +24,27 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **Password Reset Integration** — redirect password reset to WorkOS or fall back to WordPress
 - **Registration Redirect** — redirect registration to WorkOS AuthKit
 - **Admin Bar Badge** — shows the active WorkOS environment (production/staging) in the admin bar
+- **Changelog Page** — in-admin changelog viewer rendered from CHANGELOG.md
 - **Diagnostics Page** — system health checks and configuration status
 - **Onboarding Wizard** — guided setup for initial plugin configuration and user sync
 - **WP-CLI Commands** — full CLI access for scripting, bulk operations, and diagnostics
 
 ## Installation
 
-1. Upload the plugin to `wp-content/plugins/integration-workos/`.
-2. Run `composer install` in the plugin directory.
-3. Activate the plugin in WordPress admin.
+### From a Release ZIP
+
+1. Download the latest `.zip` from the [Releases](https://github.com/bordoni/integration-workos/releases) page.
+2. In WordPress admin, go to **Plugins > Add New > Upload Plugin** and upload the ZIP file.
+3. Activate the plugin.
 4. Navigate to **Settings > WorkOS** to configure.
+
+### From Source (Development)
+
+1. Clone the repository into `wp-content/plugins/integration-workos/`.
+2. Run `composer install` to install PHP dependencies.
+3. Run `bun install && bun run build` to install JS dependencies and build assets.
+4. Activate the plugin in WordPress admin.
+5. Navigate to **Settings > WorkOS** to configure.
 
 ## Configuration
 

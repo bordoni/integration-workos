@@ -1,6 +1,6 @@
 {
-	"name": "@liquidweb/workos-identity",
-	"version": "1.0.0-dev",
+	"name": "integration-workos",
+	"version": "1.0.0",
 	"description": "Enterprise identity management for WordPress powered by WorkOS.",
 	"private": true,
 	"scripts": {

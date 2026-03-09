@@ -45,7 +45,11 @@ class Settings {
 		add_action( 'admin_post_workos_create_org', [ $this, 'handle_create_org' ] );
 		add_action( 'admin_post_workos_sync_roles_to_workos', [ $this, 'handle_sync_roles_to_workos' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
 		add_filter( 'plugin_action_links_' . WORKOS_BASENAME, [ $this, 'action_links' ] );
+		add_filter( 'plugin_row_meta', [ $this, 'row_meta' ], 10, 2 );
+		add_filter( 'admin_footer_text', [ $this, 'footer_text' ] );
+		add_filter( 'update_footer', [ $this, 'footer_update' ], 15 );
 
 		// Flush organizations cache when environment credentials change.
 		foreach ( [ 'production', 'staging' ] as $env ) {
@@ -211,6 +215,29 @@ class Settings {
 			$this->enqueue_redirect_urls_assets();
 			$this->enqueue_logout_redirect_urls_assets();
 		}
+	}
+
+	/**
+	 * Enqueue shared admin styles on all WorkOS screens.
+	 */
+	public function enqueue_admin_assets(): void {
+		if ( ! $this->is_workos_screen() ) {
+			return;
+		}
+
+		$asset_file = WORKOS_DIR . 'build/admin.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_style(
+			'workos-admin',
+			WORKOS_URL . 'build/admin.css',
+			[],
+			$asset['version']
+		);
 	}
 
 	/**
@@ -744,7 +771,7 @@ class Settings {
 
 		?>
 		<div class="wrap">
-			<h1 style="display: inline-block; margin-right: 16px;"><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<h1 class="workos-admin-title"><?php echo esc_html( get_admin_page_title() ); ?></h1>
 
 			<?php $this->render_environment_picker(); ?>
 
@@ -787,24 +814,6 @@ class Settings {
 				?>
 			</form>
 
-			<?php if ( 'settings' === $current_tab && workos()->is_enabled() ) : ?>
-				<hr>
-				<h2><?php esc_html_e( 'Status', 'integration-workos' ); ?></h2>
-				<table class="widefat striped" style="max-width:600px">
-					<tr>
-						<td><strong><?php esc_html_e( 'Plugin', 'integration-workos' ); ?></strong></td>
-						<td><?php esc_html_e( 'Configured', 'integration-workos' ); ?> <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a32a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></td>
-					</tr>
-					<tr>
-						<td><strong><?php esc_html_e( 'Webhook URL', 'integration-workos' ); ?></strong></td>
-						<td><code><?php echo esc_url( rest_url( 'workos/v1/webhook' ) ); ?></code></td>
-					</tr>
-					<tr>
-						<td><strong><?php esc_html_e( 'Callback URL', 'integration-workos' ); ?></strong></td>
-						<td><code><?php echo esc_url( home_url( '/workos/callback' ) ); ?></code></td>
-					</tr>
-				</table>
-			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -1230,7 +1239,7 @@ class Settings {
 
 			if ( is_wp_error( $result ) ) {
 				printf(
-					'<p class="description" style="color:#d63638">%s %s</p>',
+					'<p class="description workos-admin-description-error">%s %s</p>',
 					esc_html__( 'Could not fetch organizations:', 'integration-workos' ),
 					esc_html( $result->get_error_message() )
 				);
@@ -1942,5 +1951,96 @@ class Settings {
 		);
 		array_unshift( $links, $settings_link );
 		return $links;
+	}
+
+	public function row_meta( array $plugin_meta, string $plugin_file ): array {
+		if ( WORKOS_BASENAME !== $plugin_file ) {
+			return $plugin_meta;
+		}
+
+		$plugin_meta[] = sprintf(
+			'<a href="%1$s" target="_blank"><span class="dashicons dashicons-editor-help" aria-hidden="true" style="font-size:14px;line-height:1.3"></span>%2$s</a>',
+			esc_url( 'https://github.com/bordoni/integration-workos/issues' ),
+			esc_html__( 'Support', 'integration-workos' )
+		);
+
+		$plugin_meta[] = sprintf(
+			'<a href="%1$s" target="_blank"><span class="dashicons dashicons-star-filled" aria-hidden="true" style="font-size:14px;line-height:1.3"></span>%2$s</a>',
+			esc_url( 'https://bordoni.me/r/sponsor' ),
+			esc_html__( 'Sponsor', 'integration-workos' )
+		);
+
+		return $plugin_meta;
+	}
+
+	/**
+	 * Customize the left admin footer text on WorkOS pages.
+	 *
+	 * @param string $text Default footer text.
+	 *
+	 * @return string
+	 */
+	public function footer_text( string $text ): string {
+		if ( ! $this->is_workos_screen() ) {
+			return $text;
+		}
+
+		return sprintf(
+			'<a href="%1$s" target="_blank">%2$s</a> | %3$s',
+			esc_url( 'https://github.com/bordoni/integration-workos/issues' ),
+			esc_html__( 'Contact Support', 'integration-workos' ),
+			str_replace(
+				[ '[stars]', '[wp.org]' ],
+				[
+					'<a target="_blank" href="https://wordpress.org/support/plugin/integration-workos/reviews/#new-post">&#9733;&#9733;&#9733;&#9733;&#9733;</a>',
+					'<a target="_blank" href="https://wordpress.org/plugins/integration-workos/">wordpress.org</a>',
+				],
+				__( 'Add your [stars] on [wp.org] to spread the love.', 'integration-workos' )
+			)
+		);
+	}
+
+	/**
+	 * Customize the right admin footer text on WorkOS pages.
+	 *
+	 * @param string $text Default footer text.
+	 *
+	 * @return string
+	 */
+	public function footer_update( string $text ): string {
+		if ( ! $this->is_workos_screen() ) {
+			return $text;
+		}
+
+		$sponsor = sprintf(
+			'<a href="%2$s" title="%3$s" target="_blank"><span class="dashicons dashicons-money-alt" aria-hidden="true"></span> %1$s</a> | ',
+			esc_html__( 'Sponsor', 'integration-workos' ),
+			esc_url( 'https://bordoni.me/r/sponsor' ),
+			esc_attr__( 'Sponsor the project', 'integration-workos' )
+		);
+
+		$version = sprintf(
+			'<a href="%2$s" title="%3$s">%1$s</a>',
+			esc_html__( 'Version: ', 'integration-workos' ) . esc_attr( workos()->getVersion() ),
+			esc_url( admin_url( 'admin.php?page=workos-changelog&version=' . workos()->getVersion() ) ),
+			esc_attr__( 'View what changed in this version', 'integration-workos' )
+		);
+
+		return $sponsor . $version;
+	}
+
+	/**
+	 * Check whether the current admin screen belongs to the WorkOS plugin.
+	 *
+	 * @return bool
+	 */
+	private function is_workos_screen(): bool {
+		$screen = get_current_screen();
+		if ( ! $screen ) {
+			return false;
+		}
+
+		return 'toplevel_page_workos' === $screen->id
+			|| str_starts_with( $screen->id, 'workos_page_' );
 	}
 }

@@ -82,8 +82,8 @@ class DiagnosticsPage {
 			return;
 		}
 
-		$global   = App::container()->get( Global_Options::class );
-		$saved    = $global->get( 'diagnostics_results' );
+		$global = App::container()->get( Global_Options::class );
+		$saved  = $global->get( 'diagnostics_results' );
 		if ( ! empty( $saved ) ) {
 			$this->results = $saved;
 		}
@@ -94,7 +94,7 @@ class DiagnosticsPage {
 		<div class="wrap">
 			<h1><?php esc_html_e( 'WorkOS Diagnostics', 'integration-workos' ); ?></h1>
 
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:20px 0;">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="workos-diagnostics-form">
 				<input type="hidden" name="action" value="workos_run_diagnostics" />
 				<?php wp_nonce_field( 'workos_run_diagnostics' ); ?>
 				<?php submit_button( __( 'Run Diagnostics', 'integration-workos' ), 'primary', '', false ); ?>
@@ -112,11 +112,11 @@ class DiagnosticsPage {
 			</form>
 
 			<?php if ( null !== $this->results ) : ?>
-				<table class="wp-list-table widefat fixed striped" style="width:100%;max-width:960px;">
+				<table class="wp-list-table widefat fixed striped workos-admin-table">
 					<thead>
 						<tr>
-							<th style="width:75px;"><?php esc_html_e( 'Status', 'integration-workos' ); ?></th>
-							<th style="width:200px;"><?php esc_html_e( 'Check', 'integration-workos' ); ?></th>
+							<th class="workos-diagnostics-status-col"><?php esc_html_e( 'Status', 'integration-workos' ); ?></th>
+							<th class="workos-diagnostics-check-col"><?php esc_html_e( 'Check', 'integration-workos' ); ?></th>
 							<th><?php esc_html_e( 'Details', 'integration-workos' ); ?></th>
 						</tr>
 					</thead>
@@ -134,12 +134,12 @@ class DiagnosticsPage {
 				<p class="description"><?php esc_html_e( 'Click "Run Diagnostics" to check your WorkOS configuration.', 'integration-workos' ); ?></p>
 			<?php endif; ?>
 
-			<hr style="margin-top:30px;">
+			<hr class="workos-admin-separator">
 			<h2><?php esc_html_e( 'Configuration Values', 'integration-workos' ); ?></h2>
 			<?php $this->render_config_table(); ?>
 
 			<h2><?php esc_html_e( 'Endpoints', 'integration-workos' ); ?></h2>
-			<table class="widefat striped" style="width:100%;max-width:960px;">
+			<table class="widefat striped workos-admin-table">
 				<tr>
 					<td><strong><?php esc_html_e( 'Callback URL', 'integration-workos' ); ?></strong></td>
 					<td><code><?php echo esc_url( Login::get_callback_url() ); ?></code></td>
@@ -351,7 +351,7 @@ class DiagnosticsPage {
 		];
 
 		?>
-		<table class="widefat striped" style="width:100%;max-width:960px;">
+		<table class="widefat striped workos-admin-table">
 			<thead>
 				<tr>
 					<th><?php esc_html_e( 'Setting', 'integration-workos' ); ?></th>

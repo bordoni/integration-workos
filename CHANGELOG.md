@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0-dev] - Unreleased
+## [1.0.0] - Unreleased
 
 ### Added
 - AuthKit redirect and headless API authentication flows.

@@ -2,6 +2,11 @@
  * WorkOS Login Button — Editor-specific overrides
  */
 
+/* Ensure the block wrapper contains SSR content for proper selection outline */
+.wp-block-workos-login-button {
+	display: flow-root;
+}
+
 /* Prevent link navigation in the editor preview */
 .wp-block-workos-login-button a {
 	pointer-events: none;

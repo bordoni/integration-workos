@@ -4,7 +4,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 5.9
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.0-dev
+Stable tag: 1.0.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,16 +29,28 @@ Integration with WorkOS connects your WordPress site with [WorkOS](https://worko
 * **Registration Redirect** — Redirect registration to WorkOS AuthKit.
 * **REST API Authentication** — Verify WorkOS access tokens for headless/API usage.
 * **Admin Bar Badge** — Shows the active WorkOS environment (production/staging) in the admin bar.
+* **Changelog Page** — In-admin changelog viewer rendered from CHANGELOG.md.
 * **Diagnostics Page** — System health checks, configuration status, and connectivity tests.
 * **Onboarding Wizard** — Guided setup for initial plugin configuration and user sync.
 * **WP-CLI Commands** — Full CLI access for scripting, bulk operations, and diagnostics.
 
 == Installation ==
 
-1. Upload the `integration-workos` folder to `/wp-content/plugins/`.
-2. Activate the plugin through the **Plugins** menu in WordPress.
-3. Go to **WorkOS > Settings** and enter your API Key and Client ID from the [WorkOS Dashboard](https://dashboard.workos.com).
-4. Configure your webhook endpoint in the WorkOS Dashboard using the URL shown on the settings page.
+= From a Release ZIP =
+
+1. Download the latest `.zip` from the [Releases page](https://github.com/bordoni/integration-workos/releases).
+2. In WordPress admin, go to **Plugins > Add New > Upload Plugin** and upload the ZIP file.
+3. Activate the plugin.
+4. Go to **Settings > WorkOS** and enter your API Key and Client ID from the [WorkOS Dashboard](https://dashboard.workos.com).
+5. Configure your webhook endpoint in the WorkOS Dashboard using the URL shown on the settings page.
+
+= From Source (Development) =
+
+1. Clone the repository into `/wp-content/plugins/integration-workos/`.
+2. Run `composer install` to install PHP dependencies.
+3. Run `bun install && bun run build` to install JS dependencies and build assets.
+4. Activate the plugin through the **Plugins** menu in WordPress.
+5. Go to **Settings > WorkOS** to configure.
 
 == Frequently Asked Questions ==
 
@@ -265,7 +277,7 @@ Parameters:
 
 == Changelog ==
 
-= 1.0.0-dev =
+= 1.0.0 =
 * SSO login via WorkOS AuthKit (redirect and headless modes).
 * Directory Sync (SCIM) for automatic user provisioning and deprovisioning.
 * Role mapping between WorkOS organization roles and WordPress roles.

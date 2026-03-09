@@ -46,6 +46,9 @@ class Controller extends BaseController {
 
 		$this->container->singleton( OnboardingAjax::class );
 		$this->container->get( OnboardingAjax::class );
+
+		$this->container->singleton( ChangelogPage::class );
+		$this->container->get( ChangelogPage::class );
 	}
 
 	/**
