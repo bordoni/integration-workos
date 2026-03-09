@@ -84,6 +84,10 @@ jobs:
             --exclude='composer.json' \
             --exclude='composer.lock' \
             --exclude='codeception.yml' \
+            --exclude='webpack.config.js' \
+            --exclude='.slic' \
+            --exclude='README.md' \
+            --exclude='AGENTS.md' \
             --exclude='bin' \
             --exclude='src/css' \
             --exclude='src/js' \
