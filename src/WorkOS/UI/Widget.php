@@ -20,9 +20,9 @@ class Widget extends \WP_Widget {
 	public function __construct() {
 		parent::__construct(
 			'workos_login_button',
-			__( 'WorkOS Login Button', 'workos' ),
+			__( 'WorkOS Login Button', 'integration-workos' ),
 			[
-				'description' => __( 'Display a WorkOS login or logout button.', 'workos' ),
+				'description' => __( 'Display a WorkOS login or logout button.', 'integration-workos' ),
 			]
 		);
 	}
@@ -56,53 +56,53 @@ class Widget extends \WP_Widget {
 		$instance = wp_parse_args( (array) $instance, Renderer::DEFAULTS );
 
 		// Auth section.
-		$this->render_heading( __( 'Authentication', 'workos' ) );
-		$this->render_select( $instance, 'mode', __( 'Mode', 'workos' ), [
-			'auto'     => __( 'Auto (from settings)', 'workos' ),
-			'redirect' => __( 'Redirect (AuthKit)', 'workos' ),
-			'headless' => __( 'Headless (password)', 'workos' ),
+		$this->render_heading( __( 'Authentication', 'integration-workos' ) );
+		$this->render_select( $instance, 'mode', __( 'Mode', 'integration-workos' ), [
+			'auto'     => __( 'Auto (from settings)', 'integration-workos' ),
+			'redirect' => __( 'Redirect (AuthKit)', 'integration-workos' ),
+			'headless' => __( 'Headless (password)', 'integration-workos' ),
 		] );
-		$this->render_text( $instance, 'redirect_to', __( 'Redirect URL', 'workos' ) );
+		$this->render_text( $instance, 'redirect_to', __( 'Redirect URL', 'integration-workos' ) );
 
 		// Display section.
-		$this->render_heading( __( 'Logged-in Display', 'workos' ) );
-		$this->render_select( $instance, 'logged_in_display', __( 'When logged in', 'workos' ), [
-			'hide'      => __( 'Hide', 'workos' ),
-			'logout'    => __( 'Show logout button', 'workos' ),
-			'user_info' => __( 'Show user info + logout', 'workos' ),
+		$this->render_heading( __( 'Logged-in Display', 'integration-workos' ) );
+		$this->render_select( $instance, 'logged_in_display', __( 'When logged in', 'integration-workos' ), [
+			'hide'      => __( 'Hide', 'integration-workos' ),
+			'logout'    => __( 'Show logout button', 'integration-workos' ),
+			'user_info' => __( 'Show user info + logout', 'integration-workos' ),
 		] );
 
 		// Style section.
-		$this->render_heading( __( 'Button Styling', 'workos' ) );
-		$this->render_text( $instance, 'button_text', __( 'Button text', 'workos' ) );
-		$this->render_text( $instance, 'logout_text', __( 'Logout text', 'workos' ) );
-		$this->render_select( $instance, 'alignment', __( 'Alignment', 'workos' ), [
-			'left'   => __( 'Left', 'workos' ),
-			'center' => __( 'Center', 'workos' ),
-			'right'  => __( 'Right', 'workos' ),
+		$this->render_heading( __( 'Button Styling', 'integration-workos' ) );
+		$this->render_text( $instance, 'button_text', __( 'Button text', 'integration-workos' ) );
+		$this->render_text( $instance, 'logout_text', __( 'Logout text', 'integration-workos' ) );
+		$this->render_select( $instance, 'alignment', __( 'Alignment', 'integration-workos' ), [
+			'left'   => __( 'Left', 'integration-workos' ),
+			'center' => __( 'Center', 'integration-workos' ),
+			'right'  => __( 'Right', 'integration-workos' ),
 		] );
-		$this->render_select( $instance, 'size', __( 'Size', 'workos' ), [
-			'small'  => __( 'Small', 'workos' ),
-			'medium' => __( 'Medium', 'workos' ),
-			'large'  => __( 'Large', 'workos' ),
+		$this->render_select( $instance, 'size', __( 'Size', 'integration-workos' ), [
+			'small'  => __( 'Small', 'integration-workos' ),
+			'medium' => __( 'Medium', 'integration-workos' ),
+			'large'  => __( 'Large', 'integration-workos' ),
 		] );
-		$this->render_select( $instance, 'style', __( 'Style', 'workos' ), [
-			'filled'  => __( 'Filled', 'workos' ),
-			'outline' => __( 'Outline', 'workos' ),
-			'link'    => __( 'Link', 'workos' ),
+		$this->render_select( $instance, 'style', __( 'Style', 'integration-workos' ), [
+			'filled'  => __( 'Filled', 'integration-workos' ),
+			'outline' => __( 'Outline', 'integration-workos' ),
+			'link'    => __( 'Link', 'integration-workos' ),
 		] );
-		$this->render_text( $instance, 'bg_color', __( 'Background color (hex)', 'workos' ) );
-		$this->render_text( $instance, 'text_color', __( 'Text color (hex)', 'workos' ) );
-		$this->render_text( $instance, 'border_color', __( 'Border color (hex)', 'workos' ) );
-		$this->render_text( $instance, 'border_radius', __( 'Border radius (px)', 'workos' ) );
-		$this->render_checkbox( $instance, 'show_icon', __( 'Show icon', 'workos' ) );
+		$this->render_text( $instance, 'bg_color', __( 'Background color (hex)', 'integration-workos' ) );
+		$this->render_text( $instance, 'text_color', __( 'Text color (hex)', 'integration-workos' ) );
+		$this->render_text( $instance, 'border_color', __( 'Border color (hex)', 'integration-workos' ) );
+		$this->render_text( $instance, 'border_radius', __( 'Border radius (px)', 'integration-workos' ) );
+		$this->render_checkbox( $instance, 'show_icon', __( 'Show icon', 'integration-workos' ) );
 
 		// Extras section.
-		$this->render_heading( __( 'Additional Links', 'workos' ) );
-		$this->render_checkbox( $instance, 'show_registration', __( 'Show registration link', 'workos' ) );
-		$this->render_text( $instance, 'registration_text', __( 'Registration text', 'workos' ) );
-		$this->render_checkbox( $instance, 'show_password_fallback', __( 'Show password fallback link', 'workos' ) );
-		$this->render_text( $instance, 'password_fallback_text', __( 'Password fallback text', 'workos' ) );
+		$this->render_heading( __( 'Additional Links', 'integration-workos' ) );
+		$this->render_checkbox( $instance, 'show_registration', __( 'Show registration link', 'integration-workos' ) );
+		$this->render_text( $instance, 'registration_text', __( 'Registration text', 'integration-workos' ) );
+		$this->render_checkbox( $instance, 'show_password_fallback', __( 'Show password fallback link', 'integration-workos' ) );
+		$this->render_text( $instance, 'password_fallback_text', __( 'Password fallback text', 'integration-workos' ) );
 	}
 
 	/**

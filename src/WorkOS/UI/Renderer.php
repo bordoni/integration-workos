@@ -161,7 +161,7 @@ class Renderer {
 	 */
 	private static function render_logged_out( array $attrs ): string {
 		$mode        = self::resolve_mode( $attrs['mode'] );
-		$button_text = $attrs['button_text'] ?: __( 'Sign in', 'workos' );
+		$button_text = $attrs['button_text'] ?: __( 'Sign in', 'integration-workos' );
 		$inline      = self::build_inline_styles( $attrs );
 		$style_attr  = $inline ? ' style="' . esc_attr( $inline ) . '"' : '';
 
@@ -210,10 +210,10 @@ class Renderer {
 				$html .= '<input type="hidden" name="redirect_to" value="' . esc_attr( $attrs['redirect_to'] ) . '" />';
 			}
 
-			$html .= '<label class="workos-login-button__label" for="' . esc_attr( $email_id ) . '">' . esc_html__( 'Email', 'workos' ) . '</label>'
-				. '<input type="email" class="workos-login-button__input" name="email" required placeholder="' . esc_attr__( 'Email address', 'workos' ) . '" id="' . esc_attr( $email_id ) . '" />'
-				. '<label class="workos-login-button__label" for="' . esc_attr( $password_id ) . '">' . esc_html__( 'Password', 'workos' ) . '</label>'
-				. '<input type="password" class="workos-login-button__input" name="password" required placeholder="' . esc_attr__( 'Password', 'workos' ) . '" id="' . esc_attr( $password_id ) . '" />'
+			$html .= '<label class="workos-login-button__label" for="' . esc_attr( $email_id ) . '">' . esc_html__( 'Email', 'integration-workos' ) . '</label>'
+				. '<input type="email" class="workos-login-button__input" name="email" required placeholder="' . esc_attr__( 'Email address', 'integration-workos' ) . '" id="' . esc_attr( $email_id ) . '" />'
+				. '<label class="workos-login-button__label" for="' . esc_attr( $password_id ) . '">' . esc_html__( 'Password', 'integration-workos' ) . '</label>'
+				. '<input type="password" class="workos-login-button__input" name="password" required placeholder="' . esc_attr__( 'Password', 'integration-workos' ) . '" id="' . esc_attr( $password_id ) . '" />'
 				. '<button type="submit" class="workos-login-button__submit workos-login-button__btn--' . esc_attr( $attrs['style'] ) . '"' . $style_attr . '>'
 				. esc_html( $button_text )
 				. '</button>'
@@ -250,7 +250,7 @@ class Renderer {
 			'workos-login-button--' . $attrs['size'],
 		];
 
-		$logout_text = $attrs['logout_text'] ?: __( 'Sign out', 'workos' );
+		$logout_text = $attrs['logout_text'] ?: __( 'Sign out', 'integration-workos' );
 		$logout_url  = wp_logout_url( $attrs['redirect_to'] ?: home_url() );
 		$inline      = self::build_inline_styles( $attrs );
 		$style_attr  = $inline ? ' style="' . esc_attr( $inline ) . '"' : '';
@@ -290,14 +290,14 @@ class Renderer {
 		$links = '';
 
 		if ( $attrs['show_registration'] && get_option( 'users_can_register' ) ) {
-			$reg_text = $attrs['registration_text'] ?: __( 'Create account', 'workos' );
+			$reg_text = $attrs['registration_text'] ?: __( 'Create account', 'integration-workos' );
 			$links   .= '<a href="' . esc_url( wp_registration_url() ) . '" class="workos-login-button__link">'
 				. esc_html( $reg_text )
 				. '</a>';
 		}
 
 		if ( $attrs['show_password_fallback'] && workos()->option( 'allow_password_fallback', true ) ) {
-			$fb_text = $attrs['password_fallback_text'] ?: __( 'Sign in with password', 'workos' );
+			$fb_text = $attrs['password_fallback_text'] ?: __( 'Sign in with password', 'integration-workos' );
 			$links  .= '<a href="' . esc_url( wp_login_url() . '?fallback=1' ) . '" class="workos-login-button__link">'
 				. esc_html( $fb_text )
 				. '</a>';

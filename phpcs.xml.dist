@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
-<ruleset name="WorkOS Identity">
-	<description>Coding standards for the WorkOS Identity plugin.</description>
+<ruleset name="Integration with WorkOS">
+	<description>Coding standards for the Integration with WorkOS plugin.</description>
 
 	<!-- Scan these files -->
 	<file>./src</file>
-	<file>./workos.php</file>
+	<file>./integration-workos.php</file>
 	<file>./uninstall.php</file>
 
 	<!-- Exclude vendor and node_modules -->
@@ -106,7 +106,7 @@
 	<rule ref="WordPress.WP.I18n">
 		<properties>
 			<property name="text_domain" type="array">
-				<element value="workos" />
+				<element value="integration-workos" />
 			</property>
 		</properties>
 	</rule>

@@ -1,4 +1,4 @@
-# WorkOS Identity - Agent Instructions
+# Integration with WorkOS - Agent Instructions
 
 ## Project Overview
 
@@ -8,7 +8,7 @@ Enterprise identity management for WordPress powered by WorkOS. SSO, directory s
 - **Namespace:** `WorkOS\`
 - **PHP Requirement:** 7.4+
 - **WordPress Requirement:** 5.9+
-- **Text Domain:** `workos`
+- **Text Domain:** `integration-workos`
 - **Author:** LiquidWeb Software
 
 ## Architecture
@@ -16,12 +16,12 @@ Enterprise identity management for WordPress powered by WorkOS. SSO, directory s
 ### Bootstrap Process
 
 The plugin uses a deferred loading pattern:
-1. `workos.php` manually requires `Bootstrap.php` (no autoloader yet)
+1. `integration-workos.php` manually requires `Bootstrap.php` (no autoloader yet)
 2. `Bootstrap::set_plugin_file()` registers activation/deactivation hooks and returns a callback for `plugins_loaded`
 3. On `plugins_loaded`, `Bootstrap::load_plugin()` defines constants, loads Composer autoloader, requires global helpers, and boots `Plugin::instance()`
 
 ```php
-// workos.php
+// integration-workos.php
 require_once __DIR__ . '/src/WorkOS/Bootstrap.php';
 add_action( 'plugins_loaded', WorkOS\Bootstrap::set_plugin_file( __FILE__ ) );
 ```
@@ -39,7 +39,7 @@ Defined in `Bootstrap::load_plugin()`:
 - `WORKOS_FILE` — Absolute path to main plugin file
 - `WORKOS_DIR` — Plugin directory path (trailing slash)
 - `WORKOS_URL` — Plugin directory URL (trailing slash)
-- `WORKOS_BASENAME` — Plugin basename (`workos/workos.php`)
+- `WORKOS_BASENAME` — Plugin basename (`integration-workos/integration-workos.php`)
 
 ### Configuration
 
@@ -52,7 +52,7 @@ Defined in `Bootstrap::load_plugin()`:
 
 | File | Purpose |
 |------|---------|
-| `workos.php` | Main plugin entry point (minimal — require + hook) |
+| `integration-workos.php` | Main plugin entry point (minimal — require + hook) |
 | `src/WorkOS/Bootstrap.php` | Constants, autoloader, lifecycle hooks |
 | `src/WorkOS/Plugin.php` | Singleton orchestrator, boots all subsystems |
 | `src/WorkOS/Config.php` | Centralized config with constant overrides |
@@ -104,7 +104,7 @@ Run once from the WordPress plugins directory:
 ```bash
 cd ~/workspace/srv/wp-content/plugins
 ~/stellar/slic/slic here
-~/stellar/slic/slic use workos
+~/stellar/slic/slic use integration-workos
 ~/stellar/slic/slic composer install
 ```
 
@@ -115,7 +115,7 @@ cd ~/workspace/srv/wp-content/plugins
 ### Running Tests
 
 ```bash
-~/stellar/slic/slic use workos
+~/stellar/slic/slic use integration-workos
 ~/stellar/slic/slic run wpunit
 ```
 

@@ -99,7 +99,7 @@ class Controller extends BaseController {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'workos_login_button' ),
 				'i18n'    => [
-					'error' => __( 'An error occurred. Please try again.', 'workos' ),
+					'error' => __( 'An error occurred. Please try again.', 'integration-workos' ),
 				],
 			]
 		);

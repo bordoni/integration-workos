@@ -21,30 +21,30 @@ export default function Edit( { attributes, setAttributes } ) {
 			<InspectorControls>
 				{ /* Authentication Panel */ }
 				<PanelBody
-					title={ __( 'Authentication', 'workos' ) }
+					title={ __( 'Authentication', 'integration-workos' ) }
 					initialOpen={ true }
 				>
 					<SelectControl
-						label={ __( 'Mode', 'workos' ) }
+						label={ __( 'Mode', 'integration-workos' ) }
 						value={ attributes.mode }
 						options={ [
 							{
-								label: __( 'Auto (from settings)', 'workos' ),
+								label: __( 'Auto (from settings)', 'integration-workos' ),
 								value: 'auto',
 							},
 							{
-								label: __( 'Redirect (AuthKit)', 'workos' ),
+								label: __( 'Redirect (AuthKit)', 'integration-workos' ),
 								value: 'redirect',
 							},
 							{
-								label: __( 'Headless (password)', 'workos' ),
+								label: __( 'Headless (password)', 'integration-workos' ),
 								value: 'headless',
 							},
 						] }
 						onChange={ ( mode ) => setAttributes( { mode } ) }
 					/>
 					<TextControl
-						label={ __( 'Redirect URL', 'workos' ) }
+						label={ __( 'Redirect URL', 'integration-workos' ) }
 						value={ attributes.redirect_to }
 						onChange={ ( redirect_to ) =>
 							setAttributes( { redirect_to } )
@@ -58,15 +58,15 @@ export default function Edit( { attributes, setAttributes } ) {
 
 				{ /* Logged-in Display Panel */ }
 				<PanelBody
-					title={ __( 'Logged-in Display', 'workos' ) }
+					title={ __( 'Logged-in Display', 'integration-workos' ) }
 					initialOpen={ false }
 				>
 					<SelectControl
-						label={ __( 'When logged in', 'workos' ) }
+						label={ __( 'When logged in', 'integration-workos' ) }
 						value={ attributes.logged_in_display }
 						options={ [
 							{
-								label: __( 'Hide', 'workos' ),
+								label: __( 'Hide', 'integration-workos' ),
 								value: 'hide',
 							},
 							{
@@ -92,11 +92,11 @@ export default function Edit( { attributes, setAttributes } ) {
 
 				{ /* Button Styling Panel */ }
 				<PanelBody
-					title={ __( 'Button Styling', 'workos' ) }
+					title={ __( 'Button Styling', 'integration-workos' ) }
 					initialOpen={ false }
 				>
 					<TextControl
-						label={ __( 'Button text', 'workos' ) }
+						label={ __( 'Button text', 'integration-workos' ) }
 						value={ attributes.button_text }
 						onChange={ ( button_text ) =>
 							setAttributes( { button_text } )
@@ -107,7 +107,7 @@ export default function Edit( { attributes, setAttributes } ) {
 						) }
 					/>
 					<TextControl
-						label={ __( 'Logout text', 'workos' ) }
+						label={ __( 'Logout text', 'integration-workos' ) }
 						value={ attributes.logout_text }
 						onChange={ ( logout_text ) =>
 							setAttributes( { logout_text } )
@@ -118,19 +118,19 @@ export default function Edit( { attributes, setAttributes } ) {
 						) }
 					/>
 					<SelectControl
-						label={ __( 'Alignment', 'workos' ) }
+						label={ __( 'Alignment', 'integration-workos' ) }
 						value={ attributes.alignment }
 						options={ [
 							{
-								label: __( 'Left', 'workos' ),
+								label: __( 'Left', 'integration-workos' ),
 								value: 'left',
 							},
 							{
-								label: __( 'Center', 'workos' ),
+								label: __( 'Center', 'integration-workos' ),
 								value: 'center',
 							},
 							{
-								label: __( 'Right', 'workos' ),
+								label: __( 'Right', 'integration-workos' ),
 								value: 'right',
 							},
 						] }
@@ -139,38 +139,38 @@ export default function Edit( { attributes, setAttributes } ) {
 						}
 					/>
 					<SelectControl
-						label={ __( 'Size', 'workos' ) }
+						label={ __( 'Size', 'integration-workos' ) }
 						value={ attributes.size }
 						options={ [
 							{
-								label: __( 'Small', 'workos' ),
+								label: __( 'Small', 'integration-workos' ),
 								value: 'small',
 							},
 							{
-								label: __( 'Medium', 'workos' ),
+								label: __( 'Medium', 'integration-workos' ),
 								value: 'medium',
 							},
 							{
-								label: __( 'Large', 'workos' ),
+								label: __( 'Large', 'integration-workos' ),
 								value: 'large',
 							},
 						] }
 						onChange={ ( size ) => setAttributes( { size } ) }
 					/>
 					<SelectControl
-						label={ __( 'Style', 'workos' ) }
+						label={ __( 'Style', 'integration-workos' ) }
 						value={ attributes.style }
 						options={ [
 							{
-								label: __( 'Filled', 'workos' ),
+								label: __( 'Filled', 'integration-workos' ),
 								value: 'filled',
 							},
 							{
-								label: __( 'Outline', 'workos' ),
+								label: __( 'Outline', 'integration-workos' ),
 								value: 'outline',
 							},
 							{
-								label: __( 'Link', 'workos' ),
+								label: __( 'Link', 'integration-workos' ),
 								value: 'link',
 							},
 						] }
@@ -179,35 +179,35 @@ export default function Edit( { attributes, setAttributes } ) {
 						}
 					/>
 					<TextControl
-						label={ __( 'Background color (hex)', 'workos' ) }
+						label={ __( 'Background color (hex)', 'integration-workos' ) }
 						value={ attributes.bg_color }
 						onChange={ ( bg_color ) =>
 							setAttributes( { bg_color } )
 						}
 					/>
 					<TextControl
-						label={ __( 'Text color (hex)', 'workos' ) }
+						label={ __( 'Text color (hex)', 'integration-workos' ) }
 						value={ attributes.text_color }
 						onChange={ ( text_color ) =>
 							setAttributes( { text_color } )
 						}
 					/>
 					<TextControl
-						label={ __( 'Border color (hex)', 'workos' ) }
+						label={ __( 'Border color (hex)', 'integration-workos' ) }
 						value={ attributes.border_color }
 						onChange={ ( border_color ) =>
 							setAttributes( { border_color } )
 						}
 					/>
 					<TextControl
-						label={ __( 'Border radius (px)', 'workos' ) }
+						label={ __( 'Border radius (px)', 'integration-workos' ) }
 						value={ attributes.border_radius }
 						onChange={ ( border_radius ) =>
 							setAttributes( { border_radius } )
 						}
 					/>
 					<ToggleControl
-						label={ __( 'Show icon', 'workos' ) }
+						label={ __( 'Show icon', 'integration-workos' ) }
 						checked={ attributes.show_icon }
 						onChange={ ( show_icon ) =>
 							setAttributes( { show_icon } )
@@ -217,7 +217,7 @@ export default function Edit( { attributes, setAttributes } ) {
 
 				{ /* Additional Links Panel */ }
 				<PanelBody
-					title={ __( 'Additional Links', 'workos' ) }
+					title={ __( 'Additional Links', 'integration-workos' ) }
 					initialOpen={ false }
 				>
 					<ToggleControl

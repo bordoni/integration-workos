@@ -81,7 +81,7 @@ class UserProfile {
 		$environment_id = Config::get_environment_id();
 		$plugin_enabled = workos()->is_enabled();
 
-		echo '<h2>' . esc_html__( 'WorkOS', 'workos' ) . '</h2>';
+		echo '<h2>' . esc_html__( 'WorkOS', 'integration-workos' ) . '</h2>';
 
 		$this->render_dashboard_link( $workos_user_id, $environment_id );
 
@@ -126,7 +126,7 @@ class UserProfile {
 		printf(
 			'<p><a href="%s" class="button" target="_blank" rel="noopener noreferrer">%s</a></p>',
 			esc_url( $dashboard_url ),
-			esc_html__( 'View in WorkOS Dashboard', 'workos' ) . ' &#x2197;'
+			esc_html__( 'View in WorkOS Dashboard', 'integration-workos' ) . ' &#x2197;'
 		);
 	}
 
@@ -138,11 +138,11 @@ class UserProfile {
 	 * @param string     $environment_id WorkOS environment ID.
 	 */
 	private function render_user_info( ?array $workos_user, array $local_meta, string $environment_id ): void {
-		echo '<h3>' . esc_html__( 'User Information', 'workos' ) . '</h3>';
+		echo '<h3>' . esc_html__( 'User Information', 'integration-workos' ) . '</h3>';
 
 		if ( null === $workos_user ) {
 			if ( workos()->is_enabled() ) {
-				echo '<p class="description">' . esc_html__( 'Could not fetch user data from WorkOS API.', 'workos' ) . '</p>';
+				echo '<p class="description">' . esc_html__( 'Could not fetch user data from WorkOS API.', 'integration-workos' ) . '</p>';
 			}
 		}
 
@@ -150,7 +150,7 @@ class UserProfile {
 
 		// WorkOS User ID.
 		$this->render_form_row(
-			__( 'WorkOS User ID', 'workos' ),
+			__( 'WorkOS User ID', 'integration-workos' ),
 			'<code>' . esc_html( $local_meta['user_id'] ) . '</code>'
 		);
 
@@ -167,7 +167,7 @@ class UserProfile {
 				$org_value = '<code><a href="' . esc_url( $org_dashboard_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $local_meta['org_id'] ) . '</a></code>';
 			}
 
-			$this->render_form_row( __( 'Organization ID', 'workos' ), $org_value );
+			$this->render_form_row( __( 'Organization ID', 'integration-workos' ), $org_value );
 		}
 
 		// API-sourced data.
@@ -175,9 +175,9 @@ class UserProfile {
 			// Email.
 			$email_html = esc_html( $workos_user['email'] ?? '' );
 			if ( ! empty( $workos_user['email_verified'] ) ) {
-				$email_html .= ' <span style="color:#00a32a;" title="' . esc_attr__( 'Verified', 'workos' ) . '">&#10003;</span>';
+				$email_html .= ' <span style="color:#00a32a;" title="' . esc_attr__( 'Verified', 'integration-workos' ) . '">&#10003;</span>';
 			}
-			$this->render_form_row( __( 'Email', 'workos' ), $email_html );
+			$this->render_form_row( __( 'Email', 'integration-workos' ), $email_html );
 
 			// Name.
 			$name_parts = array_filter( [
@@ -185,49 +185,49 @@ class UserProfile {
 				$workos_user['last_name'] ?? '',
 			] );
 			if ( $name_parts ) {
-				$this->render_form_row( __( 'Name', 'workos' ), esc_html( implode( ' ', $name_parts ) ) );
+				$this->render_form_row( __( 'Name', 'integration-workos' ), esc_html( implode( ' ', $name_parts ) ) );
 			}
 
 			// Profile Picture.
 			if ( ! empty( $workos_user['profile_picture_url'] ) ) {
 				$this->render_form_row(
-					__( 'Profile Picture', 'workos' ),
+					__( 'Profile Picture', 'integration-workos' ),
 					'<img src="' . esc_url( $workos_user['profile_picture_url'] ) . '" alt="" style="width:64px;height:64px;border-radius:50%;" />'
 				);
 			}
 
 			// Created At.
 			if ( ! empty( $workos_user['created_at'] ) ) {
-				$this->render_form_row( __( 'Created At', 'workos' ), $this->format_datetime( $workos_user['created_at'] ) );
+				$this->render_form_row( __( 'Created At', 'integration-workos' ), $this->format_datetime( $workos_user['created_at'] ) );
 			}
 
 			// Updated At.
 			if ( ! empty( $workos_user['updated_at'] ) ) {
-				$this->render_form_row( __( 'Updated At', 'workos' ), $this->format_datetime( $workos_user['updated_at'] ) );
+				$this->render_form_row( __( 'Updated At', 'integration-workos' ), $this->format_datetime( $workos_user['updated_at'] ) );
 			}
 
 			// Last Active At.
 			if ( ! empty( $workos_user['last_active_at'] ) ) {
-				$this->render_form_row( __( 'Last Active At', 'workos' ), $this->format_datetime( $workos_user['last_active_at'] ) );
+				$this->render_form_row( __( 'Last Active At', 'integration-workos' ), $this->format_datetime( $workos_user['last_active_at'] ) );
 			}
 		}
 
 		// Local meta: Last Synced.
 		if ( ! empty( $local_meta['last_synced_at'] ) ) {
-			$this->render_form_row( __( 'Last Synced', 'workos' ), $this->format_datetime( $local_meta['last_synced_at'] ) );
+			$this->render_form_row( __( 'Last Synced', 'integration-workos' ), $this->format_datetime( $local_meta['last_synced_at'] ) );
 		}
 
 		// Local meta: Deprovisioned.
 		if ( ! empty( $local_meta['deactivated'] ) ) {
 			$this->render_form_row(
-				__( 'Status', 'workos' ),
-				'<span style="color:#d63638;">' . esc_html__( 'Deprovisioned', 'workos' ) . '</span>'
+				__( 'Status', 'integration-workos' ),
+				'<span style="color:#d63638;">' . esc_html__( 'Deprovisioned', 'integration-workos' ) . '</span>'
 			);
 		}
 
 		// Local meta: First Login.
 		if ( ! empty( $local_meta['first_login'] ) ) {
-			$this->render_form_row( __( 'First Login', 'workos' ), $this->format_datetime( $local_meta['first_login'] ) );
+			$this->render_form_row( __( 'First Login', 'integration-workos' ), $this->format_datetime( $local_meta['first_login'] ) );
 		}
 
 		echo '</tbody></table>';
@@ -240,26 +240,26 @@ class UserProfile {
 	 * @param string     $environment_id WorkOS environment ID.
 	 */
 	private function render_memberships( ?array $memberships, string $environment_id ): void {
-		echo '<h3>' . esc_html__( 'Organization Memberships', 'workos' ) . '</h3>';
+		echo '<h3>' . esc_html__( 'Organization Memberships', 'integration-workos' ) . '</h3>';
 
 		if ( null === $memberships ) {
-			echo '<p class="description">' . esc_html__( 'Could not fetch organization memberships from WorkOS API.', 'workos' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'Could not fetch organization memberships from WorkOS API.', 'integration-workos' ) . '</p>';
 			return;
 		}
 
 		$items = $memberships['data'] ?? [];
 
 		if ( empty( $items ) ) {
-			echo '<p class="description">' . esc_html__( 'No organization memberships found.', 'workos' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'No organization memberships found.', 'integration-workos' ) . '</p>';
 			return;
 		}
 
 		echo '<table class="widefat striped" style="max-width:800px">';
 		echo '<thead><tr>';
-		echo '<th>' . esc_html__( 'Organization ID', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'Role', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'Status', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'Created At', 'workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Organization ID', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Role', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Status', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Created At', 'integration-workos' ) . '</th>';
 		echo '</tr></thead><tbody>';
 
 		foreach ( $items as $membership ) {
@@ -295,23 +295,23 @@ class UserProfile {
 	 * @param array|null $events Filtered events (null on error).
 	 */
 	private function render_events( ?array $events ): void {
-		echo '<h3>' . esc_html__( 'Recent Events', 'workos' ) . '</h3>';
+		echo '<h3>' . esc_html__( 'Recent Events', 'integration-workos' ) . '</h3>';
 
 		if ( null === $events ) {
-			echo '<p class="description">' . esc_html__( 'Could not fetch events from WorkOS API.', 'workos' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'Could not fetch events from WorkOS API.', 'integration-workos' ) . '</p>';
 			return;
 		}
 
 		if ( empty( $events ) ) {
-			echo '<p class="description">' . esc_html__( 'No recent events found.', 'workos' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'No recent events found.', 'integration-workos' ) . '</p>';
 			return;
 		}
 
 		echo '<table class="widefat striped" style="max-width:800px">';
 		echo '<thead><tr>';
-		echo '<th>' . esc_html__( 'Event Type', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'Event ID', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'Date', 'workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Event Type', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Event ID', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Date', 'integration-workos' ) . '</th>';
 		echo '</tr></thead><tbody>';
 
 		foreach ( $events as $event ) {
@@ -323,7 +323,7 @@ class UserProfile {
 		}
 
 		echo '</tbody></table>';
-		echo '<p class="description">' . esc_html__( 'Showing up to 25 events from last 90 days. Cached 5 min.', 'workos' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Showing up to 25 events from last 90 days. Cached 5 min.', 'integration-workos' ) . '</p>';
 	}
 
 	/**

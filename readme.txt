@@ -1,4 +1,4 @@
-=== WorkOS Identity ===
+=== Integration with WorkOS ===
 Contributors: liquidweb
 Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 5.9
@@ -12,7 +12,7 @@ Enterprise identity management for WordPress powered by WorkOS. SSO, directory s
 
 == Description ==
 
-WorkOS Identity integrates your WordPress site with [WorkOS](https://workos.com) for enterprise-grade identity management:
+Integration with WorkOS connects your WordPress site with [WorkOS](https://workos.com) for enterprise-grade identity management:
 
 * **Single Sign-On (SSO)** — AuthKit redirect and headless API authentication flows.
 * **Directory Sync** — Automatic user provisioning and deprovisioning via SCIM.
@@ -24,7 +24,7 @@ WorkOS Identity integrates your WordPress site with [WorkOS](https://workos.com)
 
 == Installation ==
 
-1. Upload the `workos` folder to `/wp-content/plugins/`.
+1. Upload the `integration-workos` folder to `/wp-content/plugins/`.
 2. Activate the plugin through the **Plugins** menu in WordPress.
 3. Go to **WorkOS > Settings** and enter your API Key and Client ID from the [WorkOS Dashboard](https://dashboard.workos.com).
 4. Configure your webhook endpoint in the WorkOS Dashboard using the URL shown on the settings page.

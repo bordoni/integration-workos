@@ -61,7 +61,7 @@ class UserSync {
 		if ( empty( $workos_id ) || empty( $email ) ) {
 			return new \WP_Error(
 				'workos_invalid_user',
-				__( 'WorkOS user data is missing required fields.', 'workos' )
+				__( 'WorkOS user data is missing required fields.', 'integration-workos' )
 			);
 		}
 
@@ -243,21 +243,21 @@ class UserSync {
 	 */
 	public static function sync_existing_user( int $user_id ) {
 		if ( self::$syncing ) {
-			return new \WP_Error( 'workos_sync_in_progress', __( 'A sync operation is already in progress.', 'workos' ) );
+			return new \WP_Error( 'workos_sync_in_progress', __( 'A sync operation is already in progress.', 'integration-workos' ) );
 		}
 
 		if ( ! workos()->is_enabled() ) {
-			return new \WP_Error( 'workos_not_configured', __( 'WorkOS is not configured.', 'workos' ) );
+			return new \WP_Error( 'workos_not_configured', __( 'WorkOS is not configured.', 'integration-workos' ) );
 		}
 
 		$workos_id = get_user_meta( $user_id, '_workos_user_id', true );
 		if ( $workos_id ) {
-			return new \WP_Error( 'workos_already_linked', __( 'User is already linked to WorkOS.', 'workos' ) );
+			return new \WP_Error( 'workos_already_linked', __( 'User is already linked to WorkOS.', 'integration-workos' ) );
 		}
 
 		$user = get_user_by( 'id', $user_id );
 		if ( ! $user ) {
-			return new \WP_Error( 'workos_user_not_found', __( 'WordPress user not found.', 'workos' ) );
+			return new \WP_Error( 'workos_user_not_found', __( 'WordPress user not found.', 'integration-workos' ) );
 		}
 
 		$payload = [
@@ -302,16 +302,16 @@ class UserSync {
 	 */
 	public static function resync_from_workos( int $user_id ) {
 		if ( self::$syncing ) {
-			return new \WP_Error( 'workos_sync_in_progress', __( 'A sync operation is already in progress.', 'workos' ) );
+			return new \WP_Error( 'workos_sync_in_progress', __( 'A sync operation is already in progress.', 'integration-workos' ) );
 		}
 
 		if ( ! workos()->is_enabled() ) {
-			return new \WP_Error( 'workos_not_configured', __( 'WorkOS is not configured.', 'workos' ) );
+			return new \WP_Error( 'workos_not_configured', __( 'WorkOS is not configured.', 'integration-workos' ) );
 		}
 
 		$workos_id = get_user_meta( $user_id, '_workos_user_id', true );
 		if ( ! $workos_id ) {
-			return new \WP_Error( 'workos_not_linked', __( 'User is not linked to WorkOS.', 'workos' ) );
+			return new \WP_Error( 'workos_not_linked', __( 'User is not linked to WorkOS.', 'integration-workos' ) );
 		}
 
 		$result = workos()->api()->get_user( $workos_id );

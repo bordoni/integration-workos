@@ -92,7 +92,7 @@ class PasswordReset {
 		if ( $workos_id ) {
 			return new \WP_Error(
 				'workos_no_password_reset',
-				__( 'Password reset is managed by your organization. Please use your SSO provider to reset your password.', 'workos' )
+				__( 'Password reset is managed by your organization. Please use your SSO provider to reset your password.', 'integration-workos' )
 			);
 		}
 

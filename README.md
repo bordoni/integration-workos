@@ -1,4 +1,4 @@
-# WorkOS Identity
+# Integration with WorkOS
 
 Enterprise identity management for WordPress powered by [WorkOS](https://workos.com). SSO, directory sync, MFA, and user management.
 
@@ -19,7 +19,7 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 
 ## Installation
 
-1. Upload the plugin to `wp-content/plugins/workos/`.
+1. Upload the plugin to `wp-content/plugins/integration-workos/`.
 2. Run `composer install` in the plugin directory.
 3. Activate the plugin in WordPress admin.
 4. Navigate to **Settings > WorkOS** to configure.
@@ -297,7 +297,7 @@ composer install
 # Using slic (Docker-based)
 cd wp-content/plugins
 slic here
-slic use workos
+slic use integration-workos
 slic run wpunit
 
 # Using Composer
@@ -319,7 +319,7 @@ composer lint:fix
 The plugin uses a DI container (di52) with a feature-controller pattern:
 
 ```
-workos.php                    # Entry point
+integration-workos.php        # Entry point
 src/WorkOS/Plugin.php         # Bootstrap, container init
 src/WorkOS/Controller.php     # Main controller, registers feature controllers
 src/WorkOS/Config.php         # Centralized config with constant overrides

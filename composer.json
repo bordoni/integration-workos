@@ -1,12 +1,12 @@
 {
-	"name": "liquidweb/workos-identity",
+	"name": "bordoni/integration-workos",
 	"description": "Enterprise identity management for WordPress powered by WorkOS.",
 	"type": "wordpress-plugin",
 	"license": "GPL-2.0-or-later",
 	"authors": [
 		{
-			"name": "LiquidWeb Software",
-			"homepage": "https://software.liquidweb.com"
+			"name": "Gustavo Bordoni",
+			"homepage": "https://github.com/bordoni"
 		}
 	],
 	"require": {

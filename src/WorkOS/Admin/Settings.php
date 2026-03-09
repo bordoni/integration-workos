@@ -63,9 +63,9 @@ class Settings {
 		if ( ! empty( Config::get_api_key() ) && ! empty( Config::get_client_id() ) && empty( Config::get_environment_id() ) ) {
 			printf(
 				'<div class="notice notice-warning"><p>%s <a href="%s">%s</a></p></div>',
-				esc_html__( 'WorkOS now requires an Environment ID to be fully configured.', 'workos' ),
+				esc_html__( 'WorkOS now requires an Environment ID to be fully configured.', 'integration-workos' ),
 				esc_url( admin_url( 'admin.php?page=workos' ) ),
-				esc_html__( 'Update your settings.', 'workos' )
+				esc_html__( 'Update your settings.', 'integration-workos' )
 			);
 		}
 	}
@@ -168,8 +168,8 @@ class Settings {
 	 */
 	public function register_menu(): void {
 		add_menu_page(
-			__( 'WorkOS Settings', 'workos' ),
-			__( 'WorkOS', 'workos' ),
+			__( 'WorkOS Settings', 'integration-workos' ),
+			__( 'WorkOS', 'integration-workos' ),
 			'manage_options',
 			'workos',
 			[ $this, 'render_page' ],
@@ -270,7 +270,7 @@ class Settings {
 
 		$wp_roles  = \WorkOS\Sync\RoleMapper::get_wp_roles();
 		$all_roles = array_merge(
-			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			[ '__default__' => __( 'Default (all roles)', 'integration-workos' ) ],
 			$wp_roles
 		);
 		wp_add_inline_script(
@@ -313,7 +313,7 @@ class Settings {
 
 		$wp_roles  = \WorkOS\Sync\RoleMapper::get_wp_roles();
 		$all_roles = array_merge(
-			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			[ '__default__' => __( 'Default (all roles)', 'integration-workos' ) ],
 			$wp_roles
 		);
 		wp_add_inline_script(
@@ -407,13 +407,13 @@ class Settings {
 		add_settings_section(
 			'workos_api',
 			/* translators: %s: environment name (Production or Staging) */
-			sprintf( __( 'API Credentials (%s)', 'workos' ), $env_label ),
+			sprintf( __( 'API Credentials (%s)', 'integration-workos' ), $env_label ),
 			function () {
 				printf(
 					'<p>%s <a href="%s" target="_blank">%s</a></p>',
-					esc_html__( 'Enter your API key and Client ID from the', 'workos' ),
+					esc_html__( 'Enter your API key and Client ID from the', 'integration-workos' ),
 					'https://dashboard.workos.com/api-keys',
-					esc_html__( 'WorkOS Dashboard &rarr; API Keys', 'workos' )
+					esc_html__( 'WorkOS Dashboard &rarr; API Keys', 'integration-workos' )
 				);
 			},
 			'workos'
@@ -421,24 +421,24 @@ class Settings {
 
 		$this->add_field(
 			$this->env_option( 'api_key' ),
-			__( 'API Key', 'workos' ),
+			__( 'API Key', 'integration-workos' ),
 			'password',
 			'workos_api',
-			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "sk_".', 'workos' )
+			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "sk_".', 'integration-workos' )
 		);
 		$this->add_field(
 			$this->env_option( 'client_id' ),
-			__( 'Client ID', 'workos' ),
+			__( 'Client ID', 'integration-workos' ),
 			'text',
 			'workos_api',
-			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "client_".', 'workos' )
+			__( 'Found under API Keys in the WorkOS Dashboard. Starts with "client_".', 'integration-workos' )
 		);
 		$this->add_field(
 			$this->env_option( 'environment_id' ),
-			__( 'Environment ID', 'workos' ),
+			__( 'Environment ID', 'integration-workos' ),
 			'text',
 			'workos_api',
-			__( 'Found in the WorkOS Dashboard URL after /environment_. Starts with "environment_".', 'workos' )
+			__( 'Found in the WorkOS Dashboard URL after /environment_. Starts with "environment_".', 'integration-workos' )
 		);
 
 		// --- Progressive disclosure: only show remaining sections when configured ---
@@ -449,7 +449,7 @@ class Settings {
 				function () {
 					printf(
 						'<div class="notice notice-info inline"><p>%s</p></div>',
-						esc_html__( 'Configure your API Key, Client ID, and Environment ID above, then save to unlock additional settings.', 'workos' )
+						esc_html__( 'Configure your API Key, Client ID, and Environment ID above, then save to unlock additional settings.', 'integration-workos' )
 					);
 				},
 				'workos'
@@ -460,28 +460,28 @@ class Settings {
 		// --- Webhook section ---
 		add_settings_section(
 			'workos_webhooks',
-			__( 'Webhooks', 'workos' ),
+			__( 'Webhooks', 'integration-workos' ),
 			function () {
 				$url = rest_url( 'workos/v1/webhook' );
-				echo '<p>' . esc_html__( 'Webhooks allow WorkOS to notify your site when users, organizations, or memberships change.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Webhooks allow WorkOS to notify your site when users, organizations, or memberships change.', 'integration-workos' ) . '</p>';
 				echo '<ol>';
 				printf(
 					'<li>%s <a href="%s" target="_blank">%s</a></li>',
-					esc_html__( 'Go to', 'workos' ),
+					esc_html__( 'Go to', 'integration-workos' ),
 					'https://dashboard.workos.com/webhooks',
-					esc_html__( 'WorkOS Dashboard &rarr; Webhooks', 'workos' )
+					esc_html__( 'WorkOS Dashboard &rarr; Webhooks', 'integration-workos' )
 				);
 				printf(
 					'<li>%s <code>%s</code></li>',
-					esc_html__( 'Create a new endpoint with this URL:', 'workos' ),
+					esc_html__( 'Create a new endpoint with this URL:', 'integration-workos' ),
 					esc_url( $url )
 				);
 				printf(
 					'<li>%s <a href="#TB_inline?width=480&height=500&inlineId=workos-webhook-events" class="thickbox">%s</a></li>',
-					esc_html__( 'Subscribe to the required events &mdash;', 'workos' ),
-					esc_html__( 'View required events', 'workos' )
+					esc_html__( 'Subscribe to the required events &mdash;', 'integration-workos' ),
+					esc_html__( 'View required events', 'integration-workos' )
 				);
-				echo '<li>' . esc_html__( 'Copy the signing secret that WorkOS generates and paste it below.', 'workos' ) . '</li>';
+				echo '<li>' . esc_html__( 'Copy the signing secret that WorkOS generates and paste it below.', 'integration-workos' ) . '</li>';
 				echo '</ol>';
 
 				$this->render_webhook_events_modal();
@@ -491,68 +491,68 @@ class Settings {
 
 		$this->add_field(
 			$this->env_option( 'webhook_secret' ),
-			__( 'Webhook Secret', 'workos' ),
+			__( 'Webhook Secret', 'integration-workos' ),
 			'password',
 			'workos_webhooks',
-			__( 'The signing secret from your WorkOS webhook endpoint.', 'workos' )
+			__( 'The signing secret from your WorkOS webhook endpoint.', 'integration-workos' )
 		);
 
 		// --- Authentication section ---
 		add_settings_section(
 			'workos_auth',
-			__( 'Authentication', 'workos' ),
+			__( 'Authentication', 'integration-workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Configure how users authenticate with your site.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Configure how users authenticate with your site.', 'integration-workos' ) . '</p>';
 			},
 			'workos'
 		);
 
 		add_settings_field(
 			'workos_env_login_mode',
-			__( 'Login Mode', 'workos' ),
+			__( 'Login Mode', 'integration-workos' ),
 			[ $this, 'render_select' ],
 			'workos',
 			'workos_auth',
 			[
 				'name'    => $this->env_option( 'login_mode' ),
 				'options' => [
-					'redirect' => __( 'AuthKit Redirect (Recommended)', 'workos' ),
-					'headless' => __( 'Headless API (Custom Form)', 'workos' ),
+					'redirect' => __( 'AuthKit Redirect (Recommended)', 'integration-workos' ),
+					'headless' => __( 'Headless API (Custom Form)', 'integration-workos' ),
 				],
 			]
 		);
 
 		add_settings_field(
 			'workos_env_allow_password_fallback',
-			__( 'Password Fallback', 'workos' ),
+			__( 'Password Fallback', 'integration-workos' ),
 			[ $this, 'render_checkbox' ],
 			'workos',
 			'workos_auth',
 			[
 				'name'  => $this->env_option( 'allow_password_fallback' ),
-				'label' => __( 'Allow users to log in with WordPress password if WorkOS auth fails.', 'workos' ),
+				'label' => __( 'Allow users to log in with WordPress password if WorkOS auth fails.', 'integration-workos' ),
 			]
 		);
 
 		// --- Audit Logging section ---
 		add_settings_section(
 			'workos_audit',
-			__( 'Audit Logging', 'workos' ),
+			__( 'Audit Logging', 'integration-workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Forward WordPress events to WorkOS Audit Logs.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Forward WordPress events to WorkOS Audit Logs.', 'integration-workos' ) . '</p>';
 			},
 			'workos'
 		);
 
 		add_settings_field(
 			'workos_env_audit_logging_enabled',
-			__( 'Enable Audit Logging', 'workos' ),
+			__( 'Enable Audit Logging', 'integration-workos' ),
 			[ $this, 'render_checkbox' ],
 			'workos',
 			'workos_audit',
 			[
 				'name'  => $this->env_option( 'audit_logging_enabled' ),
-				'label' => __( 'Send login, post, and user events to WorkOS Audit Logs.', 'workos' ),
+				'label' => __( 'Send login, post, and user events to WorkOS Audit Logs.', 'integration-workos' ),
 			]
 		);
 	}
@@ -564,16 +564,16 @@ class Settings {
 		// --- Organization selection ---
 		add_settings_section(
 			'workos_organization',
-			__( 'Organization', 'workos' ),
+			__( 'Organization', 'integration-workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Select the WorkOS organization this site belongs to.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Select the WorkOS organization this site belongs to.', 'integration-workos' ) . '</p>';
 			},
 			self::ORG_PAGE
 		);
 
 		add_settings_field(
 			'workos_env_organization_id',
-			__( 'Organization', 'workos' ),
+			__( 'Organization', 'integration-workos' ),
 			[ $this, 'render_organization_select' ],
 			self::ORG_PAGE,
 			'workos_organization'
@@ -587,32 +587,32 @@ class Settings {
 		// --- User Provisioning section ---
 		add_settings_section(
 			'workos_provisioning',
-			__( 'User Provisioning', 'workos' ),
+			__( 'User Provisioning', 'integration-workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Configure how users are deprovisioned when removed from WorkOS.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Configure how users are deprovisioned when removed from WorkOS.', 'integration-workos' ) . '</p>';
 			},
 			self::USERS_PAGE
 		);
 
 		add_settings_field(
 			'workos_env_deprovision_action',
-			__( 'Deprovision Action', 'workos' ),
+			__( 'Deprovision Action', 'integration-workos' ),
 			[ $this, 'render_select' ],
 			self::USERS_PAGE,
 			'workos_provisioning',
 			[
 				'name'    => $this->env_option( 'deprovision_action' ),
 				'options' => [
-					'deactivate' => __( 'Deactivate (mark as inactive)', 'workos' ),
-					'demote'     => __( 'Demote to Subscriber role', 'workos' ),
-					'delete'     => __( 'Delete user (reassign content)', 'workos' ),
+					'deactivate' => __( 'Deactivate (mark as inactive)', 'integration-workos' ),
+					'demote'     => __( 'Demote to Subscriber role', 'integration-workos' ),
+					'delete'     => __( 'Delete user (reassign content)', 'integration-workos' ),
 				],
 			]
 		);
 
 		add_settings_field(
 			'workos_env_reassign_user',
-			__( 'Reassign Content To', 'workos' ),
+			__( 'Reassign Content To', 'integration-workos' ),
 			[ $this, 'render_user_select' ],
 			self::USERS_PAGE,
 			'workos_provisioning',
@@ -622,9 +622,9 @@ class Settings {
 		// --- Login Redirects section ---
 		add_settings_section(
 			'workos_redirects',
-			__( 'Login Redirects', 'workos' ),
+			__( 'Login Redirects', 'integration-workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Redirect users to a specific URL after login, based on their WordPress role.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Redirect users to a specific URL after login, based on their WordPress role.', 'integration-workos' ) . '</p>';
 				$this->render_redirect_urls();
 			},
 			self::USERS_PAGE
@@ -633,9 +633,9 @@ class Settings {
 		// --- Logout Redirects section ---
 		add_settings_section(
 			'workos_logout_redirects',
-			__( 'Logout Redirects', 'workos' ),
+			__( 'Logout Redirects', 'integration-workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Redirect users to a specific URL after logout, based on their WordPress role.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Redirect users to a specific URL after logout, based on their WordPress role.', 'integration-workos' ) . '</p>';
 				$this->render_logout_redirect_urls();
 			},
 			self::USERS_PAGE
@@ -644,9 +644,9 @@ class Settings {
 		// --- Role Mapping section ---
 		add_settings_section(
 			'workos_roles',
-			__( 'Role Mapping', 'workos' ),
+			__( 'Role Mapping', 'integration-workos' ),
 			function () {
-				echo '<p>' . esc_html__( 'Map WorkOS roles to WordPress roles. Users will be assigned the mapped WP role on login.', 'workos' ) . '</p>';
+				echo '<p>' . esc_html__( 'Map WorkOS roles to WordPress roles. Users will be assigned the mapped WP role on login.', 'integration-workos' ) . '</p>';
 				$this->render_role_map();
 			},
 			self::USERS_PAGE
@@ -667,9 +667,9 @@ class Settings {
 		$has_org       = $this->has_editing_env_org();
 
 		$tabs = [
-			'settings'     => __( 'Settings', 'workos' ),
-			'organization' => __( 'Organization', 'workos' ),
-			'users'        => __( 'Users', 'workos' ),
+			'settings'     => __( 'Settings', 'integration-workos' ),
+			'organization' => __( 'Organization', 'integration-workos' ),
+			'users'        => __( 'Users', 'integration-workos' ),
 		];
 
 		$tab_disabled = [
@@ -679,8 +679,8 @@ class Settings {
 		];
 
 		$tab_tooltips = [
-			'organization' => __( 'Configure API credentials first', 'workos' ),
-			'users'        => __( 'Select an organization first', 'workos' ),
+			'organization' => __( 'Configure API credentials first', 'integration-workos' ),
+			'users'        => __( 'Select an organization first', 'integration-workos' ),
 		];
 
 		switch ( $current_tab ) {
@@ -736,24 +736,24 @@ class Settings {
 				<?php
 				settings_fields( self::OPTION_GROUP );
 				do_settings_sections( $page_slug );
-				submit_button( __( 'Save Settings', 'workos' ) );
+				submit_button( __( 'Save Settings', 'integration-workos' ) );
 				?>
 			</form>
 
 			<?php if ( 'settings' === $current_tab && workos()->is_enabled() ) : ?>
 				<hr>
-				<h2><?php esc_html_e( 'Status', 'workos' ); ?></h2>
+				<h2><?php esc_html_e( 'Status', 'integration-workos' ); ?></h2>
 				<table class="widefat striped" style="max-width:600px">
 					<tr>
-						<td><strong><?php esc_html_e( 'Plugin', 'workos' ); ?></strong></td>
-						<td><?php esc_html_e( 'Configured', 'workos' ); ?> &#x2705;</td>
+						<td><strong><?php esc_html_e( 'Plugin', 'integration-workos' ); ?></strong></td>
+						<td><?php esc_html_e( 'Configured', 'integration-workos' ); ?> &#x2705;</td>
 					</tr>
 					<tr>
-						<td><strong><?php esc_html_e( 'Webhook URL', 'workos' ); ?></strong></td>
+						<td><strong><?php esc_html_e( 'Webhook URL', 'integration-workos' ); ?></strong></td>
 						<td><code><?php echo esc_url( rest_url( 'workos/v1/webhook' ) ); ?></code></td>
 					</tr>
 					<tr>
-						<td><strong><?php esc_html_e( 'Callback URL', 'workos' ); ?></strong></td>
+						<td><strong><?php esc_html_e( 'Callback URL', 'integration-workos' ); ?></strong></td>
 						<td><code><?php echo esc_url( home_url( '/workos/callback' ) ); ?></code></td>
 					</tr>
 				</table>
@@ -834,7 +834,7 @@ class Settings {
 					'workos_activate_env'
 				);
 				$confirm_msg  = 'production' === $editing
-					? esc_attr__( 'Are you sure you want to activate the Production environment? This will affect all users.', 'workos' )
+					? esc_attr__( 'Are you sure you want to activate the Production environment? This will affect all users.', 'integration-workos' )
 					: '';
 				?>
 				<a
@@ -847,7 +847,7 @@ class Settings {
 				>
 					<?php
 					/* translators: %s: environment name (Production or Staging) */
-					printf( esc_html__( 'Activate %s', 'workos' ), esc_html( $environments[ $editing ] ?? $editing ) );
+					printf( esc_html__( 'Activate %s', 'integration-workos' ), esc_html( $environments[ $editing ] ?? $editing ) );
 					?>
 					<?php if ( 'production' === $editing ) : ?>
 						&#x26A0;
@@ -868,7 +868,7 @@ class Settings {
 		}
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to do this.', 'workos' ) );
+			wp_die( esc_html__( 'You do not have permission to do this.', 'integration-workos' ) );
 		}
 
 		check_admin_referer( 'workos_activate_env' );
@@ -876,11 +876,11 @@ class Settings {
 		$env = sanitize_text_field( wp_unslash( $_GET['env'] ?? '' ) );
 
 		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
-			wp_die( esc_html__( 'Invalid environment.', 'workos' ) );
+			wp_die( esc_html__( 'Invalid environment.', 'integration-workos' ) );
 		}
 
 		if ( Config::is_environment_overridden() ) {
-			wp_die( esc_html__( 'Environment is locked via constant.', 'workos' ) );
+			wp_die( esc_html__( 'Environment is locked via constant.', 'integration-workos' ) );
 		}
 
 		Config::set_active_environment( $env );
@@ -890,7 +890,7 @@ class Settings {
 			'workos_messages',
 			'workos_env_activated',
 			/* translators: %s: environment name */
-			sprintf( __( '%s environment is now active.', 'workos' ), $env_label ),
+			sprintf( __( '%s environment is now active.', 'integration-workos' ), $env_label ),
 			'success'
 		);
 
@@ -911,7 +911,7 @@ class Settings {
 	 */
 	public function handle_create_org(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to do this.', 'workos' ) );
+			wp_die( esc_html__( 'You do not have permission to do this.', 'integration-workos' ) );
 		}
 
 		check_admin_referer( 'workos_create_org' );
@@ -936,7 +936,7 @@ class Settings {
 			add_settings_error(
 				'workos_messages',
 				'workos_create_org_error',
-				__( 'Organization name is required.', 'workos' ),
+				__( 'Organization name is required.', 'integration-workos' ),
 				'error'
 			);
 			set_transient( 'settings_errors', get_settings_errors(), 30 );
@@ -951,7 +951,7 @@ class Settings {
 				'workos_messages',
 				'workos_create_org_error',
 				/* translators: %s: error message from API */
-				sprintf( __( 'Failed to create organization: %s', 'workos' ), $result->get_error_message() ),
+				sprintf( __( 'Failed to create organization: %s', 'integration-workos' ), $result->get_error_message() ),
 				'error'
 			);
 			set_transient( 'settings_errors', get_settings_errors(), 30 );
@@ -978,7 +978,7 @@ class Settings {
 			'workos_messages',
 			'workos_create_org_success',
 			/* translators: %s: organization name */
-			sprintf( __( 'Organization "%s" created and selected.', 'workos' ), $name ),
+			sprintf( __( 'Organization "%s" created and selected.', 'integration-workos' ), $name ),
 			'success'
 		);
 		set_transient( 'settings_errors', get_settings_errors(), 30 );
@@ -991,7 +991,7 @@ class Settings {
 	 */
 	public function handle_sync_roles_to_workos(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to do this.', 'workos' ) );
+			wp_die( esc_html__( 'You do not have permission to do this.', 'integration-workos' ) );
 		}
 
 		check_admin_referer( 'workos_sync_roles_to_workos' );
@@ -1018,7 +1018,7 @@ class Settings {
 				'workos_sync_roles_success',
 				sprintf(
 					/* translators: 1: synced count, 2: skipped count, 3: failed count */
-					__( 'Role sync complete — %1$d updated, %2$d skipped, %3$d failed.', 'workos' ),
+					__( 'Role sync complete — %1$d updated, %2$d skipped, %3$d failed.', 'integration-workos' ),
 					$counts['synced'],
 					$counts['skipped'],
 					$counts['failed']
@@ -1031,7 +1031,7 @@ class Settings {
 				'workos_sync_roles_error',
 				sprintf(
 					/* translators: 1: synced count, 2: skipped count, 3: failed count */
-					__( 'Role sync completed with errors — %1$d updated, %2$d skipped, %3$d failed.', 'workos' ),
+					__( 'Role sync completed with errors — %1$d updated, %2$d skipped, %3$d failed.', 'integration-workos' ),
 					$counts['synced'],
 					$counts['skipped'],
 					$counts['failed']
@@ -1139,11 +1139,11 @@ class Settings {
 			[
 				'name'             => $args['name'],
 				'selected'         => $value,
-				'show_option_none' => __( '— Select User —', 'workos' ),
+				'show_option_none' => __( '— Select User —', 'integration-workos' ),
 				'role__in'         => [ 'administrator', 'editor' ],
 			]
 		);
-		echo '<p class="description">' . esc_html__( 'Content from deleted users will be reassigned to this user.', 'workos' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Content from deleted users will be reassigned to this user.', 'integration-workos' ) . '</p>';
 	}
 
 	/**
@@ -1172,7 +1172,7 @@ class Settings {
 		$option_name = $this->env_option( 'organization_id' );
 
 		if ( ! workos()->is_enabled() ) {
-			echo '<p class="description">' . esc_html__( 'Configure API credentials and save to select an organization.', 'workos' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'Configure API credentials and save to select an organization.', 'integration-workos' ) . '</p>';
 			return;
 		}
 
@@ -1188,7 +1188,7 @@ class Settings {
 			if ( is_wp_error( $result ) ) {
 				printf(
 					'<p class="description" style="color:#d63638">%s %s</p>',
-					esc_html__( 'Could not fetch organizations:', 'workos' ),
+					esc_html__( 'Could not fetch organizations:', 'integration-workos' ),
 					esc_html( $result->get_error_message() )
 				);
 				return;
@@ -1210,13 +1210,13 @@ class Settings {
 			printf(
 				'<input type="text" value="%s" class="regular-text" disabled /> <em>%s</em>',
 				esc_attr( $org_name ),
-				esc_html__( 'Set via WORKOS_ORGANIZATION_ID constant.', 'workos' )
+				esc_html__( 'Set via WORKOS_ORGANIZATION_ID constant.', 'integration-workos' )
 			);
 			return;
 		}
 
 		echo '<select name="' . esc_attr( $option_name ) . '">';
-		printf( '<option value="">%s</option>', esc_html__( '— Select Organization —', 'workos' ) );
+		printf( '<option value="">%s</option>', esc_html__( '— Select Organization —', 'integration-workos' ) );
 		foreach ( $organizations as $org ) {
 			$org_id   = $org['id'] ?? '';
 			$org_name = $org['name'] ?? $org_id;
@@ -1230,7 +1230,7 @@ class Settings {
 		echo '</select>';
 		printf(
 			'<p><a href="#TB_inline?width=400&height=250&inlineId=workos-create-org-modal" class="thickbox">%s</a></p>',
-			esc_html__( 'Create new organization', 'workos' )
+			esc_html__( 'Create new organization', 'integration-workos' )
 		);
 
 		$this->render_create_org_modal();
@@ -1250,15 +1250,15 @@ class Settings {
 				<table class="form-table" role="presentation">
 					<tr>
 						<th scope="row">
-							<label for="workos_org_name"><?php esc_html_e( 'Organization Name', 'workos' ); ?></label>
+							<label for="workos_org_name"><?php esc_html_e( 'Organization Name', 'integration-workos' ); ?></label>
 						</th>
 						<td>
 							<input type="text" id="workos_org_name" name="org_name" class="regular-text" required />
-							<p class="description"><?php esc_html_e( 'Name for the new WorkOS organization.', 'workos' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Name for the new WorkOS organization.', 'integration-workos' ); ?></p>
 						</td>
 					</tr>
 				</table>
-				<?php submit_button( __( 'Create Organization', 'workos' ), 'secondary' ); ?>
+				<?php submit_button( __( 'Create Organization', 'integration-workos' ), 'secondary' ); ?>
 			</form>
 		</div>
 		<?php
@@ -1279,13 +1279,13 @@ class Settings {
 	private function render_webhook_events_modal(): void {
 		$event_groups = [];
 
-		$event_groups[ __( 'User Management', 'workos' ) ] = [
+		$event_groups[ __( 'User Management', 'integration-workos' ) ] = [
 			'user.created',
 			'user.updated',
 			'user.deleted',
 		];
 
-		$event_groups[ __( 'Directory Sync', 'workos' ) ] = [
+		$event_groups[ __( 'Directory Sync', 'integration-workos' ) ] = [
 			'dsync.user.created',
 			'dsync.user.updated',
 			'dsync.user.deleted',
@@ -1293,7 +1293,7 @@ class Settings {
 			'dsync.group.user_removed',
 		];
 
-		$event_groups[ __( 'Organizations', 'workos' ) ] = [
+		$event_groups[ __( 'Organizations', 'integration-workos' ) ] = [
 			'organization.created',
 			'organization.updated',
 			'organization_membership.created',
@@ -1301,17 +1301,17 @@ class Settings {
 			'organization_membership.deleted',
 		];
 
-		$event_groups[ __( 'Connections', 'workos' ) ] = [
+		$event_groups[ __( 'Connections', 'integration-workos' ) ] = [
 			'connection.activated',
 			'connection.deactivated',
 		];
 
-		$event_groups[ __( 'Authentication', 'workos' ) ] = [
+		$event_groups[ __( 'Authentication', 'integration-workos' ) ] = [
 			'authentication.email_verification_succeeded',
 		];
 
 		echo '<div id="workos-webhook-events" style="display:none">';
-		echo '<p>' . esc_html__( 'Subscribe to the following events when creating your webhook endpoint in the WorkOS Dashboard.', 'workos' ) . '</p>';
+		echo '<p>' . esc_html__( 'Subscribe to the following events when creating your webhook endpoint in the WorkOS Dashboard.', 'integration-workos' ) . '</p>';
 
 		foreach ( $event_groups as $label => $events ) {
 			echo '<h4 style="margin-bottom:4px">' . esc_html( $label ) . '</h4>';
@@ -1404,13 +1404,13 @@ class Settings {
 					)
 				),
 				esc_url( admin_url( 'users.php?workos_sync_status=out_of_sync' ) ),
-				esc_html__( 'View affected users', 'workos' )
+				esc_html__( 'View affected users', 'integration-workos' )
 			);
 		}
 
 		echo '<table id="workos-role-map-table" class="widefat"><thead><tr>';
-		echo '<th>' . esc_html__( 'WorkOS Role', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'WorkOS Role', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'WordPress Role', 'integration-workos' ) . '</th>';
 		echo '<th class="workos-role-map-actions"></th>';
 		echo '</tr></thead><tbody>';
 
@@ -1418,7 +1418,7 @@ class Settings {
 			echo '<tr class="workos-role-map-row"><td>';
 			if ( $has_dropdown ) {
 				printf( '<select name="workos_%s[role_map][keys][]">', esc_attr( $env ) );
-				echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
+				echo '<option value="">' . esc_html__( '— No Role —', 'integration-workos' ) . '</option>';
 				foreach ( $workos_roles as $slug => $name ) {
 					printf(
 						'<option value="%s" %s>%s</option>',
@@ -1437,7 +1437,7 @@ class Settings {
 			}
 			echo '</td><td>';
 			printf( '<select name="workos_%s[role_map][values][]">', esc_attr( $env ) );
-			echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
+			echo '<option value="">' . esc_html__( '— No Role —', 'integration-workos' ) . '</option>';
 			foreach ( $wp_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
@@ -1454,7 +1454,7 @@ class Settings {
 		echo '<tr class="workos-role-map-row"><td>';
 		if ( $has_dropdown ) {
 			printf( '<select name="workos_%s[role_map][keys][]">', esc_attr( $env ) );
-			echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
+			echo '<option value="">' . esc_html__( '— No Role —', 'integration-workos' ) . '</option>';
 			foreach ( $workos_roles as $slug => $name ) {
 				printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
 			}
@@ -1463,12 +1463,12 @@ class Settings {
 			printf(
 				'<input type="text" name="workos_%s[role_map][keys][]" value="" class="regular-text" placeholder="%s" />',
 				esc_attr( $env ),
-				esc_attr__( 'New WorkOS role...', 'workos' )
+				esc_attr__( 'New WorkOS role...', 'integration-workos' )
 			);
 		}
 		echo '</td><td>';
 		printf( '<select name="workos_%s[role_map][values][]">', esc_attr( $env ) );
-		echo '<option value="">' . esc_html__( '— No Role —', 'workos' ) . '</option>';
+		echo '<option value="">' . esc_html__( '— No Role —', 'integration-workos' ) . '</option>';
 		foreach ( $wp_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
 		}
@@ -1480,7 +1480,7 @@ class Settings {
 		// Add Mapping button — hidden until JS loads.
 		echo '<button type="button" id="workos-role-map-add" class="button" style="display:none">';
 		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
-		echo esc_html__( 'Add Mapping', 'workos' );
+		echo esc_html__( 'Add Mapping', 'integration-workos' );
 		echo '</button>';
 
 		// Sync Roles to WorkOS button — only when plugin is enabled and org is configured.
@@ -1491,12 +1491,12 @@ class Settings {
 			echo '<input type="hidden" name="editing_env" value="' . esc_attr( $this->get_editing_environment() ) . '" />';
 			echo '<button type="submit" class="button">';
 			echo '<span class="dashicons dashicons-update" style="vertical-align:middle; margin-right:2px"></span> ';
-			echo esc_html__( 'Sync Roles to WorkOS', 'workos' );
+			echo esc_html__( 'Sync Roles to WorkOS', 'integration-workos' );
 			echo '</button>';
 			echo '</form>';
 		}
 
-		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'The "member" role is used as the default fallback.', 'workos' ) . '</p>';
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'The "member" role is used as the default fallback.', 'integration-workos' ) . '</p>';
 	}
 
 	/**
@@ -1510,7 +1510,7 @@ class Settings {
 
 		// Prepend the default fallback option.
 		$all_roles = array_merge(
-			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			[ '__default__' => __( 'Default (all roles)', 'integration-workos' ) ],
 			$wp_roles
 		);
 
@@ -1534,9 +1534,9 @@ class Settings {
 		}
 
 		echo '<table id="workos-redirect-urls-table" class="widefat"><thead><tr>';
-		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'Redirect URL', 'workos' ) . '</th>';
-		echo '<th class="workos-redirect-url-first-login">' . esc_html__( 'First Login Only', 'workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'WordPress Role', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Redirect URL', 'integration-workos' ) . '</th>';
+		echo '<th class="workos-redirect-url-first-login">' . esc_html__( 'First Login Only', 'integration-workos' ) . '</th>';
 		echo '<th class="workos-redirect-url-actions"></th>';
 		echo '</tr></thead><tbody>';
 
@@ -1562,7 +1562,7 @@ class Settings {
 				esc_attr( $env ),
 				$i,
 				esc_attr( $url ),
-				esc_attr__( '/welcome', 'workos' )
+				esc_attr__( '/welcome', 'integration-workos' )
 			);
 			echo '</td><td class="workos-redirect-url-first-login">';
 			printf(
@@ -1583,7 +1583,7 @@ class Settings {
 		// Empty row for adding new redirects (no-JS fallback).
 		echo '<tr class="workos-redirect-url-row"><td>';
 		printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), $i );
-		echo '<option value="">' . esc_html__( '— Select Role —', 'workos' ) . '</option>';
+		echo '<option value="">' . esc_html__( '— Select Role —', 'integration-workos' ) . '</option>';
 		foreach ( $all_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
 		}
@@ -1593,7 +1593,7 @@ class Settings {
 			'<input type="text" name="workos_%s[redirect_urls][values][%d]" value="" class="regular-text" placeholder="%s" />',
 			esc_attr( $env ),
 			$i,
-			esc_attr__( '/welcome', 'workos' )
+			esc_attr__( '/welcome', 'integration-workos' )
 		);
 		echo '</td><td class="workos-redirect-url-first-login">';
 		printf(
@@ -1613,10 +1613,10 @@ class Settings {
 		// Add Redirect button — hidden until JS loads.
 		echo '<button type="button" id="workos-redirect-urls-add" class="button" style="display:none">';
 		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
-		echo esc_html__( 'Add Redirect', 'workos' );
+		echo esc_html__( 'Add Redirect', 'integration-workos' );
 		echo '</button>';
 
-		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /welcome) to redirect users to after login, per role. Use "Default (all roles)" as a fallback for roles without a specific redirect.', 'workos' ) . '</p>';
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /welcome) to redirect users to after login, per role. Use "Default (all roles)" as a fallback for roles without a specific redirect.', 'integration-workos' ) . '</p>';
 	}
 
 	/**
@@ -1630,7 +1630,7 @@ class Settings {
 
 		// Prepend the default fallback option.
 		$all_roles = array_merge(
-			[ '__default__' => __( 'Default (all roles)', 'workos' ) ],
+			[ '__default__' => __( 'Default (all roles)', 'integration-workos' ) ],
 			$wp_roles
 		);
 
@@ -1646,8 +1646,8 @@ class Settings {
 		}
 
 		echo '<table id="workos-logout-redirect-urls-table" class="widefat"><thead><tr>';
-		echo '<th>' . esc_html__( 'WordPress Role', 'workos' ) . '</th>';
-		echo '<th>' . esc_html__( 'Redirect URL', 'workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'WordPress Role', 'integration-workos' ) . '</th>';
+		echo '<th>' . esc_html__( 'Redirect URL', 'integration-workos' ) . '</th>';
 		echo '<th class="workos-logout-redirect-url-actions"></th>';
 		echo '</tr></thead><tbody>';
 
@@ -1670,7 +1670,7 @@ class Settings {
 				esc_attr( $env ),
 				$i,
 				esc_attr( $url ),
-				esc_attr__( '/goodbye', 'workos' )
+				esc_attr__( '/goodbye', 'integration-workos' )
 			);
 			echo '</td></tr>';
 			++$i;
@@ -1679,7 +1679,7 @@ class Settings {
 		// Empty row for adding new redirects (no-JS fallback).
 		echo '<tr class="workos-logout-redirect-url-row"><td>';
 		printf( '<select name="workos_%s[logout_redirect_urls][keys][%d]">', esc_attr( $env ), $i );
-		echo '<option value="">' . esc_html__( '— Select Role —', 'workos' ) . '</option>';
+		echo '<option value="">' . esc_html__( '— Select Role —', 'integration-workos' ) . '</option>';
 		foreach ( $all_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
 		}
@@ -1689,7 +1689,7 @@ class Settings {
 			'<input type="text" name="workos_%s[logout_redirect_urls][values][%d]" value="" class="regular-text" placeholder="%s" />',
 			esc_attr( $env ),
 			$i,
-			esc_attr__( '/goodbye', 'workos' )
+			esc_attr__( '/goodbye', 'integration-workos' )
 		);
 		echo '</td></tr>';
 
@@ -1698,10 +1698,10 @@ class Settings {
 		// Add Redirect button — hidden until JS loads.
 		echo '<button type="button" id="workos-logout-redirect-urls-add" class="button" style="display:none">';
 		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
-		echo esc_html__( 'Add Redirect', 'workos' );
+		echo esc_html__( 'Add Redirect', 'integration-workos' );
 		echo '</button>';
 
-		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /goodbye) to redirect users to after logout, per role. Use "Default (all roles)" as a fallback for roles without a specific redirect.', 'workos' ) . '</p>';
+		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'Enter a URL or path (e.g. /goodbye) to redirect users to after logout, per role. Use "Default (all roles)" as a fallback for roles without a specific redirect.', 'integration-workos' ) . '</p>';
 	}
 
 	/**
@@ -1899,7 +1899,7 @@ class Settings {
 		$settings_link = sprintf(
 			'<a href="%s">%s</a>',
 			esc_url( admin_url( 'admin.php?page=workos' ) ),
-			esc_html__( 'Settings', 'workos' )
+			esc_html__( 'Settings', 'integration-workos' )
 		);
 		array_unshift( $links, $settings_link );
 		return $links;

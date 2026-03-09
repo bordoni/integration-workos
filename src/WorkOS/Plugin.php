@@ -2,7 +2,7 @@
 /**
  * Main plugin orchestrator.
  *
- * Loaded directly by workos.php before the Composer autoloader
+ * Loaded directly by integration-workos.php before the Composer autoloader
  * is available, so this file must NOT rely on autoloading.
  *
  * @package WorkOS
@@ -123,7 +123,7 @@ class Plugin {
 				static function () {
 					printf(
 						'<div class="notice notice-error"><p>%s</p></div>',
-						esc_html__( 'WorkOS requires PHP 7.4 or later.', 'workos' )
+						esc_html__( 'Integration with WorkOS requires PHP 7.4 or later.', 'integration-workos' )
 					);
 				}
 			);
@@ -169,7 +169,7 @@ class Plugin {
 	 * @return void
 	 */
 	public static function activate(): void {
-		$dir        = plugin_dir_path( __DIR__ . '/../../workos.php' );
+		$dir        = plugin_dir_path( __DIR__ . '/../../integration-workos.php' );
 		$autoloader = $dir . 'vendor/autoload.php';
 
 		if ( file_exists( $autoloader ) ) {
@@ -233,7 +233,7 @@ class Plugin {
 	 * @return void
 	 */
 	public function load_textdomain(): void {
-		load_plugin_textdomain( 'workos', false, dirname( $this->basename ) . '/languages' );
+		load_plugin_textdomain( 'integration-workos', false, dirname( $this->basename ) . '/languages' );
 	}
 
 	/**
@@ -304,7 +304,7 @@ class Plugin {
 				static function () {
 					printf(
 						'<div class="notice notice-error"><p>%s</p></div>',
-						esc_html__( 'WorkOS Identity: Composer autoloader not found. Please run `composer install`.', 'workos' )
+						esc_html__( 'Integration with WorkOS: Composer autoloader not found. Please run `composer install`.', 'integration-workos' )
 					);
 				}
 			);

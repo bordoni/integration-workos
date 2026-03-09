@@ -8,7 +8,7 @@
 	"icon": "lock",
 	"description": "Display a WorkOS login or logout button.",
 	"keywords": [ "login", "auth", "workos", "sso" ],
-	"textdomain": "workos",
+	"textdomain": "integration-workos",
 	"supports": {
 		"html": false,
 		"multiple": true

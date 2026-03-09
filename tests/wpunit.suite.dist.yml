@@ -14,8 +14,8 @@ modules:
             tablePrefix: test_
             domain: "%WP_DOMAIN%"
             adminEmail: admin@workos.test
-            title: "WorkOS Identity Tests"
+            title: "Integration with WorkOS Tests"
             plugins:
-                - workos/workos.php
+                - integration-workos/integration-workos.php
             activatePlugins:
-                - workos/workos.php
+                - integration-workos/integration-workos.php

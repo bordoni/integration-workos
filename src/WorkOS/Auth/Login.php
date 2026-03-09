@@ -196,12 +196,12 @@ class Login {
 				esc_html(
 					sprintf(
 					/* translators: 1: error code, 2: error description */
-						__( 'WorkOS authentication error: %1$s — %2$s', 'workos' ),
+						__( 'WorkOS authentication error: %1$s — %2$s', 'integration-workos' ),
 						$error,
 						$error_desc
 					)
 				),
-				esc_html__( 'Authentication Error', 'workos' ),
+				esc_html__( 'Authentication Error', 'integration-workos' ),
 				[ 'response' => 403 ]
 			);
 		}
@@ -214,8 +214,8 @@ class Login {
 
 		if ( ! wp_verify_nonce( $nonce, 'workos_auth' ) ) {
 			wp_die(
-				esc_html__( 'Security check failed. Please try logging in again.', 'workos' ),
-				esc_html__( 'Authentication Error', 'workos' ),
+				esc_html__( 'Security check failed. Please try logging in again.', 'integration-workos' ),
+				esc_html__( 'Authentication Error', 'integration-workos' ),
 				[ 'response' => 403 ]
 			);
 		}
@@ -226,7 +226,7 @@ class Login {
 		if ( is_wp_error( $result ) ) {
 			wp_die(
 				esc_html( $result->get_error_message() ),
-				esc_html__( 'Authentication Error', 'workos' ),
+				esc_html__( 'Authentication Error', 'integration-workos' ),
 				[ 'response' => 403 ]
 			);
 		}
@@ -237,7 +237,7 @@ class Login {
 		if ( is_wp_error( $wp_user ) ) {
 			wp_die(
 				esc_html( $wp_user->get_error_message() ),
-				esc_html__( 'Authentication Error', 'workos' ),
+				esc_html__( 'Authentication Error', 'integration-workos' ),
 				[ 'response' => 500 ]
 			);
 		}

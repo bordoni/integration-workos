@@ -43,7 +43,7 @@ class UserList {
 	 * @return array
 	 */
 	public function add_column( array $columns ): array {
-		$columns['workos'] = __( 'WorkOS', 'workos' );
+		$columns['workos'] = __( 'WorkOS', 'integration-workos' );
 		return $columns;
 	}
 
@@ -101,7 +101,7 @@ class UserList {
 		$html .= sprintf(
 			'<span class="view"><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></span>',
 			esc_url( $dashboard_url ),
-			esc_html__( 'View in WorkOS', 'workos' )
+			esc_html__( 'View in WorkOS', 'integration-workos' )
 		);
 
 		if ( workos()->is_enabled() && current_user_can( 'edit_users' ) ) {
@@ -119,7 +119,7 @@ class UserList {
 			$html .= sprintf(
 				' | <span class="resync"><a href="%s">%s</a></span>',
 				esc_url( $resync_url ),
-				esc_html__( 'Re-sync', 'workos' )
+				esc_html__( 'Re-sync', 'integration-workos' )
 			);
 		}
 
@@ -165,12 +165,12 @@ class UserList {
 					esc_attr(
 						sprintf(
 							/* translators: 1: expected WP role, 2: actual WP role */
-							__( 'Expected: %1$s, Actual: %2$s', 'workos' ),
+							__( 'Expected: %1$s, Actual: %2$s', 'integration-workos' ),
 							$expected,
 							$actual_wp_role
 						)
 					),
-					esc_html__( 'Role mismatch', 'workos' )
+					esc_html__( 'Role mismatch', 'integration-workos' )
 				);
 			}
 		}
@@ -204,7 +204,7 @@ class UserList {
 			$html .= sprintf(
 				'<span class="sync"><a href="%s">%s</a></span>',
 				esc_url( $url ),
-				esc_html__( 'Sync to WorkOS', 'workos' )
+				esc_html__( 'Sync to WorkOS', 'integration-workos' )
 			);
 			$html .= '</div>';
 		}
@@ -224,9 +224,9 @@ class UserList {
 			return $actions;
 		}
 
-		$actions['workos_bulk_sync']       = __( 'Sync to WorkOS', 'workos' );
-		$actions['workos_bulk_resync']     = __( 'Re-sync from WorkOS', 'workos' );
-		$actions['workos_bulk_sync_roles'] = __( 'Sync Roles from WorkOS', 'workos' );
+		$actions['workos_bulk_sync']       = __( 'Sync to WorkOS', 'integration-workos' );
+		$actions['workos_bulk_resync']     = __( 'Re-sync from WorkOS', 'integration-workos' );
+		$actions['workos_bulk_sync_roles'] = __( 'Sync Roles from WorkOS', 'integration-workos' );
 		return $actions;
 	}
 
@@ -276,7 +276,7 @@ class UserList {
 				++$failed;
 				$errors[] = sprintf(
 					/* translators: 1: user ID, 2: error message */
-					__( 'User #%1$d: %2$s', 'workos' ),
+					__( 'User #%1$d: %2$s', 'integration-workos' ),
 					$user_id,
 					$result->get_error_message()
 				);
@@ -325,7 +325,7 @@ class UserList {
 				++$failed;
 				$errors[] = sprintf(
 					/* translators: 1: user ID, 2: error message */
-					__( 'User #%1$d: %2$s', 'workos' ),
+					__( 'User #%1$d: %2$s', 'integration-workos' ),
 					$user_id,
 					$result->get_error_message()
 				);
@@ -363,7 +363,7 @@ class UserList {
 		check_admin_referer( 'workos_sync_user_' . $user_id );
 
 		if ( ! current_user_can( 'edit_users' ) ) {
-			wp_die( esc_html__( 'You do not have permission to perform this action.', 'workos' ) );
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'integration-workos' ) );
 		}
 
 		$result = UserSync::sync_existing_user( $user_id );
@@ -398,7 +398,7 @@ class UserList {
 		check_admin_referer( 'workos_resync_user_' . $user_id );
 
 		if ( ! current_user_can( 'edit_users' ) ) {
-			wp_die( esc_html__( 'You do not have permission to perform this action.', 'workos' ) );
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'integration-workos' ) );
 		}
 
 		$result = UserSync::resync_from_workos( $user_id );
@@ -493,7 +493,7 @@ class UserList {
 			'<a href="%s"%s>%s <span class="count">(%d)</span></a>',
 			esc_url( admin_url( 'users.php?workos_sync_status=out_of_sync' ) ),
 			$class,
-			esc_html__( 'Out of sync', 'workos' ),
+			esc_html__( 'Out of sync', 'integration-workos' ),
 			$count
 		);
 

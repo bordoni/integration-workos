@@ -32,14 +32,14 @@ class Ajax {
 		check_ajax_referer( 'workos_login_button', 'nonce' );
 
 		if ( ! workos()->is_enabled() ) {
-			wp_send_json_error( [ 'message' => __( 'WorkOS is not configured.', 'workos' ) ] );
+			wp_send_json_error( [ 'message' => __( 'WorkOS is not configured.', 'integration-workos' ) ] );
 		}
 
 		$email    = sanitize_email( wp_unslash( $_POST['email'] ?? '' ) );
 		$password = wp_unslash( $_POST['password'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 		if ( ! $email || ! $password ) {
-			wp_send_json_error( [ 'message' => __( 'Email and password are required.', 'workos' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Email and password are required.', 'integration-workos' ) ] );
 		}
 
 		$result = workos()->api()->authenticate_with_password( $email, $password );

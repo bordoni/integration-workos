@@ -379,13 +379,13 @@ class Client {
 	public function verify_access_token( string $token ) {
 		$parts = explode( '.', $token );
 		if ( 3 !== count( $parts ) ) {
-			return new \WP_Error( 'workos_invalid_token', __( 'Invalid token format.', 'workos' ) );
+			return new \WP_Error( 'workos_invalid_token', __( 'Invalid token format.', 'integration-workos' ) );
 		}
 
 		// Decode header to get kid.
 		$header = json_decode( self::base64url_decode( $parts[0] ), true );
 		if ( empty( $header['kid'] ) || empty( $header['alg'] ) ) {
-			return new \WP_Error( 'workos_invalid_token', __( 'Invalid token header.', 'workos' ) );
+			return new \WP_Error( 'workos_invalid_token', __( 'Invalid token header.', 'integration-workos' ) );
 		}
 
 		// Fetch JWKS.
@@ -405,18 +405,18 @@ class Client {
 
 		$valid = openssl_verify( $signing_input, $signature, $public_key, OPENSSL_ALGO_SHA256 );
 		if ( 1 !== $valid ) {
-			return new \WP_Error( 'workos_invalid_token', __( 'Token signature verification failed.', 'workos' ) );
+			return new \WP_Error( 'workos_invalid_token', __( 'Token signature verification failed.', 'integration-workos' ) );
 		}
 
 		// Decode payload.
 		$payload = json_decode( self::base64url_decode( $parts[1] ), true );
 		if ( ! $payload ) {
-			return new \WP_Error( 'workos_invalid_token', __( 'Invalid token payload.', 'workos' ) );
+			return new \WP_Error( 'workos_invalid_token', __( 'Invalid token payload.', 'integration-workos' ) );
 		}
 
 		// Check expiration.
 		if ( isset( $payload['exp'] ) && $payload['exp'] < time() ) {
-			return new \WP_Error( 'workos_token_expired', __( 'Token has expired.', 'workos' ) );
+			return new \WP_Error( 'workos_token_expired', __( 'Token has expired.', 'integration-workos' ) );
 		}
 
 		return $payload;
@@ -441,7 +441,7 @@ class Client {
 
 			$jwks = json_decode( wp_remote_retrieve_body( $response ), true );
 			if ( empty( $jwks['keys'] ) ) {
-				return new \WP_Error( 'workos_jwks_error', __( 'Failed to fetch JWKS.', 'workos' ) );
+				return new \WP_Error( 'workos_jwks_error', __( 'Failed to fetch JWKS.', 'integration-workos' ) );
 			}
 
 			set_transient( $cache_key, $jwks, HOUR_IN_SECONDS );
@@ -456,7 +456,7 @@ class Client {
 		// Key not found — clear cache and retry once.
 		delete_transient( $cache_key );
 
-		return new \WP_Error( 'workos_jwk_not_found', __( 'JWK not found for the given key ID.', 'workos' ) );
+		return new \WP_Error( 'workos_jwk_not_found', __( 'JWK not found for the given key ID.', 'integration-workos' ) );
 	}
 
 	/**
@@ -468,7 +468,7 @@ class Client {
 	 */
 	private static function jwk_to_pem( array $jwk ) {
 		if ( 'RSA' !== ( $jwk['kty'] ?? '' ) ) {
-			return new \WP_Error( 'workos_unsupported_key', __( 'Only RSA keys are supported.', 'workos' ) );
+			return new \WP_Error( 'workos_unsupported_key', __( 'Only RSA keys are supported.', 'integration-workos' ) );
 		}
 
 		$n = self::base64url_decode( $jwk['n'] );
