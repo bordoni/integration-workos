@@ -83,7 +83,7 @@ jobs:
 
       - name: Set up plugin
         run: |
-          ${SLIC_BIN} use workos
+          ${SLIC_BIN} use integration-workos
           ${SLIC_BIN} composer install
 
       - name: Run wpunit tests

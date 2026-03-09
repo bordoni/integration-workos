@@ -173,7 +173,7 @@ class Settings {
 			'manage_options',
 			'workos',
 			[ $this, 'render_page' ],
-			'dashicons-shield',
+			'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCA1OSA1MSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMCAyNS40MDAyQzAgMjYuNTEzOSAwLjI5MzA3OSAyNy42Mjc2IDAuODU5Njk5IDI4LjU4NUwxMS4xMzcgNDYuMzg0N0MxMi4xOTIxIDQ4LjIwMTggMTMuNzk0MyA0OS42ODY3IDE1Ljc4NzIgNTAuMzUxQzE5LjcxNDUgNTEuNjYwMSAyMy43Nzg1IDQ5Ljk3OTggMjUuNzEyOCA0Ni42MTkyTDI4LjE5NDIgNDIuMzIwN0wxOC40MDU0IDI1LjQwMDJMMjguNzQxMyA3LjQ4MzI5TDMxLjIyMjcgMy4xODQ4QzMxLjk2NTIgMS44OTUyNSAzMi45NjE3IDAuODQwMTYxIDM0LjEzNCAwSDMzLjA1OTRIMTguMTkwNUMxNS4zOTY0IDAgMTIuODE3MyAxLjQ4NDk0IDExLjQzMDEgMy45MDc3MkwwLjg1OTY5OSAyMi4yMTU0QzAuMjkzMDc5IDIzLjE3MjggMCAyNC4yODY1IDAgMjUuNDAwMloiIGZpbGw9ImJsYWNrIi8+PHBhdGggZD0iTTU4LjYxNTEgMjUuNDAwMUM1OC42MTUxIDI0LjI4NjQgNTguMzIyIDIzLjE3MjcgNTcuNzU1NCAyMi4yMTUzTDQ3LjM0MTMgNC4xODExOEM0NS40MDcgMC44NDAwNzggNDEuMzQzIC0wLjg0MDI0MyAzNy40MTU3IDAuNDQ5MzA2QzM1LjQyMjggMS4xMTM2MiAzMy44MjA2IDIuNTk4NTUgMzIuNzY1NSA0LjQxNTY1TDMwLjQyMDkgOC40NjAxNEw0MC4yMDk3IDI1LjQwMDFMMjkuODczOCA0My4zMTdMMjcuMzkyNCA0Ny42MTU1QzI2LjY0OTkgNDguODg1NiAyNS42NTM1IDQ5Ljk2MDIgMjQuNDgxMSA1MC44MDAzSDI1LjU1NThINDAuNDI0N0M0My4yMTg3IDUwLjgwMDMgNDUuNzk3OCA0OS4zMTU0IDQ3LjE4NSA0Ni44OTI2TDU3Ljc1NTQgMjguNTg0OUM1OC4zMjIgMjcuNjI3NSA1OC42MTUxIDI2LjUxMzggNTguNjE1MSAyNS40MDAxWiIgZmlsbD0iYmxhY2siLz48L3N2Zz4=',
 			81
 		);
 	}
@@ -1398,7 +1398,7 @@ class Settings {
 							'%d user has a WordPress role that doesn\'t match their WorkOS role mapping.',
 							'%d users have a WordPress role that doesn\'t match their WorkOS role mapping.',
 							$count,
-							'workos'
+							'integration-workos'
 						),
 						$count
 					)
@@ -1546,7 +1546,7 @@ class Settings {
 			$first_login = ! empty( $entry['first_login_only'] );
 
 			echo '<tr class="workos-redirect-url-row"><td>';
-			printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), $i );
+			printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), absint( $i ) );
 			foreach ( $all_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
@@ -1560,7 +1560,7 @@ class Settings {
 			printf(
 				'<input type="text" name="workos_%s[redirect_urls][values][%d]" value="%s" class="regular-text" placeholder="%s" />',
 				esc_attr( $env ),
-				$i,
+				absint( $i ),
 				esc_attr( $url ),
 				esc_attr__( '/welcome', 'integration-workos' )
 			);
@@ -1568,12 +1568,12 @@ class Settings {
 			printf(
 				'<input type="hidden" name="workos_%s[redirect_urls][first_login][%d]" value="0" />',
 				esc_attr( $env ),
-				$i
+				absint( $i )
 			);
 			printf(
 				'<input type="checkbox" name="workos_%s[redirect_urls][first_login][%d]" value="1" %s />',
 				esc_attr( $env ),
-				$i,
+				absint( $i ),
 				checked( $first_login, true, false )
 			);
 			echo '</td></tr>';
@@ -1582,7 +1582,7 @@ class Settings {
 
 		// Empty row for adding new redirects (no-JS fallback).
 		echo '<tr class="workos-redirect-url-row"><td>';
-		printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), $i );
+		printf( '<select name="workos_%s[redirect_urls][keys][%d]">', esc_attr( $env ), absint( $i ) );
 		echo '<option value="">' . esc_html__( '— Select Role —', 'integration-workos' ) . '</option>';
 		foreach ( $all_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
@@ -1592,19 +1592,19 @@ class Settings {
 		printf(
 			'<input type="text" name="workos_%s[redirect_urls][values][%d]" value="" class="regular-text" placeholder="%s" />',
 			esc_attr( $env ),
-			$i,
+			absint( $i ),
 			esc_attr__( '/welcome', 'integration-workos' )
 		);
 		echo '</td><td class="workos-redirect-url-first-login">';
 		printf(
 			'<input type="hidden" name="workos_%s[redirect_urls][first_login][%d]" value="0" />',
 			esc_attr( $env ),
-			$i
+			absint( $i )
 		);
 		printf(
 			'<input type="checkbox" name="workos_%s[redirect_urls][first_login][%d]" value="1" />',
 			esc_attr( $env ),
-			$i
+			absint( $i )
 		);
 		echo '</td></tr>';
 
@@ -1654,7 +1654,7 @@ class Settings {
 		$i = 0;
 		foreach ( $map as $role => $url ) {
 			echo '<tr class="workos-logout-redirect-url-row"><td>';
-			printf( '<select name="workos_%s[logout_redirect_urls][keys][%d]">', esc_attr( $env ), $i );
+			printf( '<select name="workos_%s[logout_redirect_urls][keys][%d]">', esc_attr( $env ), absint( $i ) );
 			foreach ( $all_roles as $slug => $name ) {
 				printf(
 					'<option value="%s" %s>%s</option>',
@@ -1668,7 +1668,7 @@ class Settings {
 			printf(
 				'<input type="text" name="workos_%s[logout_redirect_urls][values][%d]" value="%s" class="regular-text" placeholder="%s" />',
 				esc_attr( $env ),
-				$i,
+				absint( $i ),
 				esc_attr( $url ),
 				esc_attr__( '/goodbye', 'integration-workos' )
 			);
@@ -1678,7 +1678,7 @@ class Settings {
 
 		// Empty row for adding new redirects (no-JS fallback).
 		echo '<tr class="workos-logout-redirect-url-row"><td>';
-		printf( '<select name="workos_%s[logout_redirect_urls][keys][%d]">', esc_attr( $env ), $i );
+		printf( '<select name="workos_%s[logout_redirect_urls][keys][%d]">', esc_attr( $env ), absint( $i ) );
 		echo '<option value="">' . esc_html__( '— Select Role —', 'integration-workos' ) . '</option>';
 		foreach ( $all_roles as $slug => $name ) {
 			printf( '<option value="%s">%s</option>', esc_attr( $slug ), esc_html( $name ) );
@@ -1688,7 +1688,7 @@ class Settings {
 		printf(
 			'<input type="text" name="workos_%s[logout_redirect_urls][values][%d]" value="" class="regular-text" placeholder="%s" />',
 			esc_attr( $env ),
-			$i,
+			absint( $i ),
 			esc_attr__( '/goodbye', 'integration-workos' )
 		);
 		echo '</td></tr>';

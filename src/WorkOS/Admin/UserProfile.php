@@ -164,7 +164,7 @@ class UserProfile {
 					rawurlencode( $environment_id ),
 					rawurlencode( $local_meta['org_id'] )
 				);
-				$org_value = '<code><a href="' . esc_url( $org_dashboard_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $local_meta['org_id'] ) . '</a></code>';
+				$org_value         = '<code><a href="' . esc_url( $org_dashboard_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $local_meta['org_id'] ) . '</a></code>';
 			}
 
 			$this->render_form_row( __( 'Organization ID', 'integration-workos' ), $org_value );
@@ -180,10 +180,12 @@ class UserProfile {
 			$this->render_form_row( __( 'Email', 'integration-workos' ), $email_html );
 
 			// Name.
-			$name_parts = array_filter( [
-				$workos_user['first_name'] ?? '',
-				$workos_user['last_name'] ?? '',
-			] );
+			$name_parts = array_filter(
+				[
+					$workos_user['first_name'] ?? '',
+					$workos_user['last_name'] ?? '',
+				]
+			);
 			if ( $name_parts ) {
 				$this->render_form_row( __( 'Name', 'integration-workos' ), esc_html( implode( ' ', $name_parts ) ) );
 			}

@@ -552,7 +552,7 @@ class UserList {
 							'%d user synced to WorkOS.',
 							'%d users synced to WorkOS.',
 							$synced,
-							'workos'
+							'integration-workos'
 						),
 						$synced
 					)
@@ -570,7 +570,7 @@ class UserList {
 							'%d user re-synced from WorkOS.',
 							'%d users re-synced from WorkOS.',
 							$resynced,
-							'workos'
+							'integration-workos'
 						),
 						$resynced
 					)
@@ -585,7 +585,7 @@ class UserList {
 					'%d user failed to sync.',
 					'%d users failed to sync.',
 					$failed,
-					'workos'
+					'integration-workos'
 				),
 				$failed
 			);
@@ -610,7 +610,7 @@ class UserList {
 							'%d user skipped (not applicable).',
 							'%d users skipped (not applicable).',
 							$skipped,
-							'workos'
+							'integration-workos'
 						),
 						$skipped
 					)
@@ -633,7 +633,7 @@ class UserList {
 							'%d user role synced from WorkOS mapping.',
 							'%d user roles synced from WorkOS mapping.',
 							$roles_synced,
-							'workos'
+							'integration-workos'
 						),
 						$roles_synced
 					)
@@ -651,7 +651,7 @@ class UserList {
 							'%d user skipped (no WorkOS role found).',
 							'%d users skipped (no WorkOS role found).',
 							$roles_skipped,
-							'workos'
+							'integration-workos'
 						),
 						$roles_skipped
 					)
