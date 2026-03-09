@@ -89,21 +89,23 @@ class EventLogger {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$table = "{$wpdb->prefix}workos_activity_log";
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery
 		if ( $event_type ) {
 			$total = (int) $wpdb->get_var(
-				$wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE event_type = %s", $event_type )
+				$wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE event_type = %s', $table, $event_type )
 			);
 
 			$items = $wpdb->get_results(
-				$wpdb->prepare( "SELECT * FROM {$table} WHERE event_type = %s ORDER BY created_at DESC LIMIT %d OFFSET %d", $event_type, $per_page, $offset ),
+				$wpdb->prepare( 'SELECT * FROM %i WHERE event_type = %s ORDER BY created_at DESC LIMIT %d OFFSET %d', $table, $event_type, $per_page, $offset ),
 				ARRAY_A
 			);
 		} else {
-			$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+			$total = (int) $wpdb->get_var(
+				$wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table )
+			);
 
 			$items = $wpdb->get_results(
-				$wpdb->prepare( "SELECT * FROM {$table} ORDER BY created_at DESC LIMIT %d OFFSET %d", $per_page, $offset ),
+				$wpdb->prepare( 'SELECT * FROM %i ORDER BY created_at DESC LIMIT %d OFFSET %d', $table, $per_page, $offset ),
 				ARRAY_A
 			);
 		}
@@ -131,7 +133,8 @@ class EventLogger {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$total_logins = (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$table} WHERE event_type = 'login' AND created_at >= %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT COUNT(*) FROM %i WHERE event_type = 'login' AND created_at >= %s",
+				$table,
 				$since
 			)
 		);
@@ -139,7 +142,8 @@ class EventLogger {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$failed_logins = (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM {$table} WHERE event_type IN ('login_failed', 'login_denied') AND created_at >= %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT COUNT(*) FROM %i WHERE event_type IN ('login_failed', 'login_denied') AND created_at >= %s",
+				$table,
 				$since
 			)
 		);
@@ -147,7 +151,8 @@ class EventLogger {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$unique_users = (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(DISTINCT user_id) FROM {$table} WHERE event_type = 'login' AND user_id > 0 AND created_at >= %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT COUNT(DISTINCT user_id) FROM %i WHERE event_type = 'login' AND user_id > 0 AND created_at >= %s",
+				$table,
 				$since
 			)
 		);
@@ -166,7 +171,7 @@ class EventLogger {
 		global $wpdb;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$wpdb->query( "TRUNCATE TABLE {$wpdb->prefix}workos_activity_log" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( $wpdb->prepare( 'TRUNCATE TABLE %i', "{$wpdb->prefix}workos_activity_log" ) );
 	}
 
 	/**

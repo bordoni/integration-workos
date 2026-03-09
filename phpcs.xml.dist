@@ -29,14 +29,6 @@
 		<exclude name="WordPress.DB.DirectDatabaseQuery.NoCaching" />
 	</rule>
 
-	<!--
-		Table name interpolation in $wpdb->prepare() is safe when the table name
-		comes from $wpdb->prefix (not user input).
-	-->
-	<rule ref="WordPress.DB.PreparedSQL.InterpolatedNotPrepared">
-		<exclude-pattern>*/Organization/Manager.php</exclude-pattern>
-	</rule>
-
 	<!-- meta_key/meta_value queries are intentional for user lookups by WorkOS ID -->
 	<rule ref="WordPress.DB.SlowDBQuery.slow_db_query_meta_key">
 		<severity>0</severity>
@@ -93,7 +85,7 @@
 	<rule ref="PHPCompatibilityWP" />
 
 	<!-- WordPress minimum versions -->
-	<config name="minimum_wp_version" value="5.9" />
+	<config name="minimum_wp_version" value="6.2" />
 
 	<!-- Text domain -->
 	<rule ref="WordPress.WP.I18n">

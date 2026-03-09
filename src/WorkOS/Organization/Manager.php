@@ -251,8 +251,7 @@ class Manager {
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE workos_org_id = %s", $workos_org_id )
+			$wpdb->prepare( 'SELECT * FROM %i WHERE workos_org_id = %s', $table, $workos_org_id )
 		);
 
 		wp_cache_set( $cache_key, $row ? $row : 0, 'workos' );
@@ -279,8 +278,7 @@ class Manager {
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id )
+			$wpdb->prepare( 'SELECT * FROM %i WHERE id = %d', $table, $id )
 		);
 
 		wp_cache_set( $cache_key, $row ? $row : 0, 'workos' );
@@ -314,11 +312,12 @@ class Manager {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$result = $wpdb->get_results(
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT o.* FROM {$org_table} o
-				INNER JOIN {$site_table} s ON o.id = s.org_id
+				'SELECT o.* FROM %i o
+				INNER JOIN %i s ON o.id = s.org_id
 				WHERE s.site_id = %d
-				ORDER BY o.name",
+				ORDER BY o.name',
+				$org_table,
+				$site_table,
 				$site_id
 			)
 		);
@@ -343,10 +342,11 @@ class Manager {
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_org_memberships';
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$existing = $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT id FROM {$table} WHERE org_id = %d AND user_id = %d",
+				'SELECT id FROM %i WHERE org_id = %d AND user_id = %d',
+				$table,
 				$org_id,
 				$user_id
 			)
@@ -430,12 +430,13 @@ class Manager {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$result = $wpdb->get_results(
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT o.*, m.workos_role, m.wp_role, m.joined_at
-				FROM {$org_table} o
-				INNER JOIN {$mem_table} m ON o.id = m.org_id
+				'SELECT o.*, m.workos_role, m.wp_role, m.joined_at
+				FROM %i o
+				INNER JOIN %i m ON o.id = m.org_id
 				WHERE m.user_id = %d
-				ORDER BY o.name",
+				ORDER BY o.name',
+				$org_table,
+				$mem_table,
 				$user_id
 			)
 		);
@@ -467,10 +468,11 @@ class Manager {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$membership_id = $wpdb->get_var(
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT m.workos_membership_id FROM {$mem_table} m
-				INNER JOIN {$org_table} o ON m.org_id = o.id
-				WHERE m.user_id = %d AND o.workos_org_id = %s",
+				'SELECT m.workos_membership_id FROM %i m
+				INNER JOIN %i o ON m.org_id = o.id
+				WHERE m.user_id = %d AND o.workos_org_id = %s',
+				$mem_table,
+				$org_table,
 				$wp_user_id,
 				$workos_org_id
 			)
@@ -565,10 +567,11 @@ class Manager {
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_org_sites';
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$existing = $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT id FROM {$table} WHERE org_id = %d AND site_id = %d",
+				'SELECT id FROM %i WHERE org_id = %d AND site_id = %d',
+				$table,
 				$org_id,
 				$site_id
 			)

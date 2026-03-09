@@ -246,7 +246,8 @@ class RoleMapper {
 		$mem_table   = $wpdb->prefix . 'workos_org_memberships';
 		$memberships = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
-				"SELECT user_id, workos_membership_id, workos_role FROM {$mem_table} WHERE org_id = %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				'SELECT user_id, workos_membership_id, workos_role FROM %i WHERE org_id = %d',
+				$mem_table,
 				$local_org->id
 			)
 		);
@@ -389,7 +390,8 @@ class RoleMapper {
 
 		$memberships = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
-				"SELECT user_id, workos_role FROM {$mem_table} WHERE org_id = %d AND workos_role != ''", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT user_id, workos_role FROM %i WHERE org_id = %d AND workos_role != ''",
+				$mem_table,
 				$local_org->id
 			)
 		);
