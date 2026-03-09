@@ -37,6 +37,15 @@ class Controller extends BaseController {
 
 		$this->container->singleton( UserProfile::class );
 		$this->container->get( UserProfile::class );
+
+		$this->container->singleton( DiagnosticsPage::class );
+		$this->container->get( DiagnosticsPage::class );
+
+		$this->container->singleton( OnboardingPage::class );
+		$this->container->get( OnboardingPage::class );
+
+		$this->container->singleton( OnboardingAjax::class );
+		$this->container->get( OnboardingAjax::class );
 	}
 
 	/**

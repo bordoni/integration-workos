@@ -22,7 +22,7 @@ class Schema {
 	/**
 	 * Current schema version.
 	 */
-	private const CURRENT_VERSION = 1;
+	private const CURRENT_VERSION = 2;
 
 	/**
 	 * Activation hook — create tables.
@@ -89,6 +89,22 @@ class Schema {
 			is_primary tinyint(1) NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			UNIQUE KEY idx_org_site (org_id,site_id)
+		) {$charset_collate};
+
+		CREATE TABLE {$wpdb->prefix}workos_activity_log (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			event_type varchar(50) NOT NULL,
+			user_id bigint(20) unsigned DEFAULT 0,
+			user_email varchar(191) DEFAULT '',
+			workos_user_id varchar(191) DEFAULT '',
+			ip_address varchar(45) DEFAULT '',
+			user_agent text,
+			metadata longtext,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY idx_event_type (event_type),
+			KEY idx_user_id (user_id),
+			KEY idx_created_at (created_at)
 		) {$charset_collate};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -102,6 +118,7 @@ class Schema {
 		global $wpdb;
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery
+		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}workos_activity_log" );
 		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}workos_org_sites" );
 		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}workos_org_memberships" );
 		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}workos_organizations" );

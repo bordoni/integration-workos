@@ -555,6 +555,50 @@ class Settings {
 				'label' => __( 'Send login, post, and user events to WorkOS Audit Logs.', 'integration-workos' ),
 			]
 		);
+
+		// --- Tracking section ---
+		add_settings_section(
+			'workos_tracking',
+			__( 'Tracking', 'integration-workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Track authentication events locally.', 'integration-workos' ) . '</p>';
+			},
+			'workos'
+		);
+
+		add_settings_field(
+			'workos_env_enable_activity_log',
+			__( 'Enable Activity Log', 'integration-workos' ),
+			[ $this, 'render_checkbox' ],
+			'workos',
+			'workos_tracking',
+			[
+				'name'  => $this->env_option( 'enable_activity_log' ),
+				'label' => __( 'Record login, logout, and other auth events in a local database table.', 'integration-workos' ),
+			]
+		);
+
+		// --- Security section ---
+		add_settings_section(
+			'workos_security',
+			__( 'Security', 'integration-workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'Additional security controls for WorkOS authentication.', 'integration-workos' ) . '</p>';
+			},
+			'workos'
+		);
+
+		add_settings_field(
+			'workos_env_entitlement_gate_enabled',
+			__( 'Organization Entitlement Gate', 'integration-workos' ),
+			[ $this, 'render_checkbox' ],
+			'workos',
+			'workos_security',
+			[
+				'name'  => $this->env_option( 'entitlement_gate_enabled' ),
+				'label' => __( 'Require active organization membership to log in. Users without membership will be denied.', 'integration-workos' ),
+			]
+		);
 	}
 
 	/**

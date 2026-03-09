@@ -56,6 +56,11 @@ class Login {
 			return;
 		}
 
+		// Login bypass: allow ?workos=0 to skip WorkOS redirect.
+		if ( LoginBypass::is_active() ) {
+			return;
+		}
+
 		if ( workos()->option( 'login_mode', 'redirect' ) !== 'redirect' ) {
 			return;
 		}
@@ -156,6 +161,9 @@ class Login {
 		// Store tokens.
 		self::store_tokens( $wp_user->ID, $result );
 
+		// Entitlement gate: deny login if user lacks active org membership.
+		EntitlementGate::check( $wp_user->ID, $result );
+
 		/**
 		 * Fires after a user is authenticated via WorkOS.
 		 *
@@ -245,6 +253,9 @@ class Login {
 		// Store WorkOS tokens.
 		self::store_tokens( $wp_user->ID, $result );
 
+		// Entitlement gate: deny login if user lacks active org membership.
+		EntitlementGate::check( $wp_user->ID, $result );
+
 		/** This action is documented in Auth/Login.php */
 		do_action( 'workos_user_authenticated', $wp_user->ID, $result );
 
@@ -310,6 +321,7 @@ class Login {
 		// Clean up stored tokens.
 		delete_user_meta( $user_id, '_workos_access_token' );
 		delete_user_meta( $user_id, '_workos_refresh_token' );
+		delete_user_meta( $user_id, '_workos_session_id' );
 
 		// Extract session ID from JWT and redirect to WorkOS logout.
 		$session_id = $access_token ? self::extract_session_id( $access_token ) : '';
@@ -397,6 +409,12 @@ class Login {
 	public static function store_tokens( int $user_id, array $result ): void {
 		if ( ! empty( $result['access_token'] ) ) {
 			update_user_meta( $user_id, '_workos_access_token', $result['access_token'] );
+
+			// Store session ID from JWT for logout revocation.
+			$session_id = self::extract_session_id( $result['access_token'] );
+			if ( $session_id ) {
+				update_user_meta( $user_id, '_workos_session_id', $session_id );
+			}
 		}
 		if ( ! empty( $result['refresh_token'] ) ) {
 			update_user_meta( $user_id, '_workos_refresh_token', $result['refresh_token'] );

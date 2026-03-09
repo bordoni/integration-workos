@@ -37,6 +37,7 @@ $workos_meta_keys = [
 	'_workos_profile_hash',
 	'_workos_access_token',
 	'_workos_refresh_token',
+	'_workos_session_id',
 	'_workos_deactivated',
 ];
 

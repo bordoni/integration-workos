@@ -17,6 +17,7 @@ use WorkOS\Sync\Controller as SyncController;
 use WorkOS\Organization\Controller as OrganizationController;
 use WorkOS\CLI\Controller as CLIController;
 use WorkOS\UI\Controller as UIController;
+use WorkOS\ActivityLog\Controller as ActivityLogController;
 
 /**
  * Main controller — registers all feature controllers.
@@ -37,6 +38,7 @@ class Controller extends BaseController {
 		$this->container->register( OrganizationController::class );
 		$this->container->register( CLIController::class );
 		$this->container->register( UIController::class );
+		$this->container->register( ActivityLogController::class );
 
 		// Admin bar shows on both admin and frontend, so register at the main level.
 		$this->container->singleton( AdminBar::class );
