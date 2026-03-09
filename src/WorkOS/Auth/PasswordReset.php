@@ -50,8 +50,7 @@ class PasswordReset {
 
 		// No fallback: redirect to AuthKit.
 		$reset_url = $this->get_reset_url();
-		wp_redirect( $reset_url );
-		exit;
+		\WorkOS\Api\Client::safe_redirect( $reset_url );
 	}
 
 	/**

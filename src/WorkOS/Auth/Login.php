@@ -36,9 +36,6 @@ class Login {
 
 		// Logout: clear WorkOS session.
 		add_action( 'wp_logout', [ $this, 'handle_logout' ] );
-
-		// Allow redirect to WorkOS API for session logout.
-		add_filter( 'allowed_redirect_hosts', [ $this, 'allow_workos_redirect' ] );
 	}
 
 	/**
@@ -100,8 +97,7 @@ class Login {
 
 		$auth_url = workos()->api()->get_authorization_url( $args );
 
-		wp_redirect( $auth_url );
-		exit;
+		\WorkOS\Api\Client::safe_redirect( $auth_url );
 	}
 
 	/**
@@ -340,18 +336,6 @@ class Login {
 	}
 
 	/**
-	 * Allow redirects to the WorkOS API domain.
-	 *
-	 * @param array $hosts Allowed redirect hosts.
-	 *
-	 * @return array
-	 */
-	public function allow_workos_redirect( array $hosts ): array {
-		$hosts[] = 'api.workos.com';
-		return $hosts;
-	}
-
-	/**
 	 * Get the callback URL.
 	 *
 	 * @return string
@@ -397,7 +381,7 @@ class Login {
 		if ( $return_to ) {
 			$params['return_to'] = $return_to;
 		}
-		return 'https://api.workos.com/user_management/sessions/logout?' . http_build_query( $params );
+		return \WorkOS\Api\Client::get_base_url() . '/user_management/sessions/logout?' . http_build_query( $params );
 	}
 
 	/**

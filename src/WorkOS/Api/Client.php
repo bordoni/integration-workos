@@ -55,6 +55,37 @@ class Client {
 		return $this->client_id;
 	}
 
+	/**
+	 * Get the WorkOS API base URL.
+	 *
+	 * @return string
+	 */
+	public static function get_base_url(): string {
+		return self::BASE_URL;
+	}
+
+	/**
+	 * Perform a safe redirect to a WorkOS URL.
+	 *
+	 * Temporarily allows the WorkOS API host in wp_safe_redirect(),
+	 * then removes the filter after the redirect call.
+	 *
+	 * @param string $url WorkOS URL to redirect to.
+	 */
+	public static function safe_redirect( string $url ): void {
+		$allowed_host = wp_parse_url( self::BASE_URL, PHP_URL_HOST );
+
+		$filter = static function ( array $hosts ) use ( $allowed_host ): array {
+			$hosts[] = $allowed_host;
+			return $hosts;
+		};
+
+		add_filter( 'allowed_redirect_hosts', $filter );
+		wp_safe_redirect( $url );
+		remove_filter( 'allowed_redirect_hosts', $filter );
+		exit;
+	}
+
 	// -------------------------------------------------------------------------
 	// Authentication
 	// -------------------------------------------------------------------------
@@ -93,7 +124,7 @@ class Client {
 			]
 		);
 
-		return 'https://api.workos.com/user_management/authorize?' . http_build_query( $params );
+		return self::BASE_URL . '/user_management/authorize?' . http_build_query( $params );
 	}
 
 	/**
