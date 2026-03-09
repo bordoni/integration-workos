@@ -8,7 +8,7 @@
 namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
-use WorkOS\Auth\EntitlementGate;
+use WorkOS\Organization\EntitlementGate;
 
 /**
  * Entitlement gate check tests.

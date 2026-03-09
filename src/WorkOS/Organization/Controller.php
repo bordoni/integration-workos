@@ -22,6 +22,9 @@ class Controller extends BaseController {
 	protected function doRegister(): void {
 		$this->container->singleton( Manager::class );
 		$this->container->get( Manager::class );
+
+		$this->container->singleton( EntitlementGate::class );
+		$this->container->get( EntitlementGate::class );
 	}
 
 	/**

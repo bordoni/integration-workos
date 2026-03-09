@@ -2,10 +2,10 @@
 /**
  * Organization entitlement gate.
  *
- * @package WorkOS\Auth
+ * @package WorkOS\Organization
  */
 
-namespace WorkOS\Auth;
+namespace WorkOS\Organization;
 
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Config;

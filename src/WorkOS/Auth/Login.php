@@ -162,7 +162,7 @@ class Login {
 		self::store_tokens( $wp_user->ID, $result );
 
 		// Entitlement gate: deny login if user lacks active org membership.
-		EntitlementGate::check( $wp_user->ID, $result );
+		\WorkOS\Organization\EntitlementGate::check( $wp_user->ID, $result );
 
 		/**
 		 * Fires after a user is authenticated via WorkOS.
@@ -254,7 +254,7 @@ class Login {
 		self::store_tokens( $wp_user->ID, $result );
 
 		// Entitlement gate: deny login if user lacks active org membership.
-		EntitlementGate::check( $wp_user->ID, $result );
+		\WorkOS\Organization\EntitlementGate::check( $wp_user->ID, $result );
 
 		/** This action is documented in Auth/Login.php */
 		do_action( 'workos_user_authenticated', $wp_user->ID, $result );

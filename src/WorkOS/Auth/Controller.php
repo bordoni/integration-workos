@@ -35,9 +35,6 @@ class Controller extends BaseController {
 		$this->container->singleton( PasswordReset::class );
 		$this->container->get( PasswordReset::class );
 
-		$this->container->singleton( EntitlementGate::class );
-		$this->container->get( EntitlementGate::class );
-
 		$this->container->singleton( LoginBypass::class );
 		$this->container->get( LoginBypass::class );
 	}
