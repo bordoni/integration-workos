@@ -12,9 +12,20 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **Directory Sync (SCIM)** — automatic user provisioning and deprovisioning from your identity provider
 - **Role Mapping** — map WorkOS organization roles to WordPress roles
 - **Organization Management** — local caching of WorkOS organizations with multisite support
+- **Entitlement Gate** — require organization membership to log in
 - **Webhook Processing** — real-time sync of user, organization, and directory events
 - **REST API Authentication** — Bearer token auth for headless/decoupled WordPress
+- **Login Button** — shortcode (`[workos_login]`), Gutenberg block, and classic widget
+- **Login Bypass** — access the native WordPress login form via `?fallback=1` when WorkOS is unavailable
+- **Activity Logging** — local database table with admin viewer for tracking authentication and sync events
 - **Audit Logging** — forward WordPress events (login, logout, post changes, user changes) to WorkOS Audit Logs
+- **Role-Based Login Redirects** — send users to different URLs after login based on their WordPress role
+- **Role-Based Logout Redirects** — send users to different URLs after logout based on their WordPress role
+- **Password Reset Integration** — redirect password reset to WorkOS or fall back to WordPress
+- **Registration Redirect** — redirect registration to WorkOS AuthKit
+- **Admin Bar Badge** — shows the active WorkOS environment (production/staging) in the admin bar
+- **Diagnostics Page** — system health checks and configuration status
+- **Onboarding Wizard** — guided setup for initial plugin configuration and user sync
 - **WP-CLI Commands** — full CLI access for scripting, bulk operations, and diagnostics
 
 ## Installation
@@ -70,6 +81,10 @@ The plugin intercepts WordPress's `authenticate` filter and validates credential
 
 When enabled, WordPress native password authentication remains available alongside WorkOS. Password reset and registration forms fall back to WordPress defaults.
 
+### Login Bypass
+
+If WorkOS is down or misconfigured, users can access the native WordPress login form by appending `?fallback=1` to the login URL. This bypasses the WorkOS redirect entirely.
+
 ## Webhooks
 
 Configure your WorkOS dashboard to send webhooks to:
@@ -103,13 +118,14 @@ The token is verified using WorkOS JWKS and mapped to a WordPress user via their
 
 ## Database Tables
 
-The plugin creates three custom tables on activation:
+The plugin creates four custom tables on activation:
 
 | Table | Purpose |
 |---|---|
 | `{prefix}_workos_organizations` | Cached WorkOS organization data (name, slug, domains) |
 | `{prefix}_workos_org_memberships` | User-to-organization memberships with roles |
 | `{prefix}_workos_org_sites` | Organization-to-site mapping (multisite) |
+| `{prefix}_workos_activity_log` | Local activity log for authentication and sync events |
 
 User linking is stored in standard WordPress usermeta (`_workos_user_id`, `_workos_org_id`, `_workos_last_synced_at`, `_workos_deactivated`).
 
@@ -283,12 +299,15 @@ All commands that display data support these output formats:
 
 - PHP 7.4+
 - Composer
+- bun (for JS/CSS assets)
 - [slic](https://github.com/developer-starter/slic) (for running tests)
 
 ### Setup
 
 ```bash
 composer install
+bun install    # Install JS dependencies
+bun run build  # Build JS/CSS assets
 ```
 
 ### Running Tests
@@ -319,18 +338,20 @@ composer lint:fix
 The plugin uses a DI container (di52) with a feature-controller pattern:
 
 ```
-integration-workos.php        # Entry point
-src/WorkOS/Plugin.php         # Bootstrap, container init
-src/WorkOS/Controller.php     # Main controller, registers feature controllers
-src/WorkOS/Config.php         # Centralized config with constant overrides
+integration-workos.php            # Entry point
+src/WorkOS/Plugin.php             # Bootstrap, container init
+src/WorkOS/Controller.php         # Main controller, registers feature controllers
+src/WorkOS/Config.php             # Centralized config with constant overrides
 src/WorkOS/
-  Admin/Controller.php        # Settings UI, user list enhancements
-  Auth/Controller.php         # Login, registration, password reset
-  Sync/Controller.php         # UserSync, RoleMapper, DirectorySync, AuditLog
-  REST/Controller.php         # Bearer token authentication
-  Webhook/Controller.php      # Webhook receiver
-  Organization/Controller.php # Organization management
-  CLI/Controller.php          # WP-CLI commands
+  Admin/Controller.php            # Settings UI, user list, onboarding, diagnostics
+  Auth/Controller.php             # Login, registration, password reset, redirects
+  Sync/Controller.php             # UserSync, RoleMapper, DirectorySync, AuditLog
+  REST/Controller.php             # Bearer token authentication
+  Webhook/Controller.php          # Webhook receiver
+  Organization/Controller.php     # Organization management, entitlement gate
+  CLI/Controller.php              # WP-CLI commands
+  UI/Controller.php               # Login button (shortcode, block, widget)
+  ActivityLog/Controller.php      # Local activity logging
 ```
 
 Each controller extends `Contracts\Controller` and implements `isActive()` for conditional activation (e.g., `Admin\Controller` only activates in `is_admin()`, `CLI\Controller` only activates under `WP_CLI`).

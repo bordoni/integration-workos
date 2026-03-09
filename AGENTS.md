@@ -9,32 +9,35 @@ Enterprise identity management for WordPress powered by WorkOS. SSO, directory s
 - **PHP Requirement:** 7.4+
 - **WordPress Requirement:** 5.9+
 - **Text Domain:** `integration-workos`
-- **Author:** LiquidWeb Software
+- **Author:** Gustavo Bordoni
 
 ## Architecture
 
 ### Bootstrap Process
 
 The plugin uses a deferred loading pattern:
-1. `integration-workos.php` manually requires `Bootstrap.php` (no autoloader yet)
-2. `Bootstrap::set_plugin_file()` registers activation/deactivation hooks and returns a callback for `plugins_loaded`
-3. On `plugins_loaded`, `Bootstrap::load_plugin()` defines constants, loads Composer autoloader, requires global helpers, and boots `Plugin::instance()`
+1. `integration-workos.php` manually requires `src/WorkOS/Plugin.php` (no autoloader yet)
+2. `Plugin::bootstrap(__FILE__)` stores the plugin file path, registers activation/deactivation hooks, and returns `[$plugin, 'init']` as the callback for `plugins_loaded`
+3. On `plugins_loaded`, `Plugin::init()` defines constants, loads the Composer autoloader, requires global helpers, loads the text domain, initializes the DI container, and bootstraps the application
 
 ```php
 // integration-workos.php
-require_once __DIR__ . '/src/WorkOS/Bootstrap.php';
-add_action( 'plugins_loaded', WorkOS\Bootstrap::set_plugin_file( __FILE__ ) );
+require_once __DIR__ . '/src/WorkOS/Plugin.php';
+add_action( 'plugins_loaded', WorkOS\Plugin::bootstrap( __FILE__ ) );
 ```
 
 ### Plugin Singleton
 
-`Plugin::instance()` is the main orchestrator. Its constructor calls:
-- `init_hooks()` — registers core WordPress hooks (textdomain loading)
-- `init_components()` — boots all subsystems (Admin, Auth, REST, Sync, etc.)
+`Plugin::instance()` is a getter that returns the current instance (or `null` if not yet initialized). `Plugin::init()` does the actual work:
+- Sets plugin paths and defines constants
+- Loads Composer autoloader and prefixed autoloader
+- Requires global helper functions
+- Calls `initializeContainer()` — sets up the DI container with singletons for `Api\Client`, Options classes, and the `App` facade
+- Calls `bootstrapApp()` — runs schema upgrades and registers the main `Controller`
 
 ### Constants
 
-Defined in `Bootstrap::load_plugin()`:
+Defined in `Plugin::init()`:
 - `WORKOS_VERSION` — Plugin version string
 - `WORKOS_FILE` — Absolute path to main plugin file
 - `WORKOS_DIR` — Plugin directory path (trailing slash)
@@ -47,47 +50,107 @@ Defined in `Bootstrap::load_plugin()`:
 - `WORKOS_API_KEY` — API key (overrides DB option)
 - `WORKOS_CLIENT_ID` — Client ID (overrides DB option)
 - `WORKOS_WEBHOOK_SECRET` — Webhook secret (overrides DB option)
+- `WORKOS_ORGANIZATION_ID` — Organization ID (overrides DB option)
+- `WORKOS_ENVIRONMENT_ID` — Environment ID (overrides DB option)
+- `WORKOS_ENVIRONMENT` — Lock active environment (`production` or `staging`)
+
+Per-environment constants (take priority over generic):
+- `WORKOS_PRODUCTION_API_KEY`, `WORKOS_PRODUCTION_CLIENT_ID`, etc.
+- `WORKOS_STAGING_API_KEY`, `WORKOS_STAGING_CLIENT_ID`, etc.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `integration-workos.php` | Main plugin entry point (minimal — require + hook) |
-| `src/WorkOS/Bootstrap.php` | Constants, autoloader, lifecycle hooks |
-| `src/WorkOS/Plugin.php` | Singleton orchestrator, boots all subsystems |
+| `src/WorkOS/Plugin.php` | Bootstrap, constants, container init, app boot |
+| `src/WorkOS/App.php` | Static facade for the DI container |
 | `src/WorkOS/Config.php` | Centralized config with constant overrides |
-| `src/WorkOS/Admin/Settings.php` | Admin settings page |
-| `src/WorkOS/Admin/UserList.php` | Admin user list integration |
-| `src/WorkOS/Auth/Login.php` | SSO login flow |
-| `src/WorkOS/Auth/Registration.php` | User registration |
+| `src/WorkOS/Controller.php` | Main controller, registers all feature controllers |
+| `src/WorkOS/Contracts/Container.php` | DI container (di52-based) |
+| `src/WorkOS/Contracts/Controller.php` | Abstract base controller with `isActive()` |
+| `src/WorkOS/Contracts/ServiceProvider.php` | Service provider contract |
+| **Admin** | |
+| `src/WorkOS/Admin/Controller.php` | Admin controller, registers settings/user list/onboarding/diagnostics |
+| `src/WorkOS/Admin/Settings.php` | Admin settings page (tabs: Settings, Organization, Users) |
+| `src/WorkOS/Admin/UserList.php` | Admin user list integration (WorkOS columns) |
+| `src/WorkOS/Admin/UserProfile.php` | User profile page WorkOS metadata |
+| `src/WorkOS/Admin/AdminBar.php` | Admin bar environment badge |
+| `src/WorkOS/Admin/DiagnosticsPage.php` | System diagnostics page |
+| `src/WorkOS/Admin/OnboardingPage.php` | Onboarding wizard UI |
+| `src/WorkOS/Admin/OnboardingAjax.php` | Onboarding wizard AJAX handlers |
+| **Auth** | |
+| `src/WorkOS/Auth/Controller.php` | Auth controller (login, registration, password reset, redirects) |
+| `src/WorkOS/Auth/Login.php` | SSO login flow (redirect + headless modes) |
+| `src/WorkOS/Auth/LoginBypass.php` | Login bypass (`?fallback=1`) when WorkOS is unavailable |
+| `src/WorkOS/Auth/Registration.php` | User registration redirect |
 | `src/WorkOS/Auth/PasswordReset.php` | Password reset flow |
-| `src/WorkOS/REST/TokenAuth.php` | REST API token authentication |
-| `src/WorkOS/Webhook/Receiver.php` | Webhook event processing |
+| `src/WorkOS/Auth/Redirect.php` | Role-based login redirects |
+| `src/WorkOS/Auth/LogoutRedirect.php` | Role-based logout redirects |
+| **Organization** | |
+| `src/WorkOS/Organization/Controller.php` | Organization controller |
+| `src/WorkOS/Organization/Manager.php` | Organization CRUD and caching |
+| `src/WorkOS/Organization/EntitlementGate.php` | Require org membership for login |
+| **Activity Log** | |
+| `src/WorkOS/ActivityLog/Controller.php` | Activity log controller |
+| `src/WorkOS/ActivityLog/EventLogger.php` | Logs WordPress events to local DB table |
+| `src/WorkOS/ActivityLog/AdminPage.php` | Activity log viewer in admin |
+| **UI (Login Button)** | |
+| `src/WorkOS/UI/Controller.php` | UI controller, registers shortcode/block/widget |
+| `src/WorkOS/UI/Shortcode.php` | `[workos_login]` shortcode |
+| `src/WorkOS/UI/Block.php` | Gutenberg block registration |
+| `src/WorkOS/UI/Widget.php` | Classic widget |
+| `src/WorkOS/UI/Renderer.php` | Shared login button renderer |
+| `src/WorkOS/UI/Ajax.php` | AJAX handlers for login button |
+| **Options** | |
+| `src/WorkOS/Options/Options.php` | Abstract options base class |
+| `src/WorkOS/Options/Production.php` | Production environment options |
+| `src/WorkOS/Options/Staging.php` | Staging environment options |
+| `src/WorkOS/Options/Global_Options.php` | Environment-independent options |
+| **API** | |
+| `src/WorkOS/Api/Client.php` | WorkOS API client wrapper |
+| **Sync** | |
+| `src/WorkOS/Sync/Controller.php` | Sync controller |
 | `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound) |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
-| `src/WorkOS/Sync/DirectorySync.php` | Directory sync |
-| `src/WorkOS/Sync/AuditLog.php` | Audit logging |
-| `src/WorkOS/Organization/Manager.php` | Organization management |
+| `src/WorkOS/Sync/DirectorySync.php` | Directory sync (SCIM) |
+| `src/WorkOS/Sync/AuditLog.php` | Forward WP events to WorkOS Audit Logs |
+| `src/WorkOS/Sync/AuditLogController.php` | Audit log controller |
+| **REST** | |
+| `src/WorkOS/REST/Controller.php` | REST controller |
+| `src/WorkOS/REST/TokenAuth.php` | REST API Bearer token authentication |
+| **Webhook** | |
+| `src/WorkOS/Webhook/Controller.php` | Webhook controller |
+| `src/WorkOS/Webhook/Receiver.php` | Webhook event processing and signature verification |
+| **CLI** | |
+| `src/WorkOS/CLI/Controller.php` | CLI controller, registers WP-CLI commands |
+| `src/WorkOS/CLI/StatusCommand.php` | `wp workos status` command |
+| `src/WorkOS/CLI/UserCommand.php` | `wp workos user` commands |
+| `src/WorkOS/CLI/OrgCommand.php` | `wp workos org` commands |
+| `src/WorkOS/CLI/SyncCommand.php` | `wp workos sync` commands |
+| **Database** | |
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
+| **Helpers** | |
 | `src/includes/functions-helpers.php` | Global `workos()` and `workos_log()` helpers |
+| **Build** | |
 | `composer.json` | PHP dependencies |
-| `package.json` | Node.js dependencies |
+| `package.json` | JS dependencies (bun) |
 
 ## Build System
 
 ### Requirements
 
 - Node.js >= 20 (see `.nvmrc`)
-- npm
+- bun
 
 ### Commands
 
 ```bash
-npm install          # Install dependencies
-npm run build        # Production build (wp-scripts)
-npm run start        # Development with watch
-npm run lint:php     # Lint PHP via PHPCS
-npm run lint:php:fix # Auto-fix PHP lint issues
+bun install          # Install dependencies
+bun run build        # Production build (wp-scripts)
+bun run start        # Development with watch
+bun run lint:php     # Lint PHP via PHPCS
+bun run lint:php:fix # Auto-fix PHP lint issues
 ```
 
 ## Testing
@@ -109,7 +172,7 @@ cd ~/workspace/srv/wp-content/plugins
 ```
 
 - `slic here` registers the current directory as the plugins root
-- `slic use workos` selects the workos plugin as the active target
+- `slic use integration-workos` selects the plugin as the active target
 - `slic composer install` installs PHP dependencies inside the container
 
 ### Running Tests
@@ -147,8 +210,28 @@ tests/
 └── wpunit/
     ├── _bootstrap.php             # Suite-level bootstrap
     ├── ConfigTest.php             # Config class tests
+    ├── DirectorySyncTest.php      # Directory sync tests
+    ├── EntitlementGateTest.php    # Entitlement gate tests
+    ├── EventLoggerTest.php        # Activity log event logger tests
+    ├── LoginBypassTest.php        # Login bypass tests
+    ├── LoginSessionTest.php       # Login session tests
+    ├── LoginTokensTest.php        # Login tokens tests
+    ├── LogoutRedirectTest.php     # Logout redirect tests
+    ├── OnboardingSyncTest.php     # Onboarding sync tests
+    ├── OptionsTest.php            # Options classes tests
+    ├── OrganizationManagerTest.php # Organization manager tests
+    ├── PasswordResetTest.php      # Password reset tests
     ├── PluginTest.php             # Plugin singleton + constants tests
-    └── UserSyncPushTest.php       # Outbound user sync tests
+    ├── RedirectTest.php           # Login redirect tests
+    ├── RoleMapperTest.php         # Role mapper tests
+    ├── SchemaTest.php             # Database schema tests
+    ├── UserSyncDeprovisionTest.php # User deprovisioning tests
+    ├── UserSyncFindOrCreateTest.php # User find-or-create tests
+    ├── UserSyncLinkTest.php       # User linking tests
+    ├── UserSyncPushTest.php       # Outbound user sync tests
+    ├── UserSyncResyncTest.php     # User re-sync tests
+    ├── WebhookReceiverTest.php    # Webhook receiver tests
+    └── WebhookSignatureTest.php   # Webhook signature verification tests
 ```
 
 ### Writing Tests
