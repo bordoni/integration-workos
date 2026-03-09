@@ -25,6 +25,10 @@ class Global_Options extends Options {
 	 * {@inheritDoc}
 	 */
 	protected function defaults(): array {
-		return [];
+		return [
+			'active_environment'   => 'staging',
+			'diagnostics_results'  => [],
+			'diagnostics_last_run' => 0,
+		];
 	}
 }

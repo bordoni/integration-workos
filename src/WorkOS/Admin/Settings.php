@@ -7,7 +7,11 @@
 
 namespace WorkOS\Admin;
 
+use WorkOS\App;
 use WorkOS\Config;
+use WorkOS\Options\Options;
+use WorkOS\Options\Production;
+use WorkOS\Options\Staging;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -111,6 +115,18 @@ class Settings {
 	}
 
 	/**
+	 * Get the Options instance for the editing environment.
+	 *
+	 * @return Options
+	 */
+	private function get_editing_env_options(): Options {
+		$env   = $this->get_editing_environment();
+		$class = 'staging' === $env ? Staging::class : Production::class;
+
+		return App::container()->get( $class );
+	}
+
+	/**
 	 * Get the array-style option name for an environment setting.
 	 *
 	 * Uses the editing environment, not the active environment,
@@ -130,12 +146,11 @@ class Settings {
 	 * @return bool
 	 */
 	private function is_editing_env_configured(): bool {
-		$env     = $this->get_editing_environment();
-		$options = get_option( "workos_{$env}", [] );
+		$options = $this->get_editing_env_options();
 
-		return ! empty( $options['api_key'] )
-			&& ! empty( $options['client_id'] )
-			&& ! empty( $options['environment_id'] );
+		return ! empty( $options->get( 'api_key' ) )
+			&& ! empty( $options->get( 'client_id' ) )
+			&& ! empty( $options->get( 'environment_id' ) );
 	}
 
 	/**
@@ -148,10 +163,7 @@ class Settings {
 			return false;
 		}
 
-		$env     = $this->get_editing_environment();
-		$options = get_option( "workos_{$env}", [] );
-
-		return ! empty( $options['organization_id'] );
+		return ! empty( $this->get_editing_env_options()->get( 'organization_id' ) );
 	}
 
 	/**
@@ -578,27 +590,6 @@ class Settings {
 			]
 		);
 
-		// --- Security section ---
-		add_settings_section(
-			'workos_security',
-			__( 'Security', 'integration-workos' ),
-			function () {
-				echo '<p>' . esc_html__( 'Additional security controls for WorkOS authentication.', 'integration-workos' ) . '</p>';
-			},
-			'workos'
-		);
-
-		add_settings_field(
-			'workos_env_entitlement_gate_enabled',
-			__( 'Organization Entitlement Gate', 'integration-workos' ),
-			[ $this, 'render_checkbox' ],
-			'workos',
-			'workos_security',
-			[
-				'name'  => $this->env_option( 'entitlement_gate_enabled' ),
-				'label' => __( 'Require active organization membership to log in. Users without membership will be denied.', 'integration-workos' ),
-			]
-		);
 	}
 
 	/**
@@ -621,6 +612,18 @@ class Settings {
 			[ $this, 'render_organization_select' ],
 			self::ORG_PAGE,
 			'workos_organization'
+		);
+
+		add_settings_field(
+			'workos_env_entitlement_gate_enabled',
+			__( 'Entitlement Gate', 'integration-workos' ),
+			[ $this, 'render_checkbox' ],
+			self::ORG_PAGE,
+			'workos_organization',
+			[
+				'name'  => $this->env_option( 'entitlement_gate_enabled' ),
+				'label' => __( 'Require active organization membership to log in. Users without membership will be denied.', 'integration-workos' ),
+			]
 		);
 	}
 
@@ -1007,13 +1010,9 @@ class Settings {
 
 		if ( ! empty( $org_id ) ) {
 			// Save org_id to the editing env options.
-			$option_name = "workos_{$env}";
-			$options     = get_option( $option_name, [] );
-			if ( ! is_array( $options ) ) {
-				$options = [];
-			}
-			$options['organization_id'] = $org_id;
-			update_option( $option_name, $options );
+			$class       = 'staging' === $env ? Staging::class : Production::class;
+			$env_options = App::container()->get( $class );
+			$env_options->set( 'organization_id', $org_id );
 
 			$this->flush_organizations_cache();
 		}
@@ -1378,9 +1377,7 @@ class Settings {
 	 * @return array<string, string> WorkOS role slug => role name.
 	 */
 	private function get_workos_org_roles(): array {
-		$env     = $this->get_editing_environment();
-		$options = get_option( "workos_{$env}", [] );
-		$org_id  = $options['organization_id'] ?? '';
+		$org_id = $this->get_editing_env_options()->get( 'organization_id', '' );
 
 		if ( empty( $org_id ) ) {
 			return [];
@@ -1547,8 +1544,7 @@ class Settings {
 	 * Render the redirect URLs table for the Users tab.
 	 */
 	public function render_redirect_urls(): void {
-		$env      = $this->get_editing_environment();
-		$options  = get_option( "workos_{$env}", [] );
+		$options  = $this->get_editing_env_options()->all();
 		$raw_map  = is_array( $options['redirect_urls'] ?? null ) ? $options['redirect_urls'] : [];
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
 
@@ -1667,8 +1663,7 @@ class Settings {
 	 * Render the logout redirect URLs table for the Users tab.
 	 */
 	public function render_logout_redirect_urls(): void {
-		$env      = $this->get_editing_environment();
-		$options  = get_option( "workos_{$env}", [] );
+		$options  = $this->get_editing_env_options()->all();
 		$raw_map  = is_array( $options['logout_redirect_urls'] ?? null ) ? $options['logout_redirect_urls'] : [];
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
 

@@ -7,6 +7,8 @@
 
 namespace WorkOS;
 
+use WorkOS\Options\Global_Options;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -38,7 +40,7 @@ class Config {
 			return constant( 'WORKOS_ENVIRONMENT' );
 		}
 
-		$env = get_option( 'workos_active_environment', 'staging' );
+		$env = App::container()->get( Global_Options::class )->get( 'active_environment' );
 
 		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'staging';
 	}
@@ -53,7 +55,7 @@ class Config {
 			return;
 		}
 
-		update_option( 'workos_active_environment', $env );
+		App::container()->get( Global_Options::class )->set( 'active_environment', $env );
 	}
 
 	/**

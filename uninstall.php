@@ -11,6 +11,12 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 // Remove options.
 $workos_options = [
+	// Current serialized option names.
+	'workos_staging',
+	'workos_production',
+	'workos_global',
+	'workos_active_environment',
+	// Legacy individual option names.
 	'workos_api_key',
 	'workos_client_id',
 	'workos_login_mode',

@@ -7,8 +7,10 @@
 
 namespace WorkOS\Admin;
 
+use WorkOS\App;
 use WorkOS\Config;
 use WorkOS\Auth\Login;
+use WorkOS\Options\Global_Options;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -56,11 +58,15 @@ class DiagnosticsPage {
 
 		check_admin_referer( 'workos_run_diagnostics' );
 
+		$results = $this->run_all_checks();
+		$global  = App::container()->get( Global_Options::class );
+		$global->set( 'diagnostics_results', $results );
+		$global->set( 'diagnostics_last_run', time() );
+
 		wp_safe_redirect(
 			add_query_arg(
 				[
 					'page' => 'workos-diagnostics',
-					'ran'  => '1',
 				],
 				admin_url( 'admin.php' )
 			)
@@ -76,12 +82,13 @@ class DiagnosticsPage {
 			return;
 		}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$ran = ! empty( $_GET['ran'] );
-
-		if ( $ran ) {
-			$this->results = $this->run_all_checks();
+		$global   = App::container()->get( Global_Options::class );
+		$saved    = $global->get( 'diagnostics_results' );
+		if ( ! empty( $saved ) ) {
+			$this->results = $saved;
 		}
+
+		$last_run = $global->get( 'diagnostics_last_run' );
 
 		?>
 		<div class="wrap">
@@ -91,13 +98,24 @@ class DiagnosticsPage {
 				<input type="hidden" name="action" value="workos_run_diagnostics" />
 				<?php wp_nonce_field( 'workos_run_diagnostics' ); ?>
 				<?php submit_button( __( 'Run Diagnostics', 'integration-workos' ), 'primary', '', false ); ?>
+				<?php if ( $last_run ) : ?>
+					<p class="description">
+						<?php
+						printf(
+							/* translators: %s: human-readable time difference (e.g. "2 hours ago") */
+							esc_html__( 'Last run %s.', 'integration-workos' ),
+							esc_html( human_time_diff( $last_run ) . ' ' . __( 'ago', 'integration-workos' ) )
+						);
+						?>
+					</p>
+				<?php endif; ?>
 			</form>
 
 			<?php if ( null !== $this->results ) : ?>
-				<table class="wp-list-table widefat fixed striped" style="max-width:800px;">
+				<table class="wp-list-table widefat fixed striped" style="width:100%;max-width:960px;">
 					<thead>
 						<tr>
-							<th style="width:40px;"><?php esc_html_e( 'Status', 'integration-workos' ); ?></th>
+							<th style="width:75px;"><?php esc_html_e( 'Status', 'integration-workos' ); ?></th>
 							<th style="width:200px;"><?php esc_html_e( 'Check', 'integration-workos' ); ?></th>
 							<th><?php esc_html_e( 'Details', 'integration-workos' ); ?></th>
 						</tr>
@@ -121,7 +139,7 @@ class DiagnosticsPage {
 			<?php $this->render_config_table(); ?>
 
 			<h2><?php esc_html_e( 'Endpoints', 'integration-workos' ); ?></h2>
-			<table class="widefat striped" style="max-width:800px;">
+			<table class="widefat striped" style="width:100%;max-width:960px;">
 				<tr>
 					<td><strong><?php esc_html_e( 'Callback URL', 'integration-workos' ); ?></strong></td>
 					<td><code><?php echo esc_url( Login::get_callback_url() ); ?></code></td>
@@ -333,7 +351,7 @@ class DiagnosticsPage {
 		];
 
 		?>
-		<table class="widefat striped" style="max-width:800px;">
+		<table class="widefat striped" style="width:100%;max-width:960px;">
 			<thead>
 				<tr>
 					<th><?php esc_html_e( 'Setting', 'integration-workos' ); ?></th>
