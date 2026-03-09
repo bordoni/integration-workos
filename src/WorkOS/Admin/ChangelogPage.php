@@ -7,6 +7,8 @@
 
 namespace WorkOS\Admin;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -61,7 +63,7 @@ class ChangelogPage {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$filter_version = isset( $_GET['version'] ) ? sanitize_text_field( wp_unslash( $_GET['version'] ) ) : '';
+		$filter_version = SuperGlobals::get_get_var( 'version' ) ?? '';
 
 		$versions = $this->parse_changelog( $content );
 

@@ -184,6 +184,7 @@ class Manager {
 		$existing = self::get_by_workos_id( $workos_org_id );
 
 		if ( $existing ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->update(
 				$table,
 				[
@@ -196,11 +197,15 @@ class Manager {
 				[ '%s', '%s', '%s', '%s' ],
 				[ '%s' ]
 			);
+
+			// Invalidate caches.
+			wp_cache_delete( "org_workos_{$workos_org_id}", 'workos' );
+			wp_cache_delete( "org_{$existing->id}", 'workos' );
+
 			return $existing->id;
 		}
 
-		$now = current_time( 'mysql', true );
-
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$wpdb->insert(
 			$table,
 			[
@@ -208,8 +213,8 @@ class Manager {
 				'name'          => $name,
 				'slug'          => $slug,
 				'domains'       => $domains,
-				'created_at'    => $now,
-				'updated_at'    => $now,
+				'created_at'    => current_time( 'mysql', true ),
+				'updated_at'    => current_time( 'mysql', true ),
 			],
 			[ '%s', '%s', '%s', '%s', '%s', '%s' ]
 		);
@@ -220,6 +225,9 @@ class Manager {
 		if ( $org_id ) {
 			self::link_to_site( $org_id, get_current_blog_id(), true );
 		}
+
+		// Invalidate caches.
+		wp_cache_delete( "org_workos_{$workos_org_id}", 'workos' );
 
 		return $org_id ? $org_id : false;
 	}
@@ -232,12 +240,22 @@ class Manager {
 	 * @return object|null Row object or null.
 	 */
 	public static function get_by_workos_id( string $workos_org_id ): ?object {
+		$cache_key = "org_workos_{$workos_org_id}";
+		$cached    = wp_cache_get( $cache_key, 'workos' );
+		if ( false !== $cached ) {
+			return $cached ? $cached : null;
+		}
+
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_organizations';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$wpdb->prepare( "SELECT * FROM {$table} WHERE workos_org_id = %s", $workos_org_id )
 		);
+
+		wp_cache_set( $cache_key, $row ? $row : 0, 'workos' );
 
 		return $row ? $row : null;
 	}
@@ -250,12 +268,22 @@ class Manager {
 	 * @return object|null
 	 */
 	public static function get( int $id ): ?object {
+		$cache_key = "org_{$id}";
+		$cached    = wp_cache_get( $cache_key, 'workos' );
+		if ( false !== $cached ) {
+			return $cached ? $cached : null;
+		}
+
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_organizations';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$row = $wpdb->get_row(
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id )
 		);
+
+		wp_cache_set( $cache_key, $row ? $row : 0, 'workos' );
 
 		return $row ? $row : null;
 	}
@@ -274,11 +302,19 @@ class Manager {
 			$site_id = get_current_blog_id();
 		}
 
+		$cache_key = "org_site_{$site_id}";
+		$cached    = wp_cache_get( $cache_key, 'workos' );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
 		$org_table  = $wpdb->prefix . 'workos_organizations';
 		$site_table = $wpdb->prefix . 'workos_org_sites';
 
-		return $wpdb->get_results(
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->get_results(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				"SELECT o.* FROM {$org_table} o
 				INNER JOIN {$site_table} s ON o.id = s.org_id
 				WHERE s.site_id = %d
@@ -286,6 +322,10 @@ class Manager {
 				$site_id
 			)
 		);
+
+		wp_cache_set( $cache_key, $result, 'workos' );
+
+		return $result;
 	}
 
 	// -------------------------------------------------------------------------
@@ -303,7 +343,7 @@ class Manager {
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_org_memberships';
 
-		// Check if already exists.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$existing = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT id FROM {$table} WHERE org_id = %d AND user_id = %d",
@@ -313,6 +353,7 @@ class Manager {
 		);
 
 		if ( $existing ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->update(
 				$table,
 				array_filter(
@@ -324,21 +365,24 @@ class Manager {
 				),
 				[ 'id' => $existing ]
 			);
-			return;
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->insert(
+				$table,
+				[
+					'org_id'               => $org_id,
+					'user_id'              => $user_id,
+					'workos_membership_id' => $extra['workos_membership_id'] ?? '',
+					'workos_role'          => $extra['workos_role'] ?? 'member',
+					'wp_role'              => $extra['wp_role'] ?? '',
+					'joined_at'            => current_time( 'mysql', true ),
+				],
+				[ '%d', '%d', '%s', '%s', '%s', '%s' ]
+			);
 		}
 
-		$wpdb->insert(
-			$table,
-			[
-				'org_id'               => $org_id,
-				'user_id'              => $user_id,
-				'workos_membership_id' => $extra['workos_membership_id'] ?? '',
-				'workos_role'          => $extra['workos_role'] ?? 'member',
-				'wp_role'              => $extra['wp_role'] ?? '',
-				'joined_at'            => current_time( 'mysql', true ),
-			],
-			[ '%d', '%d', '%s', '%s', '%s', '%s' ]
-		);
+		// Invalidate caches.
+		wp_cache_delete( "user_orgs_{$user_id}", 'workos' );
 	}
 
 	/**
@@ -351,6 +395,7 @@ class Manager {
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_org_memberships';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$wpdb->delete(
 			$table,
 			[
@@ -359,6 +404,9 @@ class Manager {
 			],
 			[ '%d', '%d' ]
 		);
+
+		// Invalidate caches.
+		wp_cache_delete( "user_orgs_{$user_id}", 'workos' );
 	}
 
 	/**
@@ -369,12 +417,20 @@ class Manager {
 	 * @return array List of organization objects with membership data.
 	 */
 	public static function get_user_orgs( int $user_id ): array {
+		$cache_key = "user_orgs_{$user_id}";
+		$cached    = wp_cache_get( $cache_key, 'workos' );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
 		global $wpdb;
 		$org_table = $wpdb->prefix . 'workos_organizations';
 		$mem_table = $wpdb->prefix . 'workos_org_memberships';
 
-		return $wpdb->get_results(
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$result = $wpdb->get_results(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				"SELECT o.*, m.workos_role, m.wp_role, m.joined_at
 				FROM {$org_table} o
 				INNER JOIN {$mem_table} m ON o.id = m.org_id
@@ -383,6 +439,10 @@ class Manager {
 				$user_id
 			)
 		);
+
+		wp_cache_set( $cache_key, $result, 'workos' );
+
+		return $result;
 	}
 
 	/**
@@ -394,12 +454,20 @@ class Manager {
 	 * @return string WorkOS membership ID, or empty string if not found.
 	 */
 	public static function get_membership_id_for_user( int $wp_user_id, string $workos_org_id ): string {
+		$cache_key = "membership_{$wp_user_id}_{$workos_org_id}";
+		$cached    = wp_cache_get( $cache_key, 'workos' );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
 		global $wpdb;
 		$org_table = $wpdb->prefix . 'workos_organizations';
 		$mem_table = $wpdb->prefix . 'workos_org_memberships';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$membership_id = $wpdb->get_var(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				"SELECT m.workos_membership_id FROM {$mem_table} m
 				INNER JOIN {$org_table} o ON m.org_id = o.id
 				WHERE m.user_id = %d AND o.workos_org_id = %s",
@@ -408,7 +476,10 @@ class Manager {
 			)
 		);
 
-		return $membership_id ? $membership_id : '';
+		$result = $membership_id ? $membership_id : '';
+		wp_cache_set( $cache_key, $result, 'workos' );
+
+		return $result;
 	}
 
 	/**
@@ -420,7 +491,6 @@ class Manager {
 	 */
 	public static function store_membership_id( int $wp_user_id, string $workos_org_id, string $membership_id ): void {
 		global $wpdb;
-		$org_table = $wpdb->prefix . 'workos_organizations';
 		$mem_table = $wpdb->prefix . 'workos_org_memberships';
 
 		$local_org = self::get_by_workos_id( $workos_org_id );
@@ -428,6 +498,7 @@ class Manager {
 			return;
 		}
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$wpdb->update(
 			$mem_table,
 			[ 'workos_membership_id' => $membership_id ],
@@ -438,6 +509,9 @@ class Manager {
 			[ '%s' ],
 			[ '%d', '%d' ]
 		);
+
+		// Invalidate caches.
+		wp_cache_delete( "membership_{$wp_user_id}_{$workos_org_id}", 'workos' );
 	}
 
 	/**
@@ -457,6 +531,7 @@ class Manager {
 			return;
 		}
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$wpdb->update(
 			$mem_table,
 			[
@@ -470,6 +545,9 @@ class Manager {
 			[ '%s', '%s' ],
 			[ '%d', '%d' ]
 		);
+
+		// Invalidate caches.
+		wp_cache_delete( "user_orgs_{$wp_user_id}", 'workos' );
 	}
 
 	// -------------------------------------------------------------------------
@@ -487,6 +565,7 @@ class Manager {
 		global $wpdb;
 		$table = $wpdb->prefix . 'workos_org_sites';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$existing = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT id FROM {$table} WHERE org_id = %d AND site_id = %d",
@@ -496,6 +575,7 @@ class Manager {
 		);
 
 		if ( $existing ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$wpdb->update(
 				$table,
 				[ 'is_primary' => (int) $is_primary ],
@@ -503,17 +583,20 @@ class Manager {
 				[ '%d' ],
 				[ '%d' ]
 			);
-			return;
+		} else {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$wpdb->insert(
+				$table,
+				[
+					'org_id'     => $org_id,
+					'site_id'    => $site_id,
+					'is_primary' => (int) $is_primary,
+				],
+				[ '%d', '%d', '%d' ]
+			);
 		}
 
-		$wpdb->insert(
-			$table,
-			[
-				'org_id'     => $org_id,
-				'site_id'    => $site_id,
-				'is_primary' => (int) $is_primary,
-			],
-			[ '%d', '%d', '%d' ]
-		);
+		// Invalidate caches.
+		wp_cache_delete( "org_site_{$site_id}", 'workos' );
 	}
 }

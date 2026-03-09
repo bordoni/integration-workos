@@ -7,6 +7,8 @@
 
 namespace WorkOS\REST;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -98,10 +100,10 @@ class TokenAuth {
 		$auth_header = '';
 
 		// Try standard header first.
-		if ( isset( $_SERVER['HTTP_AUTHORIZATION'] ) ) {
-			$auth_header = sanitize_text_field( wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ) );
-		} elseif ( isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) ) {
-			$auth_header = sanitize_text_field( wp_unslash( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) );
+		if ( null !== SuperGlobals::get_server_var( 'HTTP_AUTHORIZATION' ) ) {
+			$auth_header = SuperGlobals::get_server_var( 'HTTP_AUTHORIZATION' );
+		} elseif ( null !== SuperGlobals::get_server_var( 'REDIRECT_HTTP_AUTHORIZATION' ) ) {
+			$auth_header = SuperGlobals::get_server_var( 'REDIRECT_HTTP_AUTHORIZATION' );
 		} elseif ( function_exists( 'getallheaders' ) ) {
 			$headers = getallheaders();
 			if ( isset( $headers['Authorization'] ) ) {
@@ -127,7 +129,7 @@ class TokenAuth {
 		}
 
 		$rest_prefix = rest_get_url_prefix();
-		$request_uri = sanitize_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) );
+		$request_uri = SuperGlobals::get_server_var( 'REQUEST_URI' ) ?? '';
 
 		return false !== strpos( $request_uri, "/{$rest_prefix}/" );
 	}

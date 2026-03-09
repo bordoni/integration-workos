@@ -51,6 +51,7 @@
 	</rule>
 	<rule ref="WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode">
 		<exclude-pattern>*/Api/Client.php</exclude-pattern>
+		<exclude-pattern>*/Auth/Login.php</exclude-pattern>
 	</rule>
 
 	<!-- OAuth callbacks do not use WordPress nonces; they use WorkOS state tokens -->

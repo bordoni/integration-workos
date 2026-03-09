@@ -7,6 +7,8 @@
 
 namespace WorkOS\Auth;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -63,24 +65,24 @@ class Login {
 		}
 
 		// Allow specific wp-login.php actions to pass through.
-		$action = sanitize_text_field( wp_unslash( $_REQUEST['action'] ?? 'login' ) );
+		$action = SuperGlobals::get_var( 'action' ) ?? 'login';
 		$bypass = [ 'logout', 'lostpassword', 'rp', 'resetpass', 'register', 'confirmaction', 'postpass' ];
 		if ( in_array( $action, $bypass, true ) ) {
 			return;
 		}
 
 		// Allow the "You have been logged out" screen to display.
-		if ( ! empty( $_GET['loggedout'] ) ) {
+		if ( ! empty( SuperGlobals::get_get_var( 'loggedout' ) ) ) {
 			return;
 		}
 
 		// Allow fallback login with ?fallback=1.
-		if ( ! empty( $_GET['fallback'] ) && workos()->option( 'allow_password_fallback', true ) ) {
+		if ( ! empty( SuperGlobals::get_get_var( 'fallback' ) ) && workos()->option( 'allow_password_fallback', true ) ) {
 			return;
 		}
 
 		// Build state with redirect_to.
-		$redirect_to = sanitize_url( wp_unslash( $_REQUEST['redirect_to'] ?? admin_url() ) );
+		$redirect_to = sanitize_url( SuperGlobals::get_var( 'redirect_to' ) ?? admin_url() );
 		$state       = wp_create_nonce( 'workos_auth' ) . '|' . $redirect_to;
 
 		$args = [
@@ -191,11 +193,11 @@ class Login {
 			return;
 		}
 
-		$code = sanitize_text_field( wp_unslash( $_GET['code'] ?? '' ) );
+		$code = SuperGlobals::get_get_var( 'code' ) ?? '';
 		if ( empty( $code ) ) {
 			// Check for error.
-			$error      = sanitize_text_field( wp_unslash( $_GET['error'] ?? 'missing_code' ) );
-			$error_desc = sanitize_text_field( wp_unslash( $_GET['error_description'] ?? '' ) );
+			$error      = SuperGlobals::get_get_var( 'error' ) ?? 'missing_code';
+			$error_desc = SuperGlobals::get_get_var( 'error_description' ) ?? '';
 			wp_die(
 				esc_html(
 					sprintf(
@@ -211,7 +213,7 @@ class Login {
 		}
 
 		// Parse state.
-		$state       = sanitize_text_field( wp_unslash( $_GET['state'] ?? '' ) );
+		$state       = SuperGlobals::get_get_var( 'state' ) ?? '';
 		$state_parts = explode( '|', $state, 2 );
 		$nonce       = $state_parts[0] ?? '';
 		$redirect_to = $state_parts[1] ?? admin_url();
@@ -265,7 +267,7 @@ class Login {
 		 * @param string   $user_login Username.
 		 * @param \WP_User $wp_user    User object.
 		 */
-		do_action( 'wp_login', $wp_user->user_login, $wp_user );
+		do_action( 'wp_login', $wp_user->user_login, $wp_user ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Firing core wp_login action.
 
 		$redirect_to = Redirect::resolve( $redirect_to, $wp_user );
 		wp_safe_redirect( $redirect_to );

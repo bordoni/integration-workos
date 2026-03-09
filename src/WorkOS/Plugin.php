@@ -153,9 +153,6 @@ class Plugin {
 		// Global helper functions.
 		require_once $this->dir . 'src/includes/functions-helpers.php';
 
-		// Load text domain.
-		add_action( 'init', [ $this, 'load_textdomain' ] );
-
 		// Initialize container.
 		$this->initializeContainer();
 
@@ -225,15 +222,6 @@ class Plugin {
 		$class = 'staging' === $env ? Options\Staging::class : Options\Production::class;
 
 		return $this->container->get( $class )->get( $key, $default_value );
-	}
-
-	/**
-	 * Load the plugin text domain for translations.
-	 *
-	 * @return void
-	 */
-	public function load_textdomain(): void {
-		load_plugin_textdomain( 'integration-workos', false, dirname( $this->basename ) . '/languages' );
 	}
 
 	/**

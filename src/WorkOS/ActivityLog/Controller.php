@@ -7,6 +7,8 @@
 
 namespace WorkOS\ActivityLog;
 
+defined( 'ABSPATH' ) || exit;
+
 use WorkOS\Contracts\Controller as BaseController;
 
 /**

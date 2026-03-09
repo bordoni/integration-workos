@@ -7,6 +7,8 @@
 
 namespace WorkOS\Auth;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -31,14 +33,14 @@ class PasswordReset {
 			return;
 		}
 
-		$action = sanitize_text_field( wp_unslash( $_REQUEST['action'] ?? '' ) );
+		$action = SuperGlobals::get_var( 'action' ) ?? '';
 
 		if ( 'lostpassword' !== $action ) {
 			return;
 		}
 
 		// If fallback is enabled, only redirect if there's no ?fallback=1 param.
-		if ( ! empty( $_GET['fallback'] ) && workos()->option( 'allow_password_fallback', true ) ) {
+		if ( ! empty( SuperGlobals::get_get_var( 'fallback' ) ) && workos()->option( 'allow_password_fallback', true ) ) {
 			return;
 		}
 

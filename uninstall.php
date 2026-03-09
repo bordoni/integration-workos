@@ -48,7 +48,7 @@ $workos_meta_keys = [
 ];
 
 foreach ( $workos_meta_keys as $workos_key ) {
-	$wpdb->delete( $wpdb->usermeta, [ 'meta_key' => $workos_key ], [ '%s' ] ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+	$wpdb->delete( $wpdb->usermeta, [ 'meta_key' => $workos_key ], [ '%s' ] ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 }
 
 // Drop custom tables.

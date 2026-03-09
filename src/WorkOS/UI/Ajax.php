@@ -9,6 +9,7 @@ namespace WorkOS\UI;
 
 use WorkOS\Auth\Login;
 use WorkOS\Sync\UserSync;
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -35,7 +36,7 @@ class Ajax {
 			wp_send_json_error( [ 'message' => __( 'WorkOS is not configured.', 'integration-workos' ) ] );
 		}
 
-		$email    = sanitize_email( wp_unslash( $_POST['email'] ?? '' ) );
+		$email    = sanitize_email( SuperGlobals::get_post_var( 'email' ) ?? '' );
 		$password = wp_unslash( $_POST['password'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 		if ( ! $email || ! $password ) {
@@ -64,9 +65,9 @@ class Ajax {
 		wp_set_current_user( $wp_user->ID );
 
 		/** This action is documented in Auth/Login.php */
-		do_action( 'wp_login', $wp_user->user_login, $wp_user );
+		do_action( 'wp_login', $wp_user->user_login, $wp_user ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Firing core wp_login action.
 
-		$redirect_to = sanitize_url( wp_unslash( $_POST['redirect_to'] ?? '' ) );
+		$redirect_to = sanitize_url( SuperGlobals::get_post_var( 'redirect_to' ) ?? '' );
 		if ( ! $redirect_to ) {
 			$redirect_to = \WorkOS\Auth\Redirect::resolve( admin_url(), $wp_user );
 		}

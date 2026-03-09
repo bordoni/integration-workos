@@ -7,6 +7,8 @@
 
 namespace WorkOS\ActivityLog;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -69,9 +71,9 @@ class AdminPage {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$current_page = max( 1, absint( $_GET['paged'] ?? 1 ) );
+		$current_page = max( 1, absint( SuperGlobals::get_get_var( 'paged' ) ?? 1 ) );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$event_filter = sanitize_text_field( wp_unslash( $_GET['event_type'] ?? '' ) );
+		$event_filter = SuperGlobals::get_get_var( 'event_type' ) ?? '';
 
 		$stats  = EventLogger::get_stats( 30 );
 		$result = EventLogger::get_events(
@@ -87,7 +89,7 @@ class AdminPage {
 		$total_pages = (int) ceil( $total / 20 );
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$cleared = ! empty( $_GET['cleared'] );
+		$cleared = ! empty( SuperGlobals::get_get_var( 'cleared' ) );
 
 		$event_types = [ 'login', 'logout', 'login_failed', 'login_denied', 'user_suspended', 'onboarding_sync', 'bypass_activated' ];
 

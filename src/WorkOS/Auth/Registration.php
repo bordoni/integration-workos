@@ -7,6 +7,8 @@
 
 namespace WorkOS\Auth;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -30,7 +32,7 @@ class Registration {
 			return;
 		}
 
-		$action = sanitize_text_field( wp_unslash( $_REQUEST['action'] ?? '' ) );
+		$action = SuperGlobals::get_var( 'action' ) ?? '';
 
 		if ( 'register' !== $action ) {
 			return;

@@ -12,6 +12,7 @@ use WorkOS\Config;
 use WorkOS\Options\Options;
 use WorkOS\Options\Production;
 use WorkOS\Options\Staging;
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -85,7 +86,7 @@ class Settings {
 	 */
 	private function get_current_tab(): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Tab navigation, no data modification.
-		$tab = sanitize_text_field( wp_unslash( $_GET['tab'] ?? 'settings' ) );
+		$tab = SuperGlobals::get_get_var( 'tab' ) ?? 'settings';
 
 		if ( ! in_array( $tab, [ 'settings', 'organization', 'users' ], true ) ) {
 			return 'settings';
@@ -113,7 +114,7 @@ class Settings {
 	 */
 	private function get_editing_environment(): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Navigation param, no data modification.
-		$env = sanitize_text_field( wp_unslash( $_GET['env'] ?? Config::get_active_environment() ) );
+		$env = SuperGlobals::get_get_var( 'env' ) ?? Config::get_active_environment();
 
 		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'staging';
 	}
@@ -918,7 +919,7 @@ class Settings {
 	 */
 	public function handle_activate_environment(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce is verified below.
-		if ( empty( $_GET['action'] ) || 'workos_activate_env' !== $_GET['action'] ) {
+		if ( empty( SuperGlobals::get_get_var( 'action' ) ) || 'workos_activate_env' !== SuperGlobals::get_get_var( 'action' ) ) {
 			return;
 		}
 
@@ -928,7 +929,7 @@ class Settings {
 
 		check_admin_referer( 'workos_activate_env' );
 
-		$env = sanitize_text_field( wp_unslash( $_GET['env'] ?? '' ) );
+		$env = SuperGlobals::get_get_var( 'env' ) ?? '';
 
 		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
 			wp_die( esc_html__( 'Invalid environment.', 'integration-workos' ) );
@@ -971,8 +972,8 @@ class Settings {
 
 		check_admin_referer( 'workos_create_org' );
 
-		$name = sanitize_text_field( wp_unslash( $_POST['org_name'] ?? '' ) );
-		$env  = sanitize_text_field( wp_unslash( $_POST['editing_env'] ?? '' ) );
+		$name = SuperGlobals::get_post_var( 'org_name' ) ?? '';
+		$env  = SuperGlobals::get_post_var( 'editing_env' ) ?? '';
 
 		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
 			$env = Config::get_active_environment();
@@ -1047,7 +1048,7 @@ class Settings {
 
 		check_admin_referer( 'workos_sync_roles_to_workos' );
 
-		$env = sanitize_text_field( wp_unslash( $_POST['editing_env'] ?? Config::get_active_environment() ) );
+		$env = SuperGlobals::get_post_var( 'editing_env' ) ?? Config::get_active_environment();
 		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
 			$env = Config::get_active_environment();
 		}
@@ -1968,13 +1969,13 @@ class Settings {
 		}
 
 		$plugin_meta[] = sprintf(
-			'<a href="%1$s" target="_blank"><span class="dashicons dashicons-editor-help" aria-hidden="true" style="font-size:14px;line-height:1.3"></span>%2$s</a>',
+			'<a href="%1$s" target="_blank"><span class="dashicons dashicons-editor-help" aria-hidden="true" style="font-size:16px;line-height:1.3"></span>%2$s</a>',
 			esc_url( 'https://github.com/bordoni/integration-workos/issues' ),
 			esc_html__( 'Support', 'integration-workos' )
 		);
 
 		$plugin_meta[] = sprintf(
-			'<a href="%1$s" target="_blank"><span class="dashicons dashicons-star-filled" aria-hidden="true" style="font-size:14px;line-height:1.3"></span>%2$s</a>',
+			'<a href="%1$s" target="_blank"><span class="dashicons dashicons-money-alt" aria-hidden="true" style="font-size:16px;line-height:1.3"></span>%2$s</a>',
 			esc_url( 'https://bordoni.me/r/sponsor' ),
 			esc_html__( 'Sponsor', 'integration-workos' )
 		);

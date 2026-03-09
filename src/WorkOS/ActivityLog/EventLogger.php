@@ -7,6 +7,8 @@
 
 namespace WorkOS\ActivityLog;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -53,7 +55,7 @@ class EventLogger {
 				'user_email'     => sanitize_email( $user_email ),
 				'workos_user_id' => sanitize_text_field( $workos_user_id ),
 				'ip_address'     => self::get_ip_address(),
-				'user_agent'     => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
+				'user_agent'     => SuperGlobals::get_server_var( 'HTTP_USER_AGENT' ) ?? '',
 				'metadata'       => ! empty( $metadata ) ? wp_json_encode( $metadata ) : null,
 				'created_at'     => current_time( 'mysql', true ),
 			],
@@ -194,6 +196,7 @@ class EventLogger {
 		];
 
 		foreach ( $headers as $header ) {
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Dynamic key; sanitized below via FILTER_VALIDATE_IP.
 			if ( ! empty( $_SERVER[ $header ] ) ) {
 				$ip = sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) );
 				// X-Forwarded-For may contain multiple IPs; use the first.

@@ -10,6 +10,7 @@ namespace WorkOS\Admin;
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Config;
 use WorkOS\Sync\RoleMapper;
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -37,7 +38,7 @@ class OnboardingAjax {
 			wp_send_json_error( [ 'message' => 'Unauthorized' ], 403 );
 		}
 
-		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$page     = max( 1, absint( SuperGlobals::get_post_var( 'page' ) ?? 1 ) );
 		$per_page = 20;
 
 		$args = [
@@ -86,7 +87,7 @@ class OnboardingAjax {
 			wp_send_json_error( [ 'message' => 'Unauthorized' ], 403 );
 		}
 
-		$user_id = absint( $_POST['user_id'] ?? 0 );
+		$user_id = absint( SuperGlobals::get_post_var( 'user_id' ) ?? 0 );
 
 		if ( ! $user_id ) {
 			wp_send_json_error( [ 'message' => 'Invalid user ID.' ] );
@@ -111,6 +112,7 @@ class OnboardingAjax {
 			wp_send_json_error( [ 'message' => 'Unauthorized' ], 403 );
 		}
 
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.NonceVerification.Missing -- Nonce verified above; values are cast to int via absint().
 		$user_ids = array_map( 'absint', (array) ( $_POST['user_ids'] ?? [] ) );
 		$user_ids = array_filter( $user_ids );
 

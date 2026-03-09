@@ -2,7 +2,7 @@
 Contributors: developer-starter, bordoni
 Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 5.9
-Tested up to: 6.7
+Tested up to: 6.9
 Requires PHP: 7.4
 Stable tag: 1.0.0
 License: GPL-2.0-or-later

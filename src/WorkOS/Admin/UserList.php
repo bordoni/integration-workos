@@ -12,6 +12,7 @@ namespace WorkOS\Admin;
 
 use WorkOS\Sync\RoleMapper;
 use WorkOS\Sync\UserSync;
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -350,12 +351,12 @@ class UserList {
 	 */
 	public function handle_single_sync(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce verified below via check_admin_referer().
-		if ( empty( $_GET['action'] ) || 'workos_sync_user' !== $_GET['action'] ) {
+		if ( empty( SuperGlobals::get_get_var( 'action' ) ) || 'workos_sync_user' !== SuperGlobals::get_get_var( 'action' ) ) {
 			return;
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce verified below via check_admin_referer().
-		$user_id = isset( $_GET['user_id'] ) ? absint( $_GET['user_id'] ) : 0;
+		$user_id = absint( SuperGlobals::get_get_var( 'user_id' ) ?? 0 );
 		if ( ! $user_id ) {
 			return;
 		}
@@ -385,12 +386,12 @@ class UserList {
 	 */
 	public function handle_single_resync(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce verified below via check_admin_referer().
-		if ( empty( $_GET['action'] ) || 'workos_resync_user' !== $_GET['action'] ) {
+		if ( empty( SuperGlobals::get_get_var( 'action' ) ) || 'workos_resync_user' !== SuperGlobals::get_get_var( 'action' ) ) {
 			return;
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce verified below via check_admin_referer().
-		$user_id = isset( $_GET['user_id'] ) ? absint( $_GET['user_id'] ) : 0;
+		$user_id = absint( SuperGlobals::get_get_var( 'user_id' ) ?? 0 );
 		if ( ! $user_id ) {
 			return;
 		}
@@ -486,7 +487,7 @@ class UserList {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only.
-		$current = isset( $_GET['workos_sync_status'] ) && 'out_of_sync' === $_GET['workos_sync_status'];
+		$current = null !== SuperGlobals::get_get_var( 'workos_sync_status' ) && 'out_of_sync' === SuperGlobals::get_get_var( 'workos_sync_status' );
 		$class   = $current ? ' class="current"' : '';
 
 		$views['workos_out_of_sync'] = sprintf(
@@ -507,7 +508,7 @@ class UserList {
 	 */
 	public function filter_out_of_sync_users( \WP_User_Query $query ): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Filter param, no data modification.
-		if ( empty( $_GET['workos_sync_status'] ) || 'out_of_sync' !== $_GET['workos_sync_status'] ) {
+		if ( empty( SuperGlobals::get_get_var( 'workos_sync_status' ) ) || 'out_of_sync' !== SuperGlobals::get_get_var( 'workos_sync_status' ) ) {
 			return;
 		}
 
@@ -532,15 +533,15 @@ class UserList {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$synced = isset( $_GET['workos_synced'] ) ? absint( $_GET['workos_synced'] ) : 0;
+		$synced = absint( SuperGlobals::get_get_var( 'workos_synced' ) ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$resynced = isset( $_GET['workos_resynced'] ) ? absint( $_GET['workos_resynced'] ) : 0;
+		$resynced = absint( SuperGlobals::get_get_var( 'workos_resynced' ) ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$failed = isset( $_GET['workos_failed'] ) ? absint( $_GET['workos_failed'] ) : 0;
+		$failed = absint( SuperGlobals::get_get_var( 'workos_failed' ) ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$skipped = isset( $_GET['workos_skipped'] ) ? absint( $_GET['workos_skipped'] ) : 0;
+		$skipped = absint( SuperGlobals::get_get_var( 'workos_skipped' ) ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$errors = isset( $_GET['workos_errors'] ) ? sanitize_text_field( wp_unslash( $_GET['workos_errors'] ) ) : '';
+		$errors = SuperGlobals::get_get_var( 'workos_errors' ) ?? '';
 
 		if ( $synced ) {
 			printf(
@@ -619,9 +620,9 @@ class UserList {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$roles_synced = isset( $_GET['workos_roles_synced'] ) ? absint( $_GET['workos_roles_synced'] ) : 0;
+		$roles_synced = absint( SuperGlobals::get_get_var( 'workos_roles_synced' ) ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
-		$roles_skipped = isset( $_GET['workos_roles_skipped'] ) ? absint( $_GET['workos_roles_skipped'] ) : 0;
+		$roles_skipped = absint( SuperGlobals::get_get_var( 'workos_roles_skipped' ) ?? 0 );
 
 		if ( $roles_synced ) {
 			printf(

@@ -8,6 +8,7 @@
 namespace WorkOS\Auth;
 
 use WorkOS\ActivityLog\EventLogger;
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -46,7 +47,8 @@ class LoginBypass {
 	 */
 	public function maybe_activate_bypass(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		if ( ! isset( $_GET['workos'] ) || '0' !== $_GET['workos'] ) {
+		$workos = SuperGlobals::get_get_var( 'workos' );
+		if ( null === $workos || '0' !== $workos ) {
 			return;
 		}
 
@@ -106,9 +108,6 @@ class LoginBypass {
 	 * @return string
 	 */
 	private static function get_ip(): string {
-		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-			return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
-		}
-		return '';
+		return SuperGlobals::get_server_var( 'REMOTE_ADDR' ) ?? '';
 	}
 }

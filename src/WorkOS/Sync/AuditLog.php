@@ -7,6 +7,8 @@
 
 namespace WorkOS\Sync;
 
+use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -316,7 +318,7 @@ class AuditLog {
 	 * @return string
 	 */
 	private function get_client_ip(): string {
-		$ip           = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0' ) );
+		$ip           = SuperGlobals::get_server_var( 'REMOTE_ADDR' ) ?? '0.0.0.0';
 		$validated_ip = filter_var( $ip, FILTER_VALIDATE_IP );
 		return $validated_ip ? $validated_ip : '0.0.0.0';
 	}
