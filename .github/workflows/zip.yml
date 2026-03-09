@@ -90,6 +90,7 @@ jobs:
             --exclude='.slic' \
             --exclude='slic.json' \
             --exclude='README.md' \
+            --exclude='CHANGELOG.md' \
             --exclude='AGENTS.md' \
             --exclude='bin' \
             --exclude='src/css' \
