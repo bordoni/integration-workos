@@ -57,40 +57,65 @@ class Widget extends \WP_Widget {
 
 		// Auth section.
 		$this->render_heading( __( 'Authentication', 'integration-workos' ) );
-		$this->render_select( $instance, 'mode', __( 'Mode', 'integration-workos' ), [
-			'auto'     => __( 'Auto (from settings)', 'integration-workos' ),
-			'redirect' => __( 'Redirect (AuthKit)', 'integration-workos' ),
-			'headless' => __( 'Headless (password)', 'integration-workos' ),
-		] );
+		$this->render_select(
+			$instance,
+			'mode',
+			__( 'Mode', 'integration-workos' ),
+			[
+				'auto'     => __( 'Auto (from settings)', 'integration-workos' ),
+				'redirect' => __( 'Redirect (AuthKit)', 'integration-workos' ),
+				'headless' => __( 'Headless (password)', 'integration-workos' ),
+			]
+		);
 		$this->render_text( $instance, 'redirect_to', __( 'Redirect URL', 'integration-workos' ) );
 
 		// Display section.
 		$this->render_heading( __( 'Logged-in Display', 'integration-workos' ) );
-		$this->render_select( $instance, 'logged_in_display', __( 'When logged in', 'integration-workos' ), [
-			'hide'      => __( 'Hide', 'integration-workos' ),
-			'logout'    => __( 'Show logout button', 'integration-workos' ),
-			'user_info' => __( 'Show user info + logout', 'integration-workos' ),
-		] );
+		$this->render_select(
+			$instance,
+			'logged_in_display',
+			__( 'When logged in', 'integration-workos' ),
+			[
+				'hide'      => __( 'Hide', 'integration-workos' ),
+				'logout'    => __( 'Show logout button', 'integration-workos' ),
+				'user_info' => __( 'Show user info + logout', 'integration-workos' ),
+			]
+		);
 
 		// Style section.
 		$this->render_heading( __( 'Button Styling', 'integration-workos' ) );
 		$this->render_text( $instance, 'button_text', __( 'Button text', 'integration-workos' ) );
 		$this->render_text( $instance, 'logout_text', __( 'Logout text', 'integration-workos' ) );
-		$this->render_select( $instance, 'alignment', __( 'Alignment', 'integration-workos' ), [
-			'left'   => __( 'Left', 'integration-workos' ),
-			'center' => __( 'Center', 'integration-workos' ),
-			'right'  => __( 'Right', 'integration-workos' ),
-		] );
-		$this->render_select( $instance, 'size', __( 'Size', 'integration-workos' ), [
-			'small'  => __( 'Small', 'integration-workos' ),
-			'medium' => __( 'Medium', 'integration-workos' ),
-			'large'  => __( 'Large', 'integration-workos' ),
-		] );
-		$this->render_select( $instance, 'style', __( 'Style', 'integration-workos' ), [
-			'filled'  => __( 'Filled', 'integration-workos' ),
-			'outline' => __( 'Outline', 'integration-workos' ),
-			'link'    => __( 'Link', 'integration-workos' ),
-		] );
+		$this->render_select(
+			$instance,
+			'alignment',
+			__( 'Alignment', 'integration-workos' ),
+			[
+				'left'   => __( 'Left', 'integration-workos' ),
+				'center' => __( 'Center', 'integration-workos' ),
+				'right'  => __( 'Right', 'integration-workos' ),
+			]
+		);
+		$this->render_select(
+			$instance,
+			'size',
+			__( 'Size', 'integration-workos' ),
+			[
+				'small'  => __( 'Small', 'integration-workos' ),
+				'medium' => __( 'Medium', 'integration-workos' ),
+				'large'  => __( 'Large', 'integration-workos' ),
+			]
+		);
+		$this->render_select(
+			$instance,
+			'style',
+			__( 'Style', 'integration-workos' ),
+			[
+				'filled'  => __( 'Filled', 'integration-workos' ),
+				'outline' => __( 'Outline', 'integration-workos' ),
+				'link'    => __( 'Link', 'integration-workos' ),
+			]
+		);
 		$this->render_text( $instance, 'bg_color', __( 'Background color (hex)', 'integration-workos' ) );
 		$this->render_text( $instance, 'text_color', __( 'Text color (hex)', 'integration-workos' ) );
 		$this->render_text( $instance, 'border_color', __( 'Border color (hex)', 'integration-workos' ) );
@@ -130,9 +155,9 @@ class Widget extends \WP_Widget {
 		$instance['style']             = in_array( $new_instance['style'] ?? '', [ 'filled', 'outline', 'link' ], true ) ? $new_instance['style'] : 'filled';
 
 		// Checkboxes.
-		$instance['show_icon']               = ! empty( $new_instance['show_icon'] );
-		$instance['show_registration']       = ! empty( $new_instance['show_registration'] );
-		$instance['show_password_fallback']  = ! empty( $new_instance['show_password_fallback'] );
+		$instance['show_icon']              = ! empty( $new_instance['show_icon'] );
+		$instance['show_registration']      = ! empty( $new_instance['show_registration'] );
+		$instance['show_password_fallback'] = ! empty( $new_instance['show_password_fallback'] );
 
 		return $instance;
 	}

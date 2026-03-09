@@ -33,8 +33,8 @@ class LogoutRedirect {
 	/**
 	 * Filter the logout redirect URL based on user role.
 	 *
-	 * @param string           $redirect_to           Default redirect URL.
-	 * @param string           $requested_redirect_to Originally requested redirect URL.
+	 * @param string             $redirect_to           Default redirect URL.
+	 * @param string             $requested_redirect_to Originally requested redirect URL.
 	 * @param \WP_User|\WP_Error $user                User object (or error on failed logout).
 	 *
 	 * @return string

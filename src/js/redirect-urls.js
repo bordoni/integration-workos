@@ -58,13 +58,13 @@ import '../css/redirect-urls.css';
 	 * @return {DocumentFragment} Fragment with hidden input and checkbox.
 	 */
 	function buildFirstLoginInputs( index ) {
-		const fragment = document.createDocumentFragment();
+		const fragment  = document.createDocumentFragment();
 		const fieldName = 'workos_' + env + '[redirect_urls][first_login][' + index + ']';
 
-		const hidden  = document.createElement( 'input' );
-		hidden.type   = 'hidden';
-		hidden.name   = fieldName;
-		hidden.value  = '0';
+		const hidden = document.createElement( 'input' );
+		hidden.type  = 'hidden';
+		hidden.name  = fieldName;
+		hidden.value = '0';
 		fragment.appendChild( hidden );
 
 		const checkbox = document.createElement( 'input' );
@@ -136,8 +136,8 @@ import '../css/redirect-urls.css';
 	addBtn.addEventListener(
 		'click',
 		function () {
-			const index = rowIndex++;
-			const row   = document.createElement( 'tr' );
+			const index   = rowIndex++;
+			const row     = document.createElement( 'tr' );
 			row.className = 'workos-redirect-url-row';
 
 			const tdSelect = document.createElement( 'td' );

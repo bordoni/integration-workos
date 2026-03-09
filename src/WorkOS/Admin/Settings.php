@@ -616,7 +616,6 @@ class Settings {
 				'label' => __( 'Record login, logout, and other auth events in a local database table.', 'integration-workos' ),
 			]
 		);
-
 	}
 
 	/**
@@ -1955,6 +1954,14 @@ class Settings {
 		return $links;
 	}
 
+	/**
+	 * Add plugin row meta links.
+	 *
+	 * @param array  $plugin_meta Existing meta links.
+	 * @param string $plugin_file Plugin file path.
+	 *
+	 * @return array Modified meta links.
+	 */
 	public function row_meta( array $plugin_meta, string $plugin_file ): array {
 		if ( WORKOS_BASENAME !== $plugin_file ) {
 			return $plugin_meta;

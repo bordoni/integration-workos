@@ -100,7 +100,7 @@ class Schema {
 			ip_address varchar(45) DEFAULT '',
 			user_agent text,
 			metadata longtext,
-			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
 			PRIMARY KEY  (id),
 			KEY idx_event_type (event_type),
 			KEY idx_user_id (user_id),

@@ -32,8 +32,8 @@ class Redirect {
 	/**
 	 * Filter the login redirect URL for headless/standard login flows.
 	 *
-	 * @param string           $redirect_to           Default redirect URL.
-	 * @param string           $requested_redirect_to Originally requested redirect URL.
+	 * @param string             $redirect_to           Default redirect URL.
+	 * @param string             $requested_redirect_to Originally requested redirect URL.
 	 * @param \WP_User|\WP_Error $user                User object (or error on failed login).
 	 *
 	 * @return string
@@ -113,8 +113,8 @@ class Redirect {
 		$entry        = $redirect_map[ $role ] ?? $redirect_map['__default__'] ?? [];
 
 		// Support both structured entries and legacy string values.
-		$role_url          = is_array( $entry ) ? ( $entry['url'] ?? '' ) : (string) $entry;
-		$first_login_only  = is_array( $entry ) ? ! empty( $entry['first_login_only'] ) : false;
+		$role_url         = is_array( $entry ) ? ( $entry['url'] ?? '' ) : (string) $entry;
+		$first_login_only = is_array( $entry ) ? ! empty( $entry['first_login_only'] ) : false;
 
 		/**
 		 * Override the per-entry "first login only" setting programmatically.

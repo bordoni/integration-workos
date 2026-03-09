@@ -7,10 +7,11 @@
 	<file>./integration-workos.php</file>
 	<file>./uninstall.php</file>
 
-	<!-- Exclude vendor and node_modules -->
+	<!-- Exclude vendor, node_modules, and JS source (use ESLint for JS) -->
 	<exclude-pattern>*/vendor/*</exclude-pattern>
 	<exclude-pattern>*/node_modules/*</exclude-pattern>
 	<exclude-pattern>*/tests/*</exclude-pattern>
+	<exclude-pattern>*.js</exclude-pattern>
 
 	<!-- Use WordPress Coding Standards -->
 	<rule ref="WordPress">
@@ -65,6 +66,7 @@
 	<!-- wp_login is a core WP hook name we must fire to maintain compatibility -->
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound">
 		<exclude-pattern>*/Auth/Login.php</exclude-pattern>
+		<exclude-pattern>*/UI/Ajax.php</exclude-pattern>
 	</rule>
 
 	<!--

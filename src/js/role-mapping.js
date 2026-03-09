@@ -7,10 +7,10 @@
 import '../css/role-mapping.css';
 
 ( function () {
-	const config      = window.workosRoleMapping || {};
-	const wpRoles     = config.wpRoles || {};
-	const workosRoles = config.workosRoles || {};
-	const env         = config.env || 'production';
+	const config         = window.workosRoleMapping || {};
+	const wpRoles        = config.wpRoles || {};
+	const workosRoles    = config.workosRoles || {};
+	const env            = config.env || 'production';
 	const hasWorkosRoles = Object.keys( workosRoles ).length > 0;
 
 	const table  = document.getElementById( 'workos-role-map-table' );
@@ -34,47 +34,53 @@ import '../css/role-mapping.css';
 		const counts = {};
 
 		// Count occurrences of each non-empty WorkOS role value.
-		rows.forEach( function ( row ) {
-			const firstTd = row.querySelector( 'td' );
-			if ( ! firstTd ) {
-				return;
+		rows.forEach(
+			function ( row ) {
+				const firstTd = row.querySelector( 'td' );
+				if ( ! firstTd ) {
+						return;
+				}
+				const input = firstTd.querySelector( 'select, input' );
+				if ( ! input ) {
+					return;
+				}
+				const val = input.value.trim();
+				if ( val === '' ) {
+					return;
+				}
+				counts[ val ] = ( counts[ val ] || 0 ) + 1;
 			}
-			const input = firstTd.querySelector( 'select, input' );
-			if ( ! input ) {
-				return;
-			}
-			const val = input.value.trim();
-			if ( val === '' ) {
-				return;
-			}
-			counts[ val ] = ( counts[ val ] || 0 ) + 1;
-		} );
+		);
 
 		// Determine which values are duplicated.
 		const duplicated = {};
-		Object.keys( counts ).forEach( function ( key ) {
-			if ( counts[ key ] > 1 ) {
-				duplicated[ key ] = true;
+		Object.keys( counts ).forEach(
+			function ( key ) {
+				if ( counts[ key ] > 1 ) {
+						duplicated[ key ] = true;
+				}
 			}
-		} );
+		);
 
 		const hasDuplicates = Object.keys( duplicated ).length > 0;
 
 		// Toggle the duplicate class on each row.
-		rows.forEach( function ( row ) {
-			const firstTd = row.querySelector( 'td' );
-			if ( ! firstTd ) {
-				return;
-			}
-			const input = firstTd.querySelector( 'select, input' );
-			const val   = input ? input.value.trim() : '';
+		rows.forEach(
+			function ( row ) {
+				const firstTd = row.querySelector( 'td' );
+				if ( ! firstTd ) {
+						return;
+				}
+				const input = firstTd.querySelector( 'select, input' );
+				const val   = input ? input.value.trim() : '';
 
-			if ( val !== '' && duplicated[ val ] ) {
-				row.classList.add( 'workos-role-map-row-duplicate' );
-			} else {
-				row.classList.remove( 'workos-role-map-row-duplicate' );
+				if ( val !== '' && duplicated[ val ] ) {
+					row.classList.add( 'workos-role-map-row-duplicate' );
+				} else {
+					row.classList.remove( 'workos-role-map-row-duplicate' );
+				}
 			}
-		} );
+		);
 
 		// Show or hide the duplicate warning.
 		let warning = document.getElementById( 'workos-role-map-duplicate-warning' );
@@ -237,7 +243,7 @@ import '../css/role-mapping.css';
 			const row     = document.createElement( 'tr' );
 			row.className = 'workos-role-map-row';
 
-			const tdWorkos = document.createElement( 'td' );
+			const tdWorkos    = document.createElement( 'td' );
 			const workosInput = buildWorkosRoleInput();
 			tdWorkos.appendChild( workosInput );
 			row.appendChild( tdWorkos );
@@ -278,23 +284,29 @@ import '../css/role-mapping.css';
 	);
 
 	// Change detection on selects and inputs within the table.
-	table.addEventListener( 'change', function () {
-		showChangeWarning();
-		validateDuplicates();
-	} );
+	table.addEventListener(
+		'change',
+		function () {
+			showChangeWarning();
+			validateDuplicates();
+		}
+	);
 
 	// Block form submission when duplicate WorkOS roles exist.
 	const form = table.closest( 'form' );
 	if ( form ) {
-		form.addEventListener( 'submit', function ( e ) {
-			if ( validateDuplicates() ) {
-				e.preventDefault();
-				const warning = document.getElementById( 'workos-role-map-duplicate-warning' );
-				if ( warning ) {
-					warning.scrollIntoView( { behavior: 'smooth', block: 'center' } );
+		form.addEventListener(
+			'submit',
+			function ( e ) {
+				if ( validateDuplicates() ) {
+					e.preventDefault();
+					const warning = document.getElementById( 'workos-role-map-duplicate-warning' );
+					if ( warning ) {
+						warning.scrollIntoView( { behavior: 'smooth', block: 'center' } );
+					}
 				}
 			}
-		} );
+		);
 	}
 
 	// Initial visibility and duplicate checks.

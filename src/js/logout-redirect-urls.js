@@ -109,8 +109,8 @@ import '../css/logout-redirect-urls.css';
 	addBtn.addEventListener(
 		'click',
 		function () {
-			const index = rowIndex++;
-			const row   = document.createElement( 'tr' );
+			const index   = rowIndex++;
+			const row     = document.createElement( 'tr' );
 			row.className = 'workos-logout-redirect-url-row';
 
 			const tdSelect = document.createElement( 'td' );

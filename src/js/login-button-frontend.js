@@ -3,6 +3,8 @@
  *
  * Handles headless form toggle and AJAX submission.
  * Vanilla JS IIFE, no framework dependencies.
+ *
+ * @package WorkOS
  */
 ( function () {
 	'use strict';
@@ -10,13 +12,17 @@
 	var config = window.workosLoginButton || {};
 
 	function init() {
-		document.querySelectorAll( '[data-workos-headless-toggle]' ).forEach( function ( btn ) {
-			btn.addEventListener( 'click', handleToggle );
-		} );
+		document.querySelectorAll( '[data-workos-headless-toggle]' ).forEach(
+			function ( btn ) {
+				btn.addEventListener( 'click', handleToggle );
+			}
+		);
 
-		document.querySelectorAll( '[data-workos-headless-form]' ).forEach( function ( form ) {
-			form.addEventListener( 'submit', handleSubmit );
-		} );
+		document.querySelectorAll( '[data-workos-headless-form]' ).forEach(
+			function ( form ) {
+				form.addEventListener( 'submit', handleSubmit );
+			}
+		);
 	}
 
 	function handleToggle( e ) {
@@ -30,7 +36,7 @@
 			return;
 		}
 
-		var isHidden = form.style.display === 'none' || form.style.display === '';
+		var isHidden       = form.style.display === 'none' || form.style.display === '';
 		form.style.display = isHidden ? 'flex' : 'none';
 
 		if ( isHidden ) {
@@ -44,10 +50,10 @@
 	function handleSubmit( e ) {
 		e.preventDefault();
 
-		var form = e.target;
-		var wrapper = form.closest( '.workos-login-button' );
-		var errorEl = form.querySelector( '.workos-login-button__error' );
-		var email = form.querySelector( 'input[name="email"]' ).value;
+		var form     = e.target;
+		var wrapper  = form.closest( '.workos-login-button' );
+		var errorEl  = form.querySelector( '.workos-login-button__error' );
+		var email    = form.querySelector( 'input[name="email"]' ).value;
 		var password = form.querySelector( 'input[name="password"]' ).value;
 
 		if ( ! email || ! password ) {
@@ -74,32 +80,41 @@
 			body.append( 'redirect_to', redirectInput.value );
 		}
 
-		fetch( config.ajaxUrl || '/wp-admin/admin-ajax.php', {
-			method: 'POST',
-			credentials: 'same-origin',
-			body: body,
-		} )
-			.then( function ( res ) {
-				return res.json();
-			} )
-			.then( function ( data ) {
-				form.removeAttribute( 'aria-busy' );
+		fetch(
+			config.ajaxUrl || '/wp-admin/admin-ajax.php',
+			{
+				method: 'POST',
+				credentials: 'same-origin',
+				body: body,
+			}
+		)
+			.then(
+				function ( res ) {
+					return res.json();
+				}
+			)
+			.then(
+				function ( data ) {
+					form.removeAttribute( 'aria-busy' );
 
-				if ( data.success && data.data && data.data.redirect_to ) {
-					window.location.href = data.data.redirect_to;
-				} else {
-					var msg = ( data.data && data.data.message ) || ( config.i18n && config.i18n.error ) || 'Login failed.';
-					if ( errorEl ) {
-						errorEl.textContent = msg;
+					if ( data.success && data.data && data.data.redirect_to ) {
+							window.location.href = data.data.redirect_to;
+					} else {
+						var msg = ( data.data && data.data.message ) || ( config.i18n && config.i18n.error ) || 'Login failed.';
+						if ( errorEl ) {
+							errorEl.textContent = msg;
+						}
 					}
 				}
-			} )
-			.catch( function () {
-				form.removeAttribute( 'aria-busy' );
-				if ( errorEl ) {
-					errorEl.textContent = ( config.i18n && config.i18n.error ) || 'An error occurred. Please try again.';
+			)
+			.catch(
+				function () {
+					form.removeAttribute( 'aria-busy' );
+					if ( errorEl ) {
+							errorEl.textContent = ( config.i18n && config.i18n.error ) || 'An error occurred. Please try again.';
+					}
 				}
-			} );
+			);
 	}
 
 	if ( document.readyState === 'loading' ) {

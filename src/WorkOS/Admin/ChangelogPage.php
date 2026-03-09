@@ -170,8 +170,8 @@ class ChangelogPage {
 	 * @return string HTML output.
 	 */
 	private function markdown_to_html( string $markdown ): string {
-		$lines  = explode( "\n", trim( $markdown ) );
-		$html   = '';
+		$lines   = explode( "\n", trim( $markdown ) );
+		$html    = '';
 		$in_list = false;
 
 		foreach ( $lines as $line ) {

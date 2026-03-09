@@ -19,29 +19,29 @@ class Renderer {
 	 */
 	public const DEFAULTS = [
 		// Auth.
-		'mode'        => 'auto',
-		'redirect_to' => '',
+		'mode'                   => 'auto',
+		'redirect_to'            => '',
 
 		// Display.
-		'logged_in_display' => 'hide',
+		'logged_in_display'      => 'hide',
 
 		// Style.
-		'button_text'   => '',
-		'logout_text'   => '',
-		'alignment'     => 'left',
-		'size'          => 'medium',
-		'style'         => 'filled',
-		'bg_color'      => '',
-		'text_color'    => '',
-		'border_color'  => '',
-		'border_radius' => '',
-		'show_icon'     => false,
+		'button_text'            => '',
+		'logout_text'            => '',
+		'alignment'              => 'left',
+		'size'                   => 'medium',
+		'style'                  => 'filled',
+		'bg_color'               => '',
+		'text_color'             => '',
+		'border_color'           => '',
+		'border_radius'          => '',
+		'show_icon'              => false,
 
 		// Extras.
-		'show_registration'       => false,
-		'show_password_fallback'  => false,
-		'registration_text'       => '',
-		'password_fallback_text'  => '',
+		'show_registration'      => false,
+		'show_password_fallback' => false,
+		'registration_text'      => '',
+		'password_fallback_text' => '',
 	];
 
 	/**
@@ -81,16 +81,16 @@ class Renderer {
 		$attrs = wp_parse_args( $attrs, self::DEFAULTS );
 
 		// Sanitize enums.
-		$attrs['mode']             = in_array( $attrs['mode'], [ 'auto', 'redirect', 'headless' ], true ) ? $attrs['mode'] : 'auto';
+		$attrs['mode']              = in_array( $attrs['mode'], [ 'auto', 'redirect', 'headless' ], true ) ? $attrs['mode'] : 'auto';
 		$attrs['logged_in_display'] = in_array( $attrs['logged_in_display'], [ 'hide', 'logout', 'user_info' ], true ) ? $attrs['logged_in_display'] : 'hide';
-		$attrs['alignment']        = in_array( $attrs['alignment'], [ 'left', 'center', 'right' ], true ) ? $attrs['alignment'] : 'left';
-		$attrs['size']             = in_array( $attrs['size'], [ 'small', 'medium', 'large' ], true ) ? $attrs['size'] : 'medium';
-		$attrs['style']            = in_array( $attrs['style'], [ 'filled', 'outline', 'link' ], true ) ? $attrs['style'] : 'filled';
+		$attrs['alignment']         = in_array( $attrs['alignment'], [ 'left', 'center', 'right' ], true ) ? $attrs['alignment'] : 'left';
+		$attrs['size']              = in_array( $attrs['size'], [ 'small', 'medium', 'large' ], true ) ? $attrs['size'] : 'medium';
+		$attrs['style']             = in_array( $attrs['style'], [ 'filled', 'outline', 'link' ], true ) ? $attrs['style'] : 'filled';
 
 		// Sanitize booleans.
-		$attrs['show_icon']               = self::to_bool( $attrs['show_icon'] );
-		$attrs['show_registration']       = self::to_bool( $attrs['show_registration'] );
-		$attrs['show_password_fallback']  = self::to_bool( $attrs['show_password_fallback'] );
+		$attrs['show_icon']              = self::to_bool( $attrs['show_icon'] );
+		$attrs['show_registration']      = self::to_bool( $attrs['show_registration'] );
+		$attrs['show_password_fallback'] = self::to_bool( $attrs['show_password_fallback'] );
 
 		// Sanitize colors (hex only).
 		$attrs['bg_color']      = self::sanitize_hex( $attrs['bg_color'] );
@@ -99,10 +99,10 @@ class Renderer {
 		$attrs['border_radius'] = self::sanitize_px( $attrs['border_radius'] );
 
 		// Sanitize text.
-		$attrs['button_text']          = sanitize_text_field( $attrs['button_text'] );
-		$attrs['logout_text']          = sanitize_text_field( $attrs['logout_text'] );
-		$attrs['redirect_to']          = $attrs['redirect_to'] ? sanitize_url( $attrs['redirect_to'] ) : '';
-		$attrs['registration_text']    = sanitize_text_field( $attrs['registration_text'] );
+		$attrs['button_text']            = sanitize_text_field( $attrs['button_text'] );
+		$attrs['logout_text']            = sanitize_text_field( $attrs['logout_text'] );
+		$attrs['redirect_to']            = $attrs['redirect_to'] ? sanitize_url( $attrs['redirect_to'] ) : '';
+		$attrs['registration_text']      = sanitize_text_field( $attrs['registration_text'] );
 		$attrs['password_fallback_text'] = sanitize_text_field( $attrs['password_fallback_text'] );
 
 		return $attrs;
@@ -161,7 +161,7 @@ class Renderer {
 	 */
 	private static function render_logged_out( array $attrs ): string {
 		$mode        = self::resolve_mode( $attrs['mode'] );
-		$button_text = $attrs['button_text'] ?: __( 'Sign in', 'integration-workos' );
+		$button_text = ! empty( $attrs['button_text'] ) ? $attrs['button_text'] : __( 'Sign in', 'integration-workos' );
 		$inline      = self::build_inline_styles( $attrs );
 		$style_attr  = $inline ? ' style="' . esc_attr( $inline ) . '"' : '';
 
@@ -250,8 +250,9 @@ class Renderer {
 			'workos-login-button--' . $attrs['size'],
 		];
 
-		$logout_text = $attrs['logout_text'] ?: __( 'Sign out', 'integration-workos' );
-		$logout_url  = wp_logout_url( $attrs['redirect_to'] ?: home_url() );
+		$logout_text = ! empty( $attrs['logout_text'] ) ? $attrs['logout_text'] : __( 'Sign out', 'integration-workos' );
+		$redirect    = ! empty( $attrs['redirect_to'] ) ? $attrs['redirect_to'] : home_url();
+		$logout_url  = wp_logout_url( $redirect );
 		$inline      = self::build_inline_styles( $attrs );
 		$style_attr  = $inline ? ' style="' . esc_attr( $inline ) . '"' : '';
 
@@ -263,7 +264,7 @@ class Renderer {
 		$html = '<div class="' . esc_attr( implode( ' ', $classes ) ) . '">';
 
 		if ( 'user_info' === $attrs['logged_in_display'] ) {
-			$user = wp_get_current_user();
+			$user  = wp_get_current_user();
 			$html .= '<div class="workos-login-button__user">';
 			$html .= get_avatar( $user->ID, 32, '', '', [ 'class' => 'workos-login-button__avatar' ] );
 			$html .= '<span class="workos-login-button__name">' . esc_html( $user->display_name ) . '</span>';
@@ -290,14 +291,14 @@ class Renderer {
 		$links = '';
 
 		if ( $attrs['show_registration'] && get_option( 'users_can_register' ) ) {
-			$reg_text = $attrs['registration_text'] ?: __( 'Create account', 'integration-workos' );
+			$reg_text = ! empty( $attrs['registration_text'] ) ? $attrs['registration_text'] : __( 'Create account', 'integration-workos' );
 			$links   .= '<a href="' . esc_url( wp_registration_url() ) . '" class="workos-login-button__link">'
 				. esc_html( $reg_text )
 				. '</a>';
 		}
 
 		if ( $attrs['show_password_fallback'] && workos()->option( 'allow_password_fallback', true ) ) {
-			$fb_text = $attrs['password_fallback_text'] ?: __( 'Sign in with password', 'integration-workos' );
+			$fb_text = ! empty( $attrs['password_fallback_text'] ) ? $attrs['password_fallback_text'] : __( 'Sign in with password', 'integration-workos' );
 			$links  .= '<a href="' . esc_url( wp_login_url() . '?fallback=1' ) . '" class="workos-login-button__link">'
 				. esc_html( $fb_text )
 				. '</a>';
@@ -339,7 +340,8 @@ class Renderer {
 			$value = '#' . $value;
 		}
 
-		return sanitize_hex_color( $value ) ?: '';
+		$sanitized = sanitize_hex_color( $value );
+		return $sanitized ? $sanitized : '';
 	}
 
 	/**

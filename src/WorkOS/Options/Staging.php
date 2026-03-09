@@ -26,20 +26,20 @@ class Staging extends Options {
 	 */
 	protected function defaults(): array {
 		return [
-			'api_key'                 => '',
-			'client_id'               => '',
-			'webhook_secret'          => '',
-			'organization_id'         => '',
-			'environment_id'          => '',
-			'login_mode'              => 'redirect',
-			'allow_password_fallback' => true,
-			'deprovision_action'      => 'deactivate',
-			'reassign_user'           => 0,
-			'role_map'                    => [],
-			'redirect_urls'               => [],
-			'redirect_first_login_only'   => true,
-			'logout_redirect_urls'        => [],
-			'audit_logging_enabled'       => false,
+			'api_key'                   => '',
+			'client_id'                 => '',
+			'webhook_secret'            => '',
+			'organization_id'           => '',
+			'environment_id'            => '',
+			'login_mode'                => 'redirect',
+			'allow_password_fallback'   => true,
+			'deprovision_action'        => 'deactivate',
+			'reassign_user'             => 0,
+			'role_map'                  => [],
+			'redirect_urls'             => [],
+			'redirect_first_login_only' => true,
+			'logout_redirect_urls'      => [],
+			'audit_logging_enabled'     => false,
 		];
 	}
 }
