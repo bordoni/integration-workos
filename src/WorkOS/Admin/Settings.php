@@ -1553,6 +1553,7 @@ class Settings {
 	 * Render the redirect URLs table for the Users tab.
 	 */
 	public function render_redirect_urls(): void {
+		$env      = $this->get_editing_environment();
 		$options  = $this->get_editing_env_options()->all();
 		$raw_map  = is_array( $options['redirect_urls'] ?? null ) ? $options['redirect_urls'] : [];
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
@@ -1672,6 +1673,7 @@ class Settings {
 	 * Render the logout redirect URLs table for the Users tab.
 	 */
 	public function render_logout_redirect_urls(): void {
+		$env      = $this->get_editing_environment();
 		$options  = $this->get_editing_env_options()->all();
 		$raw_map  = is_array( $options['logout_redirect_urls'] ?? null ) ? $options['logout_redirect_urls'] : [];
 		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
