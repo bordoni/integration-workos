@@ -38,19 +38,19 @@ jobs:
           php-version: '8.2'
           tools: composer
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
 
       - name: Install PHP production dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-      - name: Install Node.js dependencies
-        run: npm ci
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build assets
-        run: npm run build
+        run: bun run build
 
       - name: Get version
         run: |
@@ -80,6 +80,7 @@ jobs:
             --exclude='.gitignore' \
             --exclude='package.json' \
             --exclude='package-lock.json' \
+            --exclude='bun.lock' \
             --exclude='composer.json' \
             --exclude='composer.lock' \
             --exclude='codeception.yml' \
