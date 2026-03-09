@@ -101,11 +101,6 @@ class Receiver {
 		 */
 		do_action( 'workos_webhook', $event, $event_type );
 
-		// Log for debugging.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( sprintf( '[WorkOS] Webhook received: %s', $event_type ) );
-		}
-
 		return new \WP_REST_Response( [ 'ok' => true ], 200 );
 	}
 }

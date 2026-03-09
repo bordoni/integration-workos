@@ -83,11 +83,6 @@
 		<exclude-pattern>*/Plugin.php</exclude-pattern>
 	</rule>
 
-	<!-- error_log in Webhook/Receiver is guarded by WP_DEBUG -->
-	<rule ref="WordPress.PHP.DevelopmentFunctions.error_log_error_log">
-		<exclude-pattern>*/Webhook/Receiver.php</exclude-pattern>
-	</rule>
-
 	<!-- $default is a standard WP parameter name (get_option, get_post_meta, etc.) -->
 	<rule ref="Universal.NamingConventions.NoReservedKeywordParameterNames.defaultFound">
 		<severity>0</severity>
