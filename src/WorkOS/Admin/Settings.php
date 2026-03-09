@@ -790,7 +790,7 @@ class Settings {
 				<table class="widefat striped" style="max-width:600px">
 					<tr>
 						<td><strong><?php esc_html_e( 'Plugin', 'integration-workos' ); ?></strong></td>
-						<td><?php esc_html_e( 'Configured', 'integration-workos' ); ?> &#x2705;</td>
+						<td><?php esc_html_e( 'Configured', 'integration-workos' ); ?> <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00a32a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></td>
 					</tr>
 					<tr>
 						<td><strong><?php esc_html_e( 'Webhook URL', 'integration-workos' ); ?></strong></td>
@@ -857,10 +857,10 @@ class Settings {
 				>
 					<?php echo esc_html( $label ); ?>
 					<?php if ( $is_active ) : ?>
-						<span style="margin-left: 4px; font-size: 11px; opacity: 0.9;">&#x2713;active</span>
+						<span style="margin-left: 4px; font-size: 11px; opacity: 0.9;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom"><polyline points="20 6 9 17 4 12"/></svg>active</span>
 					<?php endif; ?>
 					<?php if ( $is_locked && $is_active ) : ?>
-						<span style="margin-left: 2px; font-size: 11px;">&#x1F512;</span>
+						<span style="margin-left: 2px; font-size: 11px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
 					<?php endif; ?>
 				</a>
 			<?php endforeach; ?>
@@ -894,7 +894,7 @@ class Settings {
 					printf( esc_html__( 'Activate %s', 'integration-workos' ), esc_html( $environments[ $editing ] ?? $editing ) );
 					?>
 					<?php if ( 'production' === $editing ) : ?>
-						&#x26A0;
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;display:inline-block;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 					<?php endif; ?>
 				</a>
 			<?php endif; ?>

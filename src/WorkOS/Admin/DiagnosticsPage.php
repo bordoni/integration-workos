@@ -105,7 +105,7 @@ class DiagnosticsPage {
 					<tbody>
 						<?php foreach ( $this->results as $check ) : ?>
 							<tr>
-								<td><?php echo $check['pass'] ? '&#x2705;' : '&#x274C;'; ?></td>
+								<td><?php echo $check['pass'] ? self::icon_pass() : self::icon_fail(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
 								<td><strong><?php echo esc_html( $check['label'] ); ?></strong></td>
 								<td><?php echo wp_kses_post( $check['detail'] ); ?></td>
 							</tr>
@@ -300,6 +300,24 @@ class DiagnosticsPage {
 			'pass'   => $installed >= $current,
 			'detail' => $detail,
 		];
+	}
+
+	/**
+	 * Get the SVG icon for a passing check.
+	 *
+	 * @return string SVG markup.
+	 */
+	private static function icon_pass(): string {
+		return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00a32a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+	}
+
+	/**
+	 * Get the SVG icon for a failing check.
+	 *
+	 * @return string SVG markup.
+	 */
+	private static function icon_fail(): string {
+		return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d63638" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
 	}
 
 	/**

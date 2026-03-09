@@ -126,7 +126,7 @@ class UserProfile {
 		printf(
 			'<p><a href="%s" class="button" target="_blank" rel="noopener noreferrer">%s</a></p>',
 			esc_url( $dashboard_url ),
-			esc_html__( 'View in WorkOS Dashboard', 'integration-workos' ) . ' &#x2197;'
+			esc_html__( 'View in WorkOS Dashboard', 'integration-workos' ) . ' <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;display:inline-block;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
 		);
 	}
 
