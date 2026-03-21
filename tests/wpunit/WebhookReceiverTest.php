@@ -95,9 +95,28 @@ class WebhookReceiverTest extends WPTestCase {
 		$body    = wp_json_encode( [ 'event' => 'user.created', 'data' => [] ] );
 		$request = $this->build_request( $body, 't=' . time() . ', v1=invalidsignaturevalue' );
 
-		$response = $this->receiver->handle( $request );
+		$result = $this->receiver->verify_signature( $request );
 
-		$this->assertSame( 401, $response->get_status() );
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'workos_invalid_signature', $result->get_error_code() );
+	}
+
+	/**
+	 * Test rejects missing signature when secret is configured.
+	 */
+	public function test_rejects_missing_signature(): void {
+		$opts                   = get_option( 'workos_production' );
+		$opts['webhook_secret'] = 'whsec_test_secret';
+		update_option( 'workos_production', $opts );
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		$body    = wp_json_encode( [ 'event' => 'user.created', 'data' => [] ] );
+		$request = $this->build_request( $body );
+
+		$result = $this->receiver->verify_signature( $request );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'workos_missing_signature', $result->get_error_code() );
 	}
 
 	/**
@@ -107,8 +126,9 @@ class WebhookReceiverTest extends WPTestCase {
 		$body    = wp_json_encode( [ 'event' => 'user.created', 'data' => [] ] );
 		$request = $this->build_request( $body );
 
-		$response = $this->receiver->handle( $request );
+		$this->assertTrue( $this->receiver->verify_signature( $request ) );
 
+		$response = $this->receiver->handle( $request );
 		$this->assertSame( 200, $response->get_status() );
 	}
 
@@ -197,7 +217,53 @@ class WebhookReceiverTest extends WPTestCase {
 		$signature = $this->build_signature( $body, $secret );
 		$request   = $this->build_request( $body, $signature );
 
+		$this->assertTrue( $this->receiver->verify_signature( $request ) );
+
 		$response = $this->receiver->handle( $request );
+		$this->assertSame( 200, $response->get_status() );
+	}
+
+	/**
+	 * Test full REST dispatch rejects invalid signature via permission_callback.
+	 *
+	 * This integration test ensures the permission_callback is wired correctly
+	 * in the route registration so signature checks cannot be bypassed.
+	 */
+	public function test_dispatch_rejects_invalid_signature(): void {
+		$secret                 = 'whsec_dispatch_test';
+		$opts                   = get_option( 'workos_production' );
+		$opts['webhook_secret'] = $secret;
+		update_option( 'workos_production', $opts );
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		$this->receiver->register_route();
+
+		$body    = wp_json_encode( [ 'event' => 'user.created', 'data' => [] ] );
+		$request = $this->build_request( $body, 't=' . time() . ', v1=bad' );
+
+		$response = rest_get_server()->dispatch( $request );
+
+		$this->assertGreaterThanOrEqual( 400, $response->get_status() );
+		$this->assertLessThan( 500, $response->get_status() );
+	}
+
+	/**
+	 * Test full REST dispatch accepts valid signature via permission_callback.
+	 */
+	public function test_dispatch_accepts_valid_signature(): void {
+		$secret                 = 'whsec_dispatch_test';
+		$opts                   = get_option( 'workos_production' );
+		$opts['webhook_secret'] = $secret;
+		update_option( 'workos_production', $opts );
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		$this->receiver->register_route();
+
+		$body      = wp_json_encode( [ 'event' => 'user.created', 'data' => [ 'id' => 'user_1' ] ] );
+		$signature = $this->build_signature( $body, $secret );
+		$request   = $this->build_request( $body, $signature );
+
+		$response = rest_get_server()->dispatch( $request );
 
 		$this->assertSame( 200, $response->get_status() );
 	}
