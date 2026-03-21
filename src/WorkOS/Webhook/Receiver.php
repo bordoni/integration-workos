@@ -31,9 +31,46 @@ class Receiver {
 			[
 				'methods'             => 'POST',
 				'callback'            => [ $this, 'handle' ],
-				'permission_callback' => '__return_true',
+				'permission_callback' => [ $this, 'verify_signature' ],
 			]
 		);
+	}
+
+	/**
+	 * Verify the webhook signature.
+	 *
+	 * @param \WP_REST_Request $request The incoming request.
+	 *
+	 * @return true|\WP_Error True if valid, WP_Error if not.
+	 */
+	public function verify_signature( \WP_REST_Request $request ) {
+		$secret = \WorkOS\Config::get_webhook_secret();
+
+		if ( empty( $secret ) ) {
+			return true;
+		}
+
+		$signature = $request->get_header( 'workos-signature' );
+
+		if ( empty( $signature ) ) {
+			return new \WP_Error(
+				'workos_missing_signature',
+				__( 'Missing webhook signature.', 'integration-workos' ),
+				[ 'status' => 401 ]
+			);
+		}
+
+		$payload = $request->get_body();
+
+		if ( ! \WorkOS\Api\Client::verify_webhook_signature( $payload, $signature, $secret ) ) {
+			return new \WP_Error(
+				'workos_invalid_signature',
+				__( 'Invalid webhook signature.', 'integration-workos' ),
+				[ 'status' => 401 ]
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -44,16 +81,7 @@ class Receiver {
 	 * @return \WP_REST_Response
 	 */
 	public function handle( \WP_REST_Request $request ): \WP_REST_Response {
-		$signature = $request->get_header( 'workos-signature' );
-		$payload   = $request->get_body();
-		$secret    = \WorkOS\Config::get_webhook_secret();
-
-		// Verify signature.
-		if ( ! empty( $secret ) ) {
-			if ( empty( $signature ) || ! \WorkOS\Api\Client::verify_webhook_signature( $payload, $signature, $secret ) ) {
-				return new \WP_REST_Response( [ 'error' => 'Invalid signature' ], 401 );
-			}
-		}
+		$payload = $request->get_body();
 
 		// Parse event.
 		$event = json_decode( $payload, true );
