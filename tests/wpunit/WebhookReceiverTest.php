@@ -236,12 +236,14 @@ class WebhookReceiverTest extends WPTestCase {
 		update_option( 'workos_production', $opts );
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
-		$this->receiver->register_route();
+		// Initialize the REST server, which fires rest_api_init and registers our route.
+		$server = rest_get_server();
+		do_action( 'rest_api_init', $server );
 
 		$body    = wp_json_encode( [ 'event' => 'user.created', 'data' => [] ] );
 		$request = $this->build_request( $body, 't=' . time() . ', v1=bad' );
 
-		$response = rest_get_server()->dispatch( $request );
+		$response = $server->dispatch( $request );
 
 		$this->assertGreaterThanOrEqual( 400, $response->get_status() );
 		$this->assertLessThan( 500, $response->get_status() );
@@ -257,13 +259,15 @@ class WebhookReceiverTest extends WPTestCase {
 		update_option( 'workos_production', $opts );
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
-		$this->receiver->register_route();
+		// Initialize the REST server, which fires rest_api_init and registers our route.
+		$server = rest_get_server();
+		do_action( 'rest_api_init', $server );
 
 		$body      = wp_json_encode( [ 'event' => 'user.created', 'data' => [ 'id' => 'user_1' ] ] );
 		$signature = $this->build_signature( $body, $secret );
 		$request   = $this->build_request( $body, $signature );
 
-		$response = rest_get_server()->dispatch( $request );
+		$response = $server->dispatch( $request );
 
 		$this->assertSame( 200, $response->get_status() );
 	}
