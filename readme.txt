@@ -1,7 +1,7 @@
 === Integration with WorkOS ===
 Contributors: developer-starter, bordoni
 Tags: sso, identity, workos, authentication, directory-sync
-Requires at least: 5.9
+Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
 Stable tag: 1.0.0
