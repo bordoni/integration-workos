@@ -275,6 +275,41 @@ Parameters:
 * `WP_User $user` — The authenticated user.
 * `string $reason` — Reason the logout redirect was skipped. One of: `filtered_out`, `no_matching_role_url`.
 
+== External services ==
+
+This plugin connects to the [WorkOS API](https://workos.com) (`https://api.workos.com`) to provide enterprise identity management features for WordPress.
+
+= Authentication (SSO) =
+
+When a user logs in via WorkOS AuthKit or headless mode, the plugin sends an authorization code (and, in headless mode, the user's email and password) to WorkOS to exchange for user identity data and access tokens. This happens each time a user authenticates through WorkOS.
+
+= User Management =
+
+When the site administrator creates, updates, or syncs users between WordPress and WorkOS, the plugin sends user profile data (email, first name, last name) to the WorkOS API.
+
+= Directory Sync =
+
+The plugin receives incoming webhook requests from WorkOS containing directory and user data for automatic provisioning and deprovisioning. The webhook endpoint URL is registered with WorkOS by the site administrator.
+
+= Organization Management =
+
+When managing organizations, the plugin sends and retrieves organization data (name, membership details, role assignments) to and from the WorkOS API.
+
+= Audit Logging =
+
+When audit logging is enabled, the plugin sends WordPress event data (action performed, actor, target, and metadata) to the WorkOS Audit Logs API on each tracked event.
+
+= Token Verification =
+
+When REST API authentication is enabled, the plugin fetches JSON Web Key Sets (JWKS) from WorkOS (`https://api.workos.com/sso/jwks/{client_id}`) to verify access tokens. The JWKS response is cached locally for one hour.
+
+= Service links =
+
+WorkOS is provided by WorkOS, Inc.
+
+* [Terms of Service](https://workos.com/legal/terms)
+* [Privacy Policy](https://workos.com/legal/privacy)
+
 == Changelog ==
 
 = 1.0.0 =
