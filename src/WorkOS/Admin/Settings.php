@@ -417,7 +417,21 @@ class Settings {
 				'type'              => 'array',
 				'default'           => [],
 				'sanitize_callback' => function ( $input ) {
-					return is_array( $input ) ? $input : [];
+					if ( ! is_array( $input ) ) {
+						return [];
+					}
+
+					$sanitized = [];
+
+					if ( isset( $input['diagnostics_last_run'] ) ) {
+						$sanitized['diagnostics_last_run'] = absint( $input['diagnostics_last_run'] );
+					}
+
+					if ( isset( $input['diagnostics_results'] ) && is_array( $input['diagnostics_results'] ) ) {
+						$sanitized['diagnostics_results'] = map_deep( $input['diagnostics_results'], 'sanitize_text_field' );
+					}
+
+					return $sanitized;
 				},
 			]
 		);
@@ -1872,10 +1886,21 @@ class Settings {
 		$sanitized = [];
 
 		// Text fields.
-		$text_keys = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id', 'login_mode', 'deprovision_action' ];
+		$text_keys = [ 'api_key', 'client_id', 'webhook_secret', 'organization_id', 'environment_id' ];
 		foreach ( $text_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = sanitize_text_field( $input[ $key ] );
+			}
+		}
+
+		// Enumerated choice fields.
+		$choices = [
+			'login_mode'         => [ 'redirect', 'headless' ],
+			'deprovision_action' => [ 'deactivate', 'demote', 'delete' ],
+		];
+		foreach ( $choices as $key => $allowed ) {
+			if ( isset( $input[ $key ] ) && in_array( $input[ $key ], $allowed, true ) ) {
+				$sanitized[ $key ] = $input[ $key ];
 			}
 		}
 
