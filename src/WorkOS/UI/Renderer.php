@@ -71,6 +71,57 @@ class Renderer {
 	}
 
 	/**
+	 * Allowed HTML for wp_kses — post tags plus form, input, and SVG elements.
+	 *
+	 * @return array Kses-compatible allowed HTML map.
+	 */
+	public static function allowed_html(): array {
+		$allowed = wp_kses_allowed_html( 'post' );
+
+		$allowed['form']  = [
+			'class'                     => true,
+			'style'                     => true,
+			'data-workos-headless-form' => true,
+		];
+		$allowed['input'] = [
+			'type'        => true,
+			'name'        => true,
+			'value'       => true,
+			'class'       => true,
+			'id'          => true,
+			'required'    => true,
+			'placeholder' => true,
+		];
+		$allowed['svg']   = [
+			'xmlns'           => true,
+			'width'           => true,
+			'height'          => true,
+			'viewbox'         => true,
+			'fill'            => true,
+			'stroke'          => true,
+			'stroke-width'    => true,
+			'stroke-linecap'  => true,
+			'stroke-linejoin' => true,
+		];
+		$allowed['rect']  = [
+			'x'      => true,
+			'y'      => true,
+			'width'  => true,
+			'height' => true,
+			'rx'     => true,
+			'ry'     => true,
+		];
+		$allowed['path']  = [
+			'd' => true,
+		];
+
+		// Extend button with the headless toggle data attribute.
+		$allowed['button']['data-workos-headless-toggle'] = true;
+
+		return $allowed;
+	}
+
+	/**
 	 * Merge with defaults and sanitize attribute values.
 	 *
 	 * @param array $attrs Raw attributes.
@@ -150,86 +201,6 @@ class Renderer {
 		}
 
 		return implode( ';', $styles );
-	}
-
-	/**
-	 * Allowed HTML tags and attributes for wp_kses output filtering.
-	 *
-	 * @return array Kses-compatible allowed HTML map.
-	 */
-	public static function allowed_html(): array {
-		return [
-			'div'    => [
-				'class'     => true,
-				'role'      => true,
-				'aria-live' => true,
-			],
-			'a'      => [
-				'href'  => true,
-				'class' => true,
-				'style' => true,
-			],
-			'button' => [
-				'type'                        => true,
-				'class'                       => true,
-				'style'                       => true,
-				'data-workos-headless-toggle' => true,
-			],
-			'form'   => [
-				'class'                      => true,
-				'style'                      => true,
-				'data-workos-headless-form'  => true,
-			],
-			'input'  => [
-				'type'        => true,
-				'name'        => true,
-				'value'       => true,
-				'class'       => true,
-				'id'          => true,
-				'required'    => true,
-				'placeholder' => true,
-			],
-			'label'  => [
-				'class' => true,
-				'for'   => true,
-			],
-			'span'   => [
-				'class'       => true,
-				'aria-hidden' => true,
-			],
-			'img'    => [
-				'src'     => true,
-				'srcset'  => true,
-				'alt'     => true,
-				'class'   => true,
-				'width'   => true,
-				'height'  => true,
-				'loading' => true,
-				'decoding' => true,
-			],
-			'svg'    => [
-				'xmlns'          => true,
-				'width'          => true,
-				'height'         => true,
-				'viewbox'        => true,
-				'fill'           => true,
-				'stroke'         => true,
-				'stroke-width'   => true,
-				'stroke-linecap' => true,
-				'stroke-linejoin' => true,
-			],
-			'rect'   => [
-				'x'      => true,
-				'y'      => true,
-				'width'  => true,
-				'height' => true,
-				'rx'     => true,
-				'ry'     => true,
-			],
-			'path'   => [
-				'd' => true,
-			],
-		];
 	}
 
 	/**
