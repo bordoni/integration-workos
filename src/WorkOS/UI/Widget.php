@@ -40,9 +40,9 @@ class Widget extends \WP_Widget {
 			return;
 		}
 
-		echo $args['before_widget']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		echo $args['after_widget']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo $args['before_widget']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Widget wrapper from theme.
+		echo wp_kses( $html, Renderer::allowed_html() );
+		echo $args['after_widget']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Widget wrapper from theme.
 	}
 
 	/**

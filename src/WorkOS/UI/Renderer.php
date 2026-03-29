@@ -60,14 +60,14 @@ class Renderer {
 
 		// In REST context (block editor SSR), always show logged-out preview.
 		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-			return self::render_logged_out( $attrs );
+			$html = self::render_logged_out( $attrs );
+		} elseif ( is_user_logged_in() ) {
+			$html = self::render_logged_in( $attrs );
+		} else {
+			$html = self::render_logged_out( $attrs );
 		}
 
-		if ( is_user_logged_in() ) {
-			return self::render_logged_in( $attrs );
-		}
-
-		return self::render_logged_out( $attrs );
+		return wp_kses( $html, self::allowed_html() );
 	}
 
 	/**
@@ -150,6 +150,86 @@ class Renderer {
 		}
 
 		return implode( ';', $styles );
+	}
+
+	/**
+	 * Allowed HTML tags and attributes for wp_kses output filtering.
+	 *
+	 * @return array Kses-compatible allowed HTML map.
+	 */
+	public static function allowed_html(): array {
+		return [
+			'div'    => [
+				'class'     => true,
+				'role'      => true,
+				'aria-live' => true,
+			],
+			'a'      => [
+				'href'  => true,
+				'class' => true,
+				'style' => true,
+			],
+			'button' => [
+				'type'                        => true,
+				'class'                       => true,
+				'style'                       => true,
+				'data-workos-headless-toggle' => true,
+			],
+			'form'   => [
+				'class'                      => true,
+				'style'                      => true,
+				'data-workos-headless-form'  => true,
+			],
+			'input'  => [
+				'type'        => true,
+				'name'        => true,
+				'value'       => true,
+				'class'       => true,
+				'id'          => true,
+				'required'    => true,
+				'placeholder' => true,
+			],
+			'label'  => [
+				'class' => true,
+				'for'   => true,
+			],
+			'span'   => [
+				'class'       => true,
+				'aria-hidden' => true,
+			],
+			'img'    => [
+				'src'     => true,
+				'srcset'  => true,
+				'alt'     => true,
+				'class'   => true,
+				'width'   => true,
+				'height'  => true,
+				'loading' => true,
+				'decoding' => true,
+			],
+			'svg'    => [
+				'xmlns'          => true,
+				'width'          => true,
+				'height'         => true,
+				'viewbox'        => true,
+				'fill'           => true,
+				'stroke'         => true,
+				'stroke-width'   => true,
+				'stroke-linecap' => true,
+				'stroke-linejoin' => true,
+			],
+			'rect'   => [
+				'x'      => true,
+				'y'      => true,
+				'width'  => true,
+				'height' => true,
+				'rx'     => true,
+				'ry'     => true,
+			],
+			'path'   => [
+				'd' => true,
+			],
+		];
 	}
 
 	/**
