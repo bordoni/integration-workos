@@ -21,8 +21,8 @@ class AdminBar {
 	 */
 	public function __construct() {
 		add_action( 'admin_bar_menu', [ $this, 'add_environment_indicator' ], 100 );
-		add_action( 'wp_head', [ $this, 'render_inline_styles' ] );
-		add_action( 'admin_head', [ $this, 'render_inline_styles' ] );
+		add_action( 'wp_enqueue_scripts', [ $this, 'render_inline_styles' ] );
+		add_action( 'admin_enqueue_scripts', [ $this, 'render_inline_styles' ] );
 	}
 
 	/**
@@ -59,8 +59,7 @@ class AdminBar {
 			return;
 		}
 
-		?>
-		<style>
+		$css = '
 			#wp-admin-bar-workos-environment .ab-item {
 				font-weight: 600 !important;
 				font-size: 11px !important;
@@ -73,7 +72,8 @@ class AdminBar {
 				background: #dba617 !important;
 				color: #fff !important;
 			}
-		</style>
-		<?php
+		';
+
+		wp_add_inline_style( 'admin-bar', $css );
 	}
 }
