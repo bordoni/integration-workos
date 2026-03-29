@@ -14,7 +14,7 @@ jobs:
     name: PHPCS
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -43,10 +43,10 @@ jobs:
       matrix:
         php: [ '8.0', '8.1', '8.2', '8.3' ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Checkout slic
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: stellarwp/slic
           ref: main
@@ -93,10 +93,10 @@ jobs:
     name: JS Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
 

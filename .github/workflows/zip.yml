@@ -28,7 +28,7 @@ jobs:
     outputs:
       zip_name: ${{ env.ZIP_NAME }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'workflow_call' && inputs.ref || github.ref }}
 
@@ -91,7 +91,7 @@ jobs:
             ./ .plugin-zip/integration-workos/
 
       - name: Upload plugin artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ZIP_NAME }}
           path: .plugin-zip/integration-workos/
