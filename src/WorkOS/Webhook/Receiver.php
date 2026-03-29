@@ -47,7 +47,11 @@ class Receiver {
 		$secret = \WorkOS\Config::get_webhook_secret();
 
 		if ( empty( $secret ) ) {
-			return true;
+			return new \WP_Error(
+				'workos_webhook_not_configured',
+				__( 'Webhook secret is not configured.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
 		}
 
 		$signature = $request->get_header( 'workos-signature' );

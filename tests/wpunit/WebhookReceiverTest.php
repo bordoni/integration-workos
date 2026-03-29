@@ -120,16 +120,16 @@ class WebhookReceiverTest extends WPTestCase {
 	}
 
 	/**
-	 * Test skips signature check when no secret configured.
+	 * Test rejects request when no webhook secret is configured.
 	 */
-	public function test_skips_signature_check_when_no_secret(): void {
+	public function test_rejects_when_no_secret_configured(): void {
 		$body    = wp_json_encode( [ 'event' => 'user.created', 'data' => [] ] );
 		$request = $this->build_request( $body );
 
-		$this->assertTrue( $this->receiver->verify_signature( $request ) );
+		$result = $this->receiver->verify_signature( $request );
 
-		$response = $this->receiver->handle( $request );
-		$this->assertSame( 200, $response->get_status() );
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'workos_webhook_not_configured', $result->get_error_code() );
 	}
 
 	/**
