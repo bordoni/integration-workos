@@ -147,7 +147,7 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
-= 1.0.0 - 2026-04-06 =
+= 1.0.0 - 2026-04-14 =
 * SSO login via WorkOS AuthKit (redirect and headless modes).
 * Directory Sync (SCIM) for automatic user provisioning and deprovisioning.
 * Role mapping between WorkOS organization roles and WordPress roles.

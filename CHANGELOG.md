@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0] - 2026-04-06
+## [1.0.0] - 2026-04-14
 
 ### Added
 - AuthKit redirect and headless API authentication flows.

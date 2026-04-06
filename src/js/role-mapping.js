@@ -234,7 +234,7 @@ import '../css/role-mapping.css';
 	);
 
 	// Show the add button (hidden by default until JS loads).
-	addBtn.style.display = '';
+	addBtn.style.display = 'inline-flex';
 
 	// Add a new row.
 	addBtn.addEventListener(

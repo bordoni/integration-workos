@@ -1541,6 +1541,8 @@ class Settings {
 
 		echo '</tbody></table>';
 
+		echo '<div id="workos-role-map-actions">';
+
 		// Add Mapping button — hidden until JS loads.
 		echo '<button type="button" id="workos-role-map-add" class="button" style="display:none">';
 		echo '<span class="dashicons dashicons-plus-alt2"></span> ';
@@ -1549,16 +1551,18 @@ class Settings {
 
 		// Sync Roles to WorkOS button — only when plugin is enabled and org is configured.
 		if ( workos()->is_enabled() && ! empty( Config::get_organization_id() ) ) {
-			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="display:inline; margin-left:8px">';
+			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" id="workos-role-sync-form">';
 			wp_nonce_field( 'workos_sync_roles_to_workos' );
 			echo '<input type="hidden" name="action" value="workos_sync_roles_to_workos" />';
 			echo '<input type="hidden" name="editing_env" value="' . esc_attr( $this->get_editing_environment() ) . '" />';
 			echo '<button type="submit" class="button">';
-			echo '<span class="dashicons dashicons-update" style="vertical-align:middle; margin-right:2px"></span> ';
+			echo '<span class="dashicons dashicons-update"></span> ';
 			echo esc_html__( 'Sync Roles to WorkOS', 'integration-workos' );
 			echo '</button>';
 			echo '</form>';
 		}
+
+		echo '</div>';
 
 		echo '<p class="description" style="margin-top:8px">' . esc_html__( 'The "member" role is used as the default fallback.', 'integration-workos' ) . '</p>';
 	}
