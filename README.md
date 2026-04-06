@@ -127,6 +127,200 @@ Authorization: Bearer <workos_access_token>
 
 The token is verified using WorkOS JWKS and mapped to a WordPress user via their linked WorkOS ID.
 
+## Hooks Reference
+
+### Filters
+
+#### `workos_redirect_urls`
+
+Filter the full role-to-redirect entry map from settings. Each entry is an array with `url` (string) and `first_login_only` (bool). Allows adding, removing, or overriding entries programmatically.
+
+**Parameters:**
+
+- `array $map` — Associative array of WordPress role slug to redirect entry (`['url' => string, 'first_login_only' => bool]`).
+
+**Example:**
+
+```php
+add_filter( 'workos_redirect_urls', function ( $map ) {
+    $map['subscriber'] = [ 'url' => '/welcome', 'first_login_only' => true ];
+    return $map;
+} );
+```
+
+#### `workos_redirect_url`
+
+Filter the final redirect URL for a specific user. Return an empty string to skip the role-based redirect.
+
+**Parameters:**
+
+- `string $url` — The role-based redirect URL (empty if no match).
+- `WP_User $user` — The authenticated user.
+- `string $role` — The user's primary WordPress role.
+- `bool $is_first_login` — Whether this is the user's first login via WorkOS.
+
+**Example:**
+
+```php
+add_filter( 'workos_redirect_url', function ( $url, $user, $role, $is_first_login ) {
+    if ( $role === 'editor' ) {
+        return '/editor-guide';
+    }
+    return $url;
+}, 10, 4 );
+```
+
+#### `workos_redirect_should_apply`
+
+Whether the role-based redirect should apply at all for this request. Return `false` to skip entirely.
+
+**Parameters:**
+
+- `bool $should_apply` — Whether to apply the role-based redirect (default `true`).
+- `WP_User $user` — The authenticated user.
+- `string $requested_redirect` — The current redirect URL.
+
+**Example:**
+
+```php
+add_filter( 'workos_redirect_should_apply', function ( $should_apply, $user ) {
+    // Never redirect administrators.
+    if ( in_array( 'administrator', $user->roles, true ) ) {
+        return false;
+    }
+    return $should_apply;
+}, 10, 2 );
+```
+
+#### `workos_redirect_is_explicit`
+
+Whether the current `redirect_to` value is considered "explicit" (user-initiated). By default, any `redirect_to` that is not `admin_url()` or empty is treated as explicit, meaning the role-based redirect is skipped in favor of the user's intended destination.
+
+**Parameters:**
+
+- `bool $is_explicit` — Whether the redirect is explicit.
+- `string $redirect_to` — The redirect URL.
+- `WP_User $user` — The authenticated user.
+
+#### `workos_redirect_first_login_only`
+
+Override the per-entry "first login only" setting programmatically.
+
+**Parameters:**
+
+- `bool $first_login_only` — Whether to redirect only on first login.
+- `string $role` — The user's primary WordPress role.
+- `WP_User $user` — The authenticated user.
+
+#### `workos_logout_redirect_urls`
+
+Filter the full role-to-logout-redirect URL map from settings. Unlike login redirects, each entry is a simple URL string (no `first_login_only` option).
+
+**Parameters:**
+
+- `array $map` — Associative array of WordPress role slug to logout redirect URL (string).
+
+**Example:**
+
+```php
+add_filter( 'workos_logout_redirect_urls', function ( $map ) {
+    $map['subscriber'] = '/goodbye';
+    $map['editor']     = '/editor-farewell';
+    return $map;
+} );
+```
+
+#### `workos_logout_redirect_url`
+
+Filter the final logout redirect URL for a specific user. Return an empty string to skip the role-based logout redirect.
+
+**Parameters:**
+
+- `string $url` — The role-based logout redirect URL (empty if no match).
+- `WP_User $user` — The authenticated user.
+- `string $role` — The user's primary WordPress role.
+
+**Example:**
+
+```php
+add_filter( 'workos_logout_redirect_url', function ( $url, $user, $role ) {
+    if ( $role === 'administrator' ) {
+        return '/admin-logged-out';
+    }
+    return $url;
+}, 10, 3 );
+```
+
+#### `workos_logout_redirect_should_apply`
+
+Whether the role-based logout redirect should apply at all for this request. Return `false` to skip entirely.
+
+**Parameters:**
+
+- `bool $should_apply` — Whether to apply the role-based logout redirect (default `true`).
+- `WP_User $user` — The authenticated user.
+- `string $redirect_to` — The current logout redirect URL.
+
+**Example:**
+
+```php
+add_filter( 'workos_logout_redirect_should_apply', function ( $should_apply, $user ) {
+    // Never redirect administrators on logout.
+    if ( in_array( 'administrator', $user->roles, true ) ) {
+        return false;
+    }
+    return $should_apply;
+}, 10, 2 );
+```
+
+### Actions
+
+#### `workos_user_created`
+
+Fires when a brand-new WordPress user is created via WorkOS authentication. Does NOT fire for email-match auto-links (existing users matched by email).
+
+**Parameters:**
+
+- `int $user_id` — WordPress user ID.
+- `array $workos_user` — WorkOS user data array.
+
+#### `workos_redirect_before`
+
+Fires just before a role-based login redirect is applied.
+
+**Parameters:**
+
+- `string $url` — The redirect URL.
+- `WP_User $user` — The authenticated user.
+- `bool $is_first_login` — Whether this is the user's first login via WorkOS.
+
+#### `workos_redirect_skipped`
+
+Fires when a role-based login redirect is skipped. Useful for logging or debugging redirect behavior.
+
+**Parameters:**
+
+- `WP_User $user` — The authenticated user.
+- `string $reason` — Reason the redirect was skipped. One of: `filtered_out`, `explicit_redirect`, `not_first_login`, `no_matching_role_url`.
+
+#### `workos_logout_redirect_before`
+
+Fires just before a role-based logout redirect is applied.
+
+**Parameters:**
+
+- `string $url` — The logout redirect URL.
+- `WP_User $user` — The authenticated user.
+
+#### `workos_logout_redirect_skipped`
+
+Fires when a role-based logout redirect is skipped.
+
+**Parameters:**
+
+- `WP_User $user` — The authenticated user.
+- `string $reason` — Reason the logout redirect was skipped. One of: `filtered_out`, `no_matching_role_url`.
+
 ## Database Tables
 
 The plugin creates four custom tables on activation:
