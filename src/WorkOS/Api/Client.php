@@ -357,6 +357,21 @@ class Client {
 	}
 
 	// -------------------------------------------------------------------------
+	// Sessions
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Revoke a WorkOS session server-side.
+	 *
+	 * @param string $session_id WorkOS session ID.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function revoke_session( string $session_id ) {
+		return $this->post( "/user_management/sessions/{$session_id}/revoke" );
+	}
+
+	// -------------------------------------------------------------------------
 	// Webhook Verification
 	// -------------------------------------------------------------------------
 

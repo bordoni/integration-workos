@@ -321,19 +321,11 @@ class Login {
 		delete_user_meta( $user_id, '_workos_refresh_token' );
 		delete_user_meta( $user_id, '_workos_session_id' );
 
-		// Extract session ID from JWT and redirect to WorkOS logout.
+		// Revoke the WorkOS session server-side so WordPress retains full
+		// control of the logout redirect (no browser detour to WorkOS).
 		$session_id = $access_token ? self::extract_session_id( $access_token ) : '';
 		if ( $session_id ) {
-			// Use logout_redirect filter at priority 20 (after LogoutRedirect at 10)
-			// to ensure WorkOS session revocation always wins when a session exists.
-			// Capture the role-based redirect URL from $redirect_to and pass it as return_to.
-			add_filter(
-				'logout_redirect',
-				function ( $redirect_to ) use ( $session_id ) {
-					return self::get_workos_logout_url( $session_id, $redirect_to );
-				},
-				20
-			);
+			workos()->api()->revoke_session( $session_id );
 		}
 	}
 
@@ -370,21 +362,6 @@ class Login {
 		return $payload['sid'] ?? '';
 	}
 
-	/**
-	 * Build the WorkOS session logout URL.
-	 *
-	 * @param string $session_id WorkOS session ID.
-	 * @param string $return_to  Optional URL to return to after WorkOS logout.
-	 *
-	 * @return string Full logout URL.
-	 */
-	private static function get_workos_logout_url( string $session_id, string $return_to = '' ): string {
-		$params = [ 'session_id' => $session_id ];
-		if ( $return_to ) {
-			$params['return_to'] = $return_to;
-		}
-		return \WorkOS\Api\Client::get_base_url() . '/user_management/sessions/logout?' . http_build_query( $params );
-	}
 
 	/**
 	 * Store WorkOS tokens in usermeta (encrypted if possible).

@@ -214,6 +214,7 @@ tests/
     ├── EntitlementGateTest.php    # Entitlement gate tests
     ├── EventLoggerTest.php        # Activity log event logger tests
     ├── LoginBypassTest.php        # Login bypass tests
+    ├── LoginLogoutTest.php        # Login logout session revocation tests
     ├── LoginSessionTest.php       # Login session tests
     ├── LoginTokensTest.php        # Login tokens tests
     ├── LogoutRedirectTest.php     # Logout redirect tests
@@ -236,33 +237,13 @@ tests/
 
 ### Writing Tests
 
+Use the global `/slic` skill for comprehensive guidance on test structure, environment setup tiers, HTTP mocking patterns, assertions, factories, and advanced patterns. Always invoke `/slic` before writing or modifying tests.
+
 - **Base class:** Extend `lucatume\WPBrowser\TestCase\WPTestCase`
 - **Namespace:** `WorkOS\Tests\Wpunit`
 - **Pattern:** AAA (Arrange, Act, Assert)
 - **HTTP mocking:** Use the `pre_http_request` filter to intercept outbound HTTP calls
 - **WordPress factories:** Use `static::factory()` to create test posts, users, etc.
-
-Example:
-
-```php
-namespace WorkOS\Tests\Wpunit;
-
-use lucatume\WPBrowser\TestCase\WPTestCase;
-
-class ExampleTest extends WPTestCase {
-
-    public function test_something(): void {
-        // Arrange
-        $user_id = static::factory()->user->create();
-
-        // Act
-        $result = some_function( $user_id );
-
-        // Assert
-        $this->assertTrue( $result );
-    }
-}
-```
 
 ### Existing Config Files
 
