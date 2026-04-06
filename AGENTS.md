@@ -160,37 +160,9 @@ bun run lint:php:fix # Auto-fix PHP lint issues
 - **slic** installed and on PATH — clone [stellarwp/slic](https://github.com/stellarwp/slic) (located at `~/stellar/slic/`)
 - **Docker** running (slic uses Docker containers for the WordPress + database environment)
 
-### First-Time Setup
+### Setup & Running Tests
 
-Run once from the WordPress plugins directory:
-
-```bash
-cd ~/workspace/srv/wp-content/plugins
-~/stellar/slic/slic here
-~/stellar/slic/slic use integration-workos
-~/stellar/slic/slic composer install
-```
-
-- `slic here` registers the current directory as the plugins root
-- `slic use integration-workos` selects the plugin as the active target
-- `slic composer install` installs PHP dependencies inside the container
-
-### Running Tests
-
-```bash
-~/stellar/slic/slic use integration-workos
-~/stellar/slic/slic run wpunit
-```
-
-### Running Specific Tests
-
-```bash
-# Run a single test file:
-~/stellar/slic/slic run tests/wpunit/PluginTest.php
-
-# Run a single test method:
-~/stellar/slic/slic run tests/wpunit/PluginTest.php:test_version_constant_is_defined
-```
+Use the global `/slic` skill for first-time setup, running tests, and all slic CLI commands.
 
 ### Test Structure
 
