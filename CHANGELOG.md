@@ -58,6 +58,21 @@ browser only ever talks to `/wp-json/workos/v1/auth/*`.
   `manage_options`) — full CRUD for Login Profiles consumed by the
   React admin editor.
 
+#### Public API for third-party integrations
+
+- **`WorkOS\User`** — read-only helper class for querying WorkOS state
+  on a WP user without reaching into `get_user_meta()` directly. Methods:
+  `is_sso()`, `has_active_session()`, `get_workos_id()`,
+  `get_access_token()`, `get_refresh_token()`, `get_session_id()`,
+  `get_organization_id()`, `snapshot()`. All accept a `$user_id` argument
+  that defaults to the current user and handle unauthenticated requests
+  safely. Meta keys are exposed as class constants (`META_WORKOS_ID`,
+  `META_ACCESS_TOKEN`, etc.) for SQL/REST callers.
+- **Global function shortcuts** — `workos_is_sso_user()`,
+  `workos_has_active_session()`, `workos_get_user_id()`,
+  `workos_get_access_token()` wrap the class methods for terse
+  procedural code.
+
 #### Base platform
 
 - AuthKit redirect and headless API authentication flows.

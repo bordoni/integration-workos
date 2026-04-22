@@ -66,6 +66,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Plugin.php` | Bootstrap, constants, container init, app boot |
 | `src/WorkOS/App.php` | Static facade for the DI container |
 | `src/WorkOS/Config.php` | Centralized config with constant overrides |
+| `src/WorkOS/User.php` | Public read-only helper for WorkOS metadata on WP users (`is_sso`, `has_active_session`, `get_workos_id`, `get_access_token`, `snapshot`) |
 | `src/WorkOS/Controller.php` | Main controller, registers all feature controllers |
 | `src/WorkOS/Contracts/Container.php` | DI container (di52-based) |
 | `src/WorkOS/Contracts/Controller.php` | Abstract base controller with `isActive()` |
@@ -158,7 +159,7 @@ Per-environment constants (take priority over generic):
 | **Database** | |
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
 | **Helpers** | |
-| `src/includes/functions-helpers.php` | Global `workos()` and `workos_log()` helpers |
+| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User` |
 | **Browser — Custom AuthKit (TypeScript + TSX)** | |
 | `src/js/authkit/index.tsx` | Entry + data-* hydration |
 | `src/js/authkit/App.tsx` | Top-level step machine |
@@ -260,6 +261,7 @@ tests/
     ├── RoleMapperTest.php                          # Role mapper tests
     ├── SchemaTest.php                              # Database schema tests
     ├── TokenAuthRefreshTest.php                    # TokenAuth regression: rejects unsigned/expired Bearer JWTs
+    ├── UserHelperTest.php                          # WorkOS\User + `workos_is_sso_user`/`workos_has_active_session` helpers
     ├── UserSyncDeprovisionTest.php                 # User deprovisioning tests
     ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
     ├── UserSyncLinkTest.php                        # User linking tests

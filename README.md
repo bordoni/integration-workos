@@ -219,6 +219,91 @@ Authorization: Bearer <workos_access_token>
 
 The token is verified using WorkOS JWKS and mapped to a WordPress user via their linked WorkOS ID.
 
+## Helpers for Third-Party Integrations
+
+The plugin exposes a stable, read-only API for checking WorkOS state on
+a WP user so integrations don't need to know what meta keys the plugin
+stores. Everything lives in `WorkOS\User` (instance-free static class)
+with matching global function shortcuts.
+
+### `WorkOS\User` methods
+
+| Method                                | Returns  | Purpose                                                |
+|---------------------------------------|----------|--------------------------------------------------------|
+| `User::is_sso( $user_id = 0 )`        | `bool`   | User is linked to a WorkOS identity (persistent)       |
+| `User::has_active_session( $user_id = 0 )` | `bool` | User currently has a stored WorkOS access token       |
+| `User::get_workos_id( $user_id = 0 )` | `string` | WorkOS `user_...` identifier, or `''`                  |
+| `User::get_access_token( $user_id = 0 )` | `string` | Current WorkOS access token (treat as opaque)       |
+| `User::get_refresh_token( $user_id = 0 )` | `string` | Stored WorkOS refresh token                         |
+| `User::get_session_id( $user_id = 0 )` | `string` | WorkOS `sid` claim for the active session             |
+| `User::get_organization_id( $user_id = 0 )` | `string` | WorkOS organization id pinned to the user        |
+| `User::snapshot( $user_id = 0 )`      | `array`  | All of the above in one predictable payload            |
+
+All methods accept `0` (or omitted) to target the currently-authenticated
+user. All return empty strings / `false` safely when no user is available,
+so there's no need to null-check `get_current_user_id()` first.
+
+The meta keys are also exposed as constants (`User::META_WORKOS_ID`,
+`META_ACCESS_TOKEN`, etc.) for callers that need them in SQL queries or
+REST schemas.
+
+### Global function shortcuts
+
+```php
+workos_is_sso_user( $user_id = 0 );       // bool   — is the user linked?
+workos_has_active_session( $user_id = 0 ); // bool  — is a session stored?
+workos_get_user_id( $user_id = 0 );       // string — WorkOS user id
+workos_get_access_token( $user_id = 0 );  // string — current access token
+```
+
+### Distinguishing "linked" vs "currently signed in"
+
+- **`is_sso()`** remains true after the user logs out. Use it when you
+  want to know whether an account was ever provisioned via WorkOS.
+- **`has_active_session()`** flips to false on `wp_logout` (the plugin
+  clears the access token server-side). Use it when you want to know
+  whether a request is running under a live WorkOS session.
+
+### Example: augment a REST response payload
+
+```php
+use WorkOS\User;
+
+add_filter( 'my_plugin_response', function ( array $data ): array {
+    if ( ! User::is_sso() ) {
+        return $data;
+    }
+
+    $data['workos'] = [
+        'linked'          => true,
+        'active_session'  => User::has_active_session(),
+        'workos_user_id'  => User::get_workos_id(),
+        'organization_id' => User::get_organization_id(),
+    ];
+
+    return $data;
+} );
+```
+
+Or with the function shortcuts inside a non-namespaced file:
+
+```php
+function my_plugin_add_workos_data( array $data ): array {
+    if ( ! workos_has_active_session() ) {
+        return $data;
+    }
+
+    $data['workos_user_id'] = workos_get_user_id();
+    // ...
+    return $data;
+}
+```
+
+Note: neither helper verifies that the access token is still valid
+against WorkOS's JWKS. If you need authoritative session state (e.g.
+before authorizing a sensitive action), verify via
+`workos()->api()->verify_access_token( $token )`.
+
 ## Hooks Reference
 
 ### Filters
