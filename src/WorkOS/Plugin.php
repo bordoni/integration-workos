@@ -178,6 +178,15 @@ class Plugin {
 		// Register the rewrite rule before flushing so it gets persisted.
 		Auth\Login::register_rewrite();
 		flush_rewrite_rules();
+
+		// Seed the reserved default Login Profile so wp-login.php takeover
+		// has a profile to render against on first run. Registering the CPT
+		// here is safe because the post type is non-public and purely a
+		// storage vehicle — WordPress does not need to know about it to
+		// persist posts.
+		$profile_repository = new Auth\AuthKit\ProfileRepository();
+		$profile_repository->register_post_type();
+		$profile_repository->ensure_default();
 	}
 
 	/**

@@ -151,12 +151,13 @@ class Client {
 	/**
 	 * Authenticate with email + password (headless mode).
 	 *
-	 * @param string $email    User email.
-	 * @param string $password User password.
+	 * @param string      $email              User email.
+	 * @param string      $password           User password.
+	 * @param string|null $radar_action_token Optional Radar action token from the browser SDK.
 	 *
 	 * @return array|\WP_Error User data and tokens, or error.
 	 */
-	public function authenticate_with_password( string $email, string $password ) {
+	public function authenticate_with_password( string $email, string $password, ?string $radar_action_token = null ) {
 		return $this->post(
 			'/user_management/authenticate',
 			[
@@ -165,7 +166,334 @@ class Client {
 				'client_id'     => $this->client_id,
 				'client_secret' => $this->api_key,
 				'grant_type'    => 'password',
+			],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	/**
+	 * Send a magic authentication code to the given email.
+	 *
+	 * Enumeration-safe — WorkOS returns success even for unknown emails.
+	 *
+	 * @param string      $email              Email address to send the code to.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function send_magic_auth_code( string $email, ?string $radar_action_token = null ) {
+		return $this->post(
+			'/user_management/magic_auth/send',
+			[ 'email' => $email ],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	/**
+	 * Authenticate a user with a magic auth code.
+	 *
+	 * @param string      $email              Email address.
+	 * @param string      $code               One-time code delivered via email.
+	 * @param string|null $pending_auth_token Pending authentication token from a prior incomplete auth.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function authenticate_with_magic_auth(
+		string $email,
+		string $code,
+		?string $pending_auth_token = null,
+		?string $radar_action_token = null
+	) {
+		$body = [
+			'email'         => $email,
+			'code'          => $code,
+			'client_id'     => $this->client_id,
+			'client_secret' => $this->api_key,
+			'grant_type'    => 'urn:workos:oauth:grant-type:magic-auth:code',
+		];
+
+		if ( null !== $pending_auth_token && '' !== $pending_auth_token ) {
+			$body['pending_authentication_token'] = $pending_auth_token;
+		}
+
+		return $this->post(
+			'/user_management/authenticate',
+			$body,
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	/**
+	 * Complete a pending authentication with a TOTP code.
+	 *
+	 * @param string      $pending_auth_token Pending authentication token returned from prior auth.
+	 * @param string      $authentication_challenge_id Challenge ID.
+	 * @param string      $code               TOTP code.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function authenticate_with_totp(
+		string $pending_auth_token,
+		string $authentication_challenge_id,
+		string $code,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'client_id'                    => $this->client_id,
+				'client_secret'                => $this->api_key,
+				'grant_type'                   => 'urn:workos:oauth:grant-type:mfa-totp',
+				'pending_authentication_token' => $pending_auth_token,
+				'authentication_challenge_id'  => $authentication_challenge_id,
+				'code'                         => $code,
+			],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	/**
+	 * Exchange a refresh token for a new access token.
+	 *
+	 * Used by both the server-side token refresh in REST\TokenAuth and by the
+	 * React shell's proactive session refresh.
+	 *
+	 * @param string $refresh_token Refresh token.
+	 *
+	 * @return array|\WP_Error New tokens and user, or error.
+	 */
+	public function authenticate_with_refresh_token( string $refresh_token ) {
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'client_id'     => $this->client_id,
+				'client_secret' => $this->api_key,
+				'grant_type'    => 'refresh_token',
+				'refresh_token' => $refresh_token,
 			]
+		);
+	}
+
+	/**
+	 * Alias for {@see self::authenticate_with_refresh_token()}.
+	 *
+	 * @param string $refresh_token Refresh token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function refresh_session( string $refresh_token ) {
+		return $this->authenticate_with_refresh_token( $refresh_token );
+	}
+
+	// -------------------------------------------------------------------------
+	// Password reset
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Send a password reset email.
+	 *
+	 * Enumeration-safe — WorkOS returns success even for unknown emails.
+	 *
+	 * @param string      $email              Email address.
+	 * @param string      $password_reset_url URL the reset email should link to.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function send_password_reset(
+		string $email,
+		string $password_reset_url,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			'/user_management/password_reset/send',
+			[
+				'email'              => $email,
+				'password_reset_url' => $password_reset_url,
+			],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	/**
+	 * Complete a password reset with a token and new password.
+	 *
+	 * @param string      $token              Password reset token from the reset email.
+	 * @param string      $new_password       New password.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function reset_password(
+		string $token,
+		string $new_password,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			'/user_management/password_reset/confirm',
+			[
+				'token'        => $token,
+				'new_password' => $new_password,
+			],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	// -------------------------------------------------------------------------
+	// Email verification
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Send a verification email to a user.
+	 *
+	 * @param string $user_id WorkOS user ID.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function send_verification_email( string $user_id ) {
+		return $this->post( "/user_management/users/{$user_id}/email_verification/send" );
+	}
+
+	/**
+	 * Verify a user's email with a code.
+	 *
+	 * @param string      $user_id            WorkOS user ID.
+	 * @param string      $code               Verification code from the email.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function verify_email(
+		string $user_id,
+		string $code,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			"/user_management/users/{$user_id}/email_verification/confirm",
+			[ 'code' => $code ],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	// -------------------------------------------------------------------------
+	// Invitations
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Look up an invitation by its token.
+	 *
+	 * @param string $token Invitation token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function get_invitation_by_token( string $token ) {
+		return $this->get( "/user_management/invitations/by_token/{$token}" );
+	}
+
+	// -------------------------------------------------------------------------
+	// Authentication factors (MFA)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * List a user's enrolled authentication factors.
+	 *
+	 * @param string $user_id WorkOS user ID.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function list_auth_factors( string $user_id ) {
+		return $this->get( "/user_management/users/{$user_id}/auth_factors" );
+	}
+
+	/**
+	 * Enroll a TOTP authentication factor.
+	 *
+	 * @param string $user_id    WorkOS user ID.
+	 * @param string $totp_issuer Human-readable issuer displayed by the authenticator (e.g. site name).
+	 * @param string $totp_user  Human-readable account label (usually the user's email).
+	 *
+	 * @return array|\WP_Error Factor data including `totp.qr_code` and `totp.secret`.
+	 */
+	public function enroll_totp_factor( string $user_id, string $totp_issuer, string $totp_user ) {
+		return $this->post(
+			"/user_management/users/{$user_id}/auth_factors",
+			[
+				'type'        => 'totp',
+				'totp_issuer' => $totp_issuer,
+				'totp_user'   => $totp_user,
+			]
+		);
+	}
+
+	/**
+	 * Enroll an SMS authentication factor.
+	 *
+	 * @param string $user_id      WorkOS user ID.
+	 * @param string $phone_number E.164-formatted phone number.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function enroll_sms_factor( string $user_id, string $phone_number ) {
+		return $this->post(
+			"/user_management/users/{$user_id}/auth_factors",
+			[
+				'type'         => 'sms',
+				'phone_number' => $phone_number,
+			]
+		);
+	}
+
+	/**
+	 * Delete (un-enroll) an authentication factor.
+	 *
+	 * @param string $factor_id Factor ID.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function delete_auth_factor( string $factor_id ) {
+		return $this->delete( "/user_management/auth_factors/{$factor_id}" );
+	}
+
+	/**
+	 * Issue a challenge for an enrolled authentication factor.
+	 *
+	 * For SMS factors, this triggers the text message; for TOTP, it just
+	 * returns a challenge record to verify against.
+	 *
+	 * @param string      $factor_id    Factor ID.
+	 * @param string|null $sms_template Optional SMS template override.
+	 *
+	 * @return array|\WP_Error Challenge data.
+	 */
+	public function challenge_auth_factor( string $factor_id, ?string $sms_template = null ) {
+		$body = [];
+		if ( null !== $sms_template && '' !== $sms_template ) {
+			$body['sms_template'] = $sms_template;
+		}
+
+		return $this->post( "/user_management/auth_factors/{$factor_id}/challenge", $body );
+	}
+
+	/**
+	 * Verify an authentication challenge with a user-provided code.
+	 *
+	 * @param string      $challenge_id       Challenge ID.
+	 * @param string      $code               Code entered by the user.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function verify_auth_challenge(
+		string $challenge_id,
+		string $code,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			"/user_management/auth_challenges/{$challenge_id}/verify",
+			[ 'code' => $code ],
+			$this->radar_headers( $radar_action_token )
 		);
 	}
 
@@ -199,12 +527,17 @@ class Client {
 	/**
 	 * Create a WorkOS user.
 	 *
-	 * @param array $data User data (email required; first_name, last_name, email_verified optional).
+	 * @param array       $data               User data (email required; first_name, last_name, email_verified, password optional).
+	 * @param string|null $radar_action_token Optional Radar action token for signup-form submissions.
 	 *
 	 * @return array|\WP_Error
 	 */
-	public function create_user( array $data ) {
-		return $this->post( '/user_management/users', $data );
+	public function create_user( array $data, ?string $radar_action_token = null ) {
+		return $this->post(
+			'/user_management/users',
+			$data,
+			$this->radar_headers( $radar_action_token )
+		);
 	}
 
 	/**
@@ -545,12 +878,13 @@ class Client {
 	/**
 	 * Send a GET request.
 	 *
-	 * @param string $path   API path.
-	 * @param array  $params Query parameters.
+	 * @param string $path          API path.
+	 * @param array  $params        Query parameters.
+	 * @param array  $extra_headers Additional headers to merge in.
 	 *
 	 * @return array|\WP_Error
 	 */
-	private function get( string $path, array $params = [] ) {
+	private function get( string $path, array $params = [], array $extra_headers = [] ) {
 		$url = self::BASE_URL . $path;
 		if ( $params ) {
 			$url .= '?' . http_build_query( $params );
@@ -559,7 +893,7 @@ class Client {
 		$response = wp_remote_get(
 			$url,
 			[
-				'headers' => $this->headers(),
+				'headers' => $this->headers( false, $extra_headers ),
 				'timeout' => 15,
 			]
 		);
@@ -570,16 +904,17 @@ class Client {
 	/**
 	 * Send a POST request.
 	 *
-	 * @param string $path API path.
-	 * @param array  $data Request body.
+	 * @param string $path          API path.
+	 * @param array  $data          Request body.
+	 * @param array  $extra_headers Additional headers to merge in.
 	 *
 	 * @return array|\WP_Error
 	 */
-	private function post( string $path, array $data = [] ) {
+	private function post( string $path, array $data = [], array $extra_headers = [] ) {
 		$response = wp_remote_post(
 			self::BASE_URL . $path,
 			[
-				'headers' => $this->headers( true ),
+				'headers' => $this->headers( true, $extra_headers ),
 				'body'    => wp_json_encode( $data ),
 				'timeout' => 15,
 			]
@@ -591,18 +926,40 @@ class Client {
 	/**
 	 * Send a PUT request.
 	 *
-	 * @param string $path API path.
-	 * @param array  $data Request body.
+	 * @param string $path          API path.
+	 * @param array  $data          Request body.
+	 * @param array  $extra_headers Additional headers to merge in.
 	 *
 	 * @return array|\WP_Error
 	 */
-	private function put( string $path, array $data = [] ) {
+	private function put( string $path, array $data = [], array $extra_headers = [] ) {
 		$response = wp_remote_request(
 			self::BASE_URL . $path,
 			[
 				'method'  => 'PUT',
-				'headers' => $this->headers( true ),
+				'headers' => $this->headers( true, $extra_headers ),
 				'body'    => wp_json_encode( $data ),
+				'timeout' => 15,
+			]
+		);
+
+		return $this->parse_response( $response );
+	}
+
+	/**
+	 * Send a DELETE request.
+	 *
+	 * @param string $path          API path.
+	 * @param array  $extra_headers Additional headers to merge in.
+	 *
+	 * @return array|\WP_Error
+	 */
+	private function delete( string $path, array $extra_headers = [] ) {
+		$response = wp_remote_request(
+			self::BASE_URL . $path,
+			[
+				'method'  => 'DELETE',
+				'headers' => $this->headers( false, $extra_headers ),
 				'timeout' => 15,
 			]
 		);
@@ -613,11 +970,12 @@ class Client {
 	/**
 	 * Build default request headers.
 	 *
-	 * @param bool $json Whether to include JSON content type.
+	 * @param bool  $json          Whether to include JSON content type.
+	 * @param array $extra_headers Additional headers to merge in. Extra headers override defaults.
 	 *
 	 * @return array
 	 */
-	private function headers( bool $json = false ): array {
+	private function headers( bool $json = false, array $extra_headers = [] ): array {
 		$headers = [
 			'Authorization' => 'Bearer ' . $this->api_key,
 			'User-Agent'    => 'workos-wordpress/' . WORKOS_VERSION,
@@ -627,7 +985,32 @@ class Client {
 			$headers['Content-Type'] = 'application/json';
 		}
 
+		foreach ( $extra_headers as $name => $value ) {
+			if ( '' === (string) $value ) {
+				continue;
+			}
+			$headers[ $name ] = $value;
+		}
+
 		return $headers;
+	}
+
+	/**
+	 * Build the `x-workos-radar-action-token` header array from a token.
+	 *
+	 * Returns an empty array when the token is empty so callers can always
+	 * pass the result as the `extra_headers` argument.
+	 *
+	 * @param string|null $radar_action_token Radar action token from the browser SDK.
+	 *
+	 * @return array
+	 */
+	private function radar_headers( ?string $radar_action_token ): array {
+		if ( null === $radar_action_token || '' === $radar_action_token ) {
+			return [];
+		}
+
+		return [ 'x-workos-radar-action-token' => $radar_action_token ];
 	}
 
 	/**
