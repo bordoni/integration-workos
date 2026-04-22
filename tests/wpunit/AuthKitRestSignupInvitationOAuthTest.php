@@ -259,44 +259,22 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$this->assertSame( 'org_01ABC', $response->get_data()['organization_id'] );
 	}
 
-	public function test_invitation_accept_rejects_email_mismatch(): void {
-		$this->queue_response(
-			'/user_management/invitations/by_token/',
-			[
-				'id'    => 'inv_1',
-				'email' => 'invitee@example.com',
-			]
-		);
-
+	public function test_invitation_accept_requires_token_and_password(): void {
 		$response = $this->dispatch_with_nonce(
 			'POST',
 			'/workos/v1/auth/invitation/accept',
 			[
 				'profile'          => 'invite-only',
-				'invitation_token' => 'ABC123',
-				'email'            => 'other@example.com',
-				'password'         => 'pass',
+				'invitation_token' => '',
+				'password'         => '',
 			],
 			'invite-only'
 		);
 
 		$this->assertSame( 400, $response->get_status() );
-		$this->assertSame( 'workos_authkit_email_mismatch', $response->get_data()['code'] );
 	}
 
-	public function test_invitation_accept_creates_user_and_signs_in(): void {
-		$this->queue_response(
-			'/user_management/invitations/by_token/',
-			[ 'id' => 'inv_1', 'email' => 'invitee@example.com' ]
-		);
-		// create_user succeeds (first call to /user_management/users).
-		// authenticate_with_password succeeds (second call to /user_management/authenticate).
-		// Our intercept returns the *same* queued response for URL substrings, so we need
-		// to register both routes separately.
-		$this->queue_response(
-			'/user_management/users',
-			[ 'id' => 'user_inv', 'email' => 'invitee@example.com', 'email_verified' => true ]
-		);
+	public function test_invitation_accept_posts_invitation_grant(): void {
 		$this->queue_response(
 			'/user_management/authenticate',
 			[
@@ -316,7 +294,6 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 			[
 				'profile'          => 'invite-only',
 				'invitation_token' => 'ABC123',
-				'email'            => 'invitee@example.com',
 				'password'         => 'strongpass',
 			],
 			'invite-only'
@@ -324,6 +301,51 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertSame( 'invitee@example.com', $response->get_data()['user']['email'] );
+
+		// The critical security guarantee: exactly ONE authenticate call
+		// went out, using the invitation_token grant type, with NO
+		// caller-supplied email in the body. WorkOS matches the invitation
+		// to its bound email server-side — an attacker cannot substitute
+		// an arbitrary recipient.
+		//
+		// (A separate /user_management/users POST may appear as a side
+		//  effect of UserSync's push-to-WorkOS sync for a brand-new WP
+		//  user, which uses the authoritative WorkOS user data returned by
+		//  the authenticate call — not attacker input. That path is not
+		//  the takeover vector this test guards.)
+		$auth_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertCount( 1, $auth_calls );
+
+		$body = json_decode( (string) array_values( $auth_calls )[0]['body'], true );
+		$this->assertSame( 'urn:workos:oauth:grant-type:invitation_token', $body['grant_type'] );
+		$this->assertSame( 'ABC123', $body['invitation_token'] );
+		$this->assertSame( 'strongpass', $body['password'] );
+		$this->assertArrayNotHasKey( 'email', $body, 'Caller-supplied email must never be forwarded.' );
+		$this->assertArrayNotHasKey( 'email_verified', $body, 'Caller cannot force email_verified.' );
+	}
+
+	public function test_invitation_accept_surfaces_workos_rejection(): void {
+		$this->queue_response(
+			'/user_management/authenticate',
+			[ 'message' => 'Invitation is no longer valid.' ],
+			400
+		);
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/invitation/accept',
+			[
+				'profile'          => 'invite-only',
+				'invitation_token' => 'consumed_token',
+				'password'         => 'pass',
+			],
+			'invite-only'
+		);
+
+		$this->assertSame( 400, $response->get_status() );
 	}
 
 	// --------------------------- OAuth ---------------------------

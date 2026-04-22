@@ -287,6 +287,41 @@ class Client {
 		return $this->authenticate_with_refresh_token( $refresh_token );
 	}
 
+	/**
+	 * Accept a WorkOS invitation and authenticate the invited user in one
+	 * atomic call.
+	 *
+	 * WorkOS validates the invitation token, identifies or creates the user
+	 * on the invitation's original email (the caller CANNOT substitute an
+	 * arbitrary email), sets their password, and returns a session. This
+	 * is the only supported path for accepting invitations — it replaces
+	 * a prior create_user + authenticate_with_password pair that let the
+	 * caller override the email and force `email_verified = true`.
+	 *
+	 * @param string      $invitation_token   Invitation token from the email link.
+	 * @param string      $password           Password the new user is setting.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error Session + user, or error.
+	 */
+	public function authenticate_with_invitation(
+		string $invitation_token,
+		string $password,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'client_id'        => $this->client_id,
+				'client_secret'    => $this->api_key,
+				'grant_type'       => 'urn:workos:oauth:grant-type:invitation_token',
+				'invitation_token' => $invitation_token,
+				'password'         => $password,
+			],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
 	// -------------------------------------------------------------------------
 	// Password reset
 	// -------------------------------------------------------------------------

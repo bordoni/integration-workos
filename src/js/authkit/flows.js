@@ -526,12 +526,15 @@ export function ResetConfirm( { client, token, onDone } ) {
 // ----------------------------------------------------------- InvitationAccept
 
 export function InvitationAccept( { client, invitationToken, profile, onSuccess } ) {
-	const [ email, setEmail ] = useState( '' );
 	const [ password, setPassword ] = useState( '' );
 	const [ invitation, setInvitation ] = useState( null );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
 
+	// The invitation email is authoritative and comes from WorkOS — we show
+	// it read-only so the user sees who they're being invited as, but we
+	// never send it back on accept. The server forwards only the token +
+	// password, and WorkOS matches the invitation to its bound email.
 	useEffect( () => {
 		( async () => {
 			const resp = await fetch(
@@ -541,7 +544,6 @@ export function InvitationAccept( { client, invitationToken, profile, onSuccess 
 			const data = await resp.json();
 			if ( resp.ok ) {
 				setInvitation( data );
-				setEmail( data.email || '' );
 			} else {
 				setError( errorMessage( data ) );
 			}
@@ -556,7 +558,6 @@ export function InvitationAccept( { client, invitationToken, profile, onSuccess 
 			'/invitation/accept',
 			{
 				invitation_token: invitationToken,
-				email,
 				password,
 				redirect_to: profile.redirectTo,
 			}
@@ -578,12 +579,6 @@ export function InvitationAccept( { client, invitationToken, profile, onSuccess 
 		h(
 			'form',
 			{ onSubmit: submit },
-			h( Field, { label: 'Email', htmlFor: 'wa-inv-email' },
-				h( Input, {
-					id: 'wa-inv-email', type: 'email', value: email, onChange: setEmail,
-					required: true, disabled: !! invitation?.email,
-				} )
-			),
 			h( Field, { label: 'Set a password', htmlFor: 'wa-inv-pw' },
 				h( Input, {
 					id: 'wa-inv-pw', type: 'password', value: password, onChange: setPassword,

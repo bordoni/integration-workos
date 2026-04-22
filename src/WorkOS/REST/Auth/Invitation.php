@@ -7,8 +7,6 @@
 
 namespace WorkOS\REST\Auth;
 
-use WorkOS\Auth\AuthKit\Profile;
-
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -101,10 +99,20 @@ class Invitation extends BaseEndpoint {
 	/**
 	 * POST /auth/invitation/accept
 	 *
-	 * Completes the invitation by creating the user (when necessary) and
-	 * authenticating them via password. WorkOS's accept-invitation flow is
-	 * token-scoped — passing the invitation token as `invitation_token` on
-	 * the authenticate call consumes it.
+	 * Hands the invitation token + new password to WorkOS, which:
+	 *   - Validates the token (rejects consumed, expired, or unknown tokens)
+	 *   - Creates or identifies the invited user on the invitation's
+	 *     authoritative email (the caller cannot substitute an arbitrary email)
+	 *   - Sets the password and marks the email verified per WorkOS policy
+	 *   - Returns a session
+	 *
+	 * Single atomic call — we intentionally do NOT call create_user or
+	 * authenticate_with_password from the public endpoint. Doing so
+	 * previously let an anonymous caller force `email_verified=true` on an
+	 * arbitrary email and then authenticate with a chosen password, which
+	 * combined with email-based auto-linking allowed account takeover of
+	 * existing WP admins who happened to receive an invitation to their
+	 * address.
 	 *
 	 * @param \WP_REST_Request $request REST request.
 	 *
@@ -130,13 +138,12 @@ class Invitation extends BaseEndpoint {
 		}
 
 		$token    = (string) $request->get_param( 'invitation_token' );
-		$email    = strtolower( trim( (string) $request->get_param( 'email' ) ) );
 		$password = (string) $request->get_param( 'password' );
 
-		if ( '' === $token || '' === $email || '' === $password ) {
+		if ( '' === $token || '' === $password ) {
 			return new \WP_Error(
 				'workos_authkit_invalid_input',
-				__( 'Invitation token, email, and password are all required.', 'integration-workos' ),
+				__( 'Invitation token and password are required.', 'integration-workos' ),
 				[ 'status' => 400 ]
 			);
 		}
@@ -150,50 +157,8 @@ class Invitation extends BaseEndpoint {
 			return $rate_ok;
 		}
 
-		// Look up the invitation to confirm the email the React shell is
-		// posting matches the invitation's email. WorkOS enforces this too,
-		// but failing early gives us a clearer error.
-		$invitation = workos()->api()->get_invitation_by_token( $token );
-		if ( is_wp_error( $invitation ) ) {
-			return $invitation;
-		}
-
-		if ( ! empty( $invitation['email'] ) && strtolower( (string) $invitation['email'] ) !== $email ) {
-			return new \WP_Error(
-				'workos_authkit_email_mismatch',
-				__( 'This invitation is for a different email address.', 'integration-workos' ),
-				[ 'status' => 400 ]
-			);
-		}
-
-		// If the user does not yet exist, create them. WorkOS is idempotent
-		// on email, so a duplicate-create is safe but returns an error we
-		// can swallow.
-		$create_result = workos()->api()->create_user(
-			array_filter(
-				[
-					'email'          => $email,
-					'password'       => $password,
-					'email_verified' => true,
-				],
-				static fn( $value ) => null !== $value
-			),
-			$this->get_radar_token( $request )
-		);
-
-		// A 4xx "user already exists" is expected when the invited user
-		// previously signed up; any other error we surface.
-		if ( is_wp_error( $create_result ) ) {
-			$status = (int) ( $create_result->get_error_data()['status'] ?? 0 );
-			if ( $status < 400 || $status >= 500 ) {
-				return $create_result;
-			}
-		}
-
-		// Authenticate with the invitation token so WorkOS marks it
-		// consumed and returns a session for the user.
-		$workos_response = workos()->api()->authenticate_with_password(
-			$email,
+		$workos_response = workos()->api()->authenticate_with_invitation(
+			$token,
 			$password,
 			$this->get_radar_token( $request )
 		);

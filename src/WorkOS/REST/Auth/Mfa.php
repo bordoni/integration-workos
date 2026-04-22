@@ -387,6 +387,13 @@ class Mfa extends BaseEndpoint {
 	/**
 	 * POST /auth/mfa/factor/delete
 	 *
+	 * Removes an MFA factor the *current* user owns. The ownership check
+	 * is mandatory: because the plugin authenticates to WorkOS with a
+	 * tenant-wide API key, WorkOS cannot distinguish which user is
+	 * requesting the delete. Without this check, any authenticated WP
+	 * user could strip MFA from any other user's account by submitting
+	 * that user's factor_id.
+	 *
 	 * @param \WP_REST_Request $request REST request.
 	 *
 	 * @return \WP_REST_Response|\WP_Error
@@ -408,6 +415,35 @@ class Mfa extends BaseEndpoint {
 				'workos_authkit_invalid_input',
 				__( 'A factor id is required.', 'integration-workos' ),
 				[ 'status' => 400 ]
+			);
+		}
+
+		$workos_user_id = (string) get_user_meta( get_current_user_id(), '_workos_user_id', true );
+		if ( '' === $workos_user_id ) {
+			return new \WP_Error(
+				'workos_authkit_no_workos_user',
+				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		$factors = workos()->api()->list_auth_factors( $workos_user_id );
+		if ( is_wp_error( $factors ) ) {
+			return $factors;
+		}
+
+		$owned_ids = array_map(
+			static fn( array $factor ): string => (string) ( $factor['id'] ?? '' ),
+			(array) ( $factors['data'] ?? $factors )
+		);
+
+		if ( ! in_array( $factor_id, $owned_ids, true ) ) {
+			// Return 404 rather than 403 so we don't leak the existence of
+			// factor IDs that belong to other users.
+			return new \WP_Error(
+				'workos_authkit_factor_not_found',
+				__( 'Factor not found.', 'integration-workos' ),
+				[ 'status' => 404 ]
 			);
 		}
 

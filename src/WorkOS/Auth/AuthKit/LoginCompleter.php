@@ -76,11 +76,44 @@ class LoginCompleter {
 		// state back to the React shell so it can run the MFA challenge
 		// step and then POST /auth/mfa/verify.
 		if ( ! empty( $workos_response['pending_authentication_token'] ) ) {
+			$factors = $this->extract_factors( $workos_response );
+
+			// Enforce the profile's factor allowlist. If WorkOS surfaces a
+			// challenge for a factor type the admin has disabled on this
+			// profile, reject rather than completing via an unauthorized
+			// factor.
+			$allowed_types = $profile->get_mfa()['factors'] ?? [];
+			if ( ! empty( $allowed_types ) ) {
+				foreach ( $factors as $factor ) {
+					$type = (string) ( $factor['type'] ?? '' );
+					if ( '' !== $type && ! in_array( $type, $allowed_types, true ) ) {
+						return new \WP_Error(
+							'workos_authkit_factor_not_allowed',
+							__( 'The multi-factor method returned is not permitted for this login.', 'integration-workos' ),
+							[ 'status' => 403 ]
+						);
+					}
+				}
+			}
+
 			return [
 				'mfa_required'                 => true,
 				'pending_authentication_token' => (string) $workos_response['pending_authentication_token'],
-				'factors'                      => $this->extract_factors( $workos_response ),
+				'factors'                      => $factors,
 			];
+		}
+
+		// When the profile insists MFA is always required and WorkOS did
+		// not return a pending factor (i.e., the user has nothing enrolled
+		// or WorkOS is not enforcing org-level MFA), we must refuse to
+		// complete the login. Silently letting the user through would
+		// quietly break the admin's "MFA required" guarantee.
+		if ( Profile::MFA_ENFORCE_ALWAYS === ( $profile->get_mfa()['enforce'] ?? '' ) ) {
+			return new \WP_Error(
+				'workos_authkit_mfa_required',
+				__( 'This login requires multi-factor authentication, but no factor is enrolled on your account. Please enroll a factor and try again.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
 		}
 
 		$workos_user = $workos_response['user'] ?? null;

@@ -351,11 +351,20 @@ class AuthKitRestMfaTest extends WPTestCase {
 
 	// --------------------------- /auth/mfa/factor/delete ---------------------------
 
-	public function test_delete_factor_removes_factor(): void {
+	public function test_delete_factor_removes_owned_factor(): void {
 		$user_id = self::factory()->user->create();
 		update_user_meta( $user_id, '_workos_user_id', 'user_del' );
 		wp_set_current_user( $user_id );
 
+		// list_auth_factors confirms ownership.
+		$this->queue_response(
+			'/user_management/users/user_del/auth_factors',
+			[
+				'data' => [
+					[ 'id' => 'factor_x', 'type' => 'totp' ],
+				],
+			]
+		);
 		$this->queue_response( '/user_management/auth_factors/factor_x', [] );
 
 		$response = $this->dispatch_with_nonce(
@@ -373,5 +382,53 @@ class AuthKitRestMfaTest extends WPTestCase {
 			static fn( array $c ) => $c['method'] === 'DELETE' && str_contains( $c['url'], 'factor_x' )
 		);
 		$this->assertNotEmpty( $delete_calls );
+	}
+
+	public function test_delete_factor_rejects_other_users_factor(): void {
+		$user_id = self::factory()->user->create();
+		update_user_meta( $user_id, '_workos_user_id', 'user_attacker' );
+		wp_set_current_user( $user_id );
+
+		// Attacker's own factor list — does NOT include factor_victim.
+		$this->queue_response(
+			'/user_management/users/user_attacker/auth_factors',
+			[
+				'data' => [
+					[ 'id' => 'factor_attacker_own', 'type' => 'totp' ],
+				],
+			]
+		);
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/mfa/factor/delete',
+			[ 'profile' => 'mfa-on', 'factor_id' => 'factor_victim' ],
+			'mfa-on'
+		);
+
+		$this->assertSame( 404, $response->get_status() );
+		$this->assertSame( 'workos_authkit_factor_not_found', $response->get_data()['code'] );
+
+		// Critically: no DELETE went to WorkOS for the victim's factor.
+		$delete_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => $c['method'] === 'DELETE' && str_contains( $c['url'], 'factor_victim' )
+		);
+		$this->assertEmpty( $delete_calls );
+	}
+
+	public function test_delete_factor_rejects_user_without_workos_link(): void {
+		$user_id = self::factory()->user->create();
+		wp_set_current_user( $user_id );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/mfa/factor/delete',
+			[ 'profile' => 'mfa-on', 'factor_id' => 'factor_x' ],
+			'mfa-on'
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_authkit_no_workos_user', $response->get_data()['code'] );
 	}
 }
