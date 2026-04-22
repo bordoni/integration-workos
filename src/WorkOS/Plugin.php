@@ -179,11 +179,7 @@ class Plugin {
 		//   - /workos/callback  (OAuth callback for both AuthKit-redirect and custom modes)
 		//   - /workos/login/{profile}  (dedicated frontend login page)
 		Auth\Login::register_rewrite();
-		add_rewrite_rule(
-			Auth\AuthKit\FrontendRoute::REWRITE,
-			'index.php?' . Auth\AuthKit\FrontendRoute::QUERY_VAR . '=$matches[1]',
-			'top'
-		);
+		Auth\AuthKit\FrontendRoute::register_rewrite();
 		flush_rewrite_rules();
 
 		// Seed the reserved default Login Profile so wp-login.php takeover

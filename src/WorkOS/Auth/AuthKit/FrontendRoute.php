@@ -55,17 +55,23 @@ class FrontendRoute {
 	 * @return void
 	 */
 	public function register(): void {
-		add_action( 'init', [ $this, 'register_rewrite' ] );
+		add_action( 'init', [ self::class, 'register_rewrite' ] );
 		add_filter( 'query_vars', [ $this, 'register_query_var' ] );
 		add_action( 'template_redirect', [ $this, 'maybe_render' ] );
 	}
 
 	/**
-	 * Register the rewrite rule.
+	 * Register the /workos/login/{profile} rewrite rule.
+	 *
+	 * Static so Plugin::activate() can call it before the DI container is
+	 * built, matching the convention used by {@see \WorkOS\Auth\Login::register_rewrite()}.
+	 * Called both from activation (so the rule persists after the
+	 * flush_rewrite_rules() call below) and from the `init` hook on every
+	 * request (so the rule is present in the rewrite table for matching).
 	 *
 	 * @return void
 	 */
-	public function register_rewrite(): void {
+	public static function register_rewrite(): void {
 		add_rewrite_rule(
 			self::REWRITE,
 			'index.php?' . self::QUERY_VAR . '=$matches[1]',
