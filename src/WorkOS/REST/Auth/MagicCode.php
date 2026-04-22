@@ -8,6 +8,9 @@
 namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -51,11 +54,11 @@ class MagicCode extends BaseEndpoint {
 	/**
 	 * POST /auth/magic/send
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function send( \WP_REST_Request $request ) {
+	public function send( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -67,7 +70,7 @@ class MagicCode extends BaseEndpoint {
 		}
 
 		if ( ! $profile->has_method( Profile::METHOD_MAGIC_CODE ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_method_disabled',
 				__( 'Magic-code sign-in is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -76,7 +79,7 @@ class MagicCode extends BaseEndpoint {
 
 		$email = strtolower( trim( (string) $request->get_param( 'email' ) ) );
 		if ( '' === $email || ! is_email( $email ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'Enter a valid email.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -101,7 +104,7 @@ class MagicCode extends BaseEndpoint {
 			$this->get_radar_token( $request )
 		);
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'ok'      => true,
 				'message' => __( 'If an account exists for this email, a code is on its way.', 'integration-workos' ),
@@ -113,11 +116,11 @@ class MagicCode extends BaseEndpoint {
 	/**
 	 * POST /auth/magic/verify
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function verify( \WP_REST_Request $request ) {
+	public function verify( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -129,7 +132,7 @@ class MagicCode extends BaseEndpoint {
 		}
 
 		if ( ! $profile->has_method( Profile::METHOD_MAGIC_CODE ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_method_disabled',
 				__( 'Magic-code sign-in is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -141,7 +144,7 @@ class MagicCode extends BaseEndpoint {
 		$pending_auth_token = (string) $request->get_param( 'pending_authentication_token' );
 
 		if ( '' === $email || '' === $code ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'An email and code are required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -180,6 +183,6 @@ class MagicCode extends BaseEndpoint {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new WP_REST_Response( $result, 200 );
 	}
 }

@@ -11,6 +11,8 @@ use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
+use WP_REST_Request;
+use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\Auth\AuthKit\RateLimiter;
@@ -150,8 +152,8 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 	/**
 	 * Helper: dispatch with nonce.
 	 */
-	private function dispatch_with_nonce( string $method, string $route, array $body = [], string $profile_slug = 'members' ): \WP_REST_Response {
-		$request = new \WP_REST_Request( $method, $route );
+	private function dispatch_with_nonce( string $method, string $route, array $body = [], string $profile_slug = 'members' ): WP_REST_Response {
+		$request = new WP_REST_Request( $method, $route );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( $profile_slug ) );
 		$request->set_body( wp_json_encode( $body ) );
@@ -162,13 +164,13 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 
 	public function test_nonce_returns_nonce_and_radar_key(): void {
 		$response = rest_get_server()->dispatch(
-			new \WP_REST_Request( 'GET', '/workos/v1/auth/nonce' )
+			new WP_REST_Request( 'GET', '/workos/v1/auth/nonce' )
 		);
 
 		// Missing profile => 400.
 		$this->assertSame( 400, $response->get_status() );
 
-		$request = new \WP_REST_Request( 'GET', '/workos/v1/auth/nonce' );
+		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/nonce' );
 		$request->set_param( 'profile', 'members' );
 		$response = rest_get_server()->dispatch( $request );
 
@@ -269,7 +271,7 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 
 	public function test_refresh_rejects_logged_out_user(): void {
 		$response = rest_get_server()->dispatch(
-			new \WP_REST_Request( 'POST', '/workos/v1/auth/session/refresh' )
+			new WP_REST_Request( 'POST', '/workos/v1/auth/session/refresh' )
 		);
 
 		$this->assertSame( 401, $response->get_status() );
@@ -292,7 +294,7 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		);
 
 		$response = rest_get_server()->dispatch(
-			new \WP_REST_Request( 'POST', '/workos/v1/auth/session/refresh' )
+			new WP_REST_Request( 'POST', '/workos/v1/auth/session/refresh' )
 		);
 
 		$this->assertSame( 200, $response->get_status() );
@@ -306,7 +308,7 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		wp_set_current_user( $user_id );
 
 		$response = rest_get_server()->dispatch(
-			new \WP_REST_Request( 'POST', '/workos/v1/auth/session/refresh' )
+			new WP_REST_Request( 'POST', '/workos/v1/auth/session/refresh' )
 		);
 
 		$this->assertSame( 409, $response->get_status() );
@@ -316,7 +318,7 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 
 	public function test_logout_succeeds_even_when_not_logged_in(): void {
 		$response = rest_get_server()->dispatch(
-			new \WP_REST_Request( 'POST', '/workos/v1/auth/session/logout' )
+			new WP_REST_Request( 'POST', '/workos/v1/auth/session/logout' )
 		);
 
 		$this->assertSame( 200, $response->get_status() );

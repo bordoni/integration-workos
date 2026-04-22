@@ -7,6 +7,7 @@
 
 namespace WorkOS\Auth\AuthKit;
 
+use WorkOS\Auth\LoginBypass;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -116,7 +117,7 @@ class LoginTakeover {
 		}
 
 		// Plugin-level escape hatch.
-		if ( class_exists( '\\WorkOS\\Auth\\LoginBypass' ) && \WorkOS\Auth\LoginBypass::is_active() ) {
+		if ( class_exists( LoginBypass::class ) && LoginBypass::is_active() ) {
 			return false;
 		}
 

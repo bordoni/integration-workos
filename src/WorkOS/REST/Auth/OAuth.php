@@ -9,6 +9,9 @@ namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\Login;
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -60,11 +63,11 @@ class OAuth extends BaseEndpoint {
 	/**
 	 * GET /auth/oauth/authorize-url?profile=slug&provider=oauth_google
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function authorize_url( \WP_REST_Request $request ) {
+	public function authorize_url( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -72,7 +75,7 @@ class OAuth extends BaseEndpoint {
 
 		$method_param = sanitize_text_field( (string) $request->get_param( 'provider' ) );
 		if ( '' === $method_param ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'Provider is required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -80,7 +83,7 @@ class OAuth extends BaseEndpoint {
 		}
 
 		if ( ! isset( self::METHOD_TO_PROVIDER[ $method_param ] ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_unknown_provider',
 				__( 'Unknown OAuth provider.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -88,7 +91,7 @@ class OAuth extends BaseEndpoint {
 		}
 
 		if ( ! $profile->has_method( $method_param ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_method_disabled',
 				__( 'This social provider is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -136,7 +139,7 @@ class OAuth extends BaseEndpoint {
 
 		$url = workos()->api()->get_authorization_url( $args );
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[ 'authorize_url' => (string) $url ],
 			200
 		);

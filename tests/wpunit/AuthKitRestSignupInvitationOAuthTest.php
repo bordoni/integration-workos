@@ -11,6 +11,8 @@ use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
+use WP_REST_Request;
+use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\Auth\AuthKit\RateLimiter;
@@ -173,8 +175,8 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		];
 	}
 
-	private function dispatch_with_nonce( string $method, string $route, array $body, string $profile_slug ): \WP_REST_Response {
-		$request = new \WP_REST_Request( $method, $route );
+	private function dispatch_with_nonce( string $method, string $route, array $body, string $profile_slug ): WP_REST_Response {
+		$request = new WP_REST_Request( $method, $route );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( $profile_slug ) );
 		$request->set_body( wp_json_encode( $body ) );
@@ -251,7 +253,7 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		);
 
 		$response = rest_get_server()->dispatch(
-			new \WP_REST_Request( 'GET', '/workos/v1/auth/invitation/ABC123TOKEN' )
+			new WP_REST_Request( 'GET', '/workos/v1/auth/invitation/ABC123TOKEN' )
 		);
 
 		$this->assertSame( 200, $response->get_status() );
@@ -351,7 +353,7 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 	// --------------------------- OAuth ---------------------------
 
 	public function test_oauth_authorize_url_builds_google_url(): void {
-		$request = new \WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
+		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
 		$request->set_param( 'profile', 'open' );
 		$request->set_param( 'provider', Profile::METHOD_OAUTH_GOOGLE );
 
@@ -365,7 +367,7 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 	}
 
 	public function test_oauth_authorize_url_rejects_disabled_provider(): void {
-		$request = new \WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
+		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
 		$request->set_param( 'profile', 'open' );
 		$request->set_param( 'provider', Profile::METHOD_OAUTH_MICROSOFT );
 
@@ -376,7 +378,7 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 	}
 
 	public function test_oauth_authorize_url_rejects_unknown_provider(): void {
-		$request = new \WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
+		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
 		$request->set_param( 'profile', 'open' );
 		$request->set_param( 'provider', 'oauth_nope' );
 
@@ -394,7 +396,7 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$data['methods'] = [ Profile::METHOD_OAUTH_GOOGLE ];
 		$this->repository->save( Profile::from_array( $data ) );
 
-		$request = new \WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
+		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
 		$request->set_param( 'profile', 'invite-only' );
 		$request->set_param( 'provider', Profile::METHOD_OAUTH_GOOGLE );
 

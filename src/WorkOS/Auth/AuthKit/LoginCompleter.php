@@ -11,6 +11,8 @@ use WorkOS\Auth\Login;
 use WorkOS\Auth\Redirect;
 use WorkOS\Organization\EntitlementGate;
 use WorkOS\Sync\UserSync;
+use WP_Error;
+use WP_User;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -59,7 +61,7 @@ class LoginCompleter {
 	 * @param Profile $profile         Active Login Profile.
 	 * @param string  $redirect_to     Client-requested redirect (validated).
 	 *
-	 * @return array|\WP_Error
+	 * @return array|WP_Error
 	 *   On success: {
 	 *     'user'        => { id, email, display_name },
 	 *     'redirect_to' => string,
@@ -87,7 +89,7 @@ class LoginCompleter {
 				foreach ( $factors as $factor ) {
 					$type = (string) ( $factor['type'] ?? '' );
 					if ( '' !== $type && ! in_array( $type, $allowed_types, true ) ) {
-						return new \WP_Error(
+						return new WP_Error(
 							'workos_authkit_factor_not_allowed',
 							__( 'The multi-factor method returned is not permitted for this login.', 'integration-workos' ),
 							[ 'status' => 403 ]
@@ -109,7 +111,7 @@ class LoginCompleter {
 		// complete the login. Silently letting the user through would
 		// quietly break the admin's "MFA required" guarantee.
 		if ( Profile::MFA_ENFORCE_ALWAYS === ( $profile->get_mfa()['enforce'] ?? '' ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_mfa_required',
 				__( 'This login requires multi-factor authentication, but no factor is enrolled on your account. Please enroll a factor and try again.', 'integration-workos' ),
 				[ 'status' => 403 ]
@@ -118,7 +120,7 @@ class LoginCompleter {
 
 		$workos_user = $workos_response['user'] ?? null;
 		if ( ! is_array( $workos_user ) || empty( $workos_user['id'] ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_response',
 				__( 'Unexpected response from the authentication provider.', 'integration-workos' ),
 				[ 'status' => 502 ]
@@ -147,7 +149,7 @@ class LoginCompleter {
 		 * Fires on WP login.
 		 *
 		 * @param string   $user_login Username.
-		 * @param \WP_User $wp_user    User object.
+		 * @param WP_User $wp_user    User object.
 		 */
 		do_action( 'wp_login', $wp_user->user_login, $wp_user ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 
@@ -171,11 +173,11 @@ class LoginCompleter {
 	 *
 	 * @param Profile  $profile     Active profile.
 	 * @param string   $redirect_to Client-provided redirect URL.
-	 * @param \WP_User $wp_user     Authenticated user.
+	 * @param WP_User $wp_user     Authenticated user.
 	 *
 	 * @return string
 	 */
-	private function resolve_redirect( Profile $profile, string $redirect_to, \WP_User $wp_user ): string {
+	private function resolve_redirect( Profile $profile, string $redirect_to, WP_User $wp_user ): string {
 		$profile_redirect = $profile->get_post_login_redirect();
 		$requested        = '' !== $profile_redirect ? $profile_redirect : $redirect_to;
 

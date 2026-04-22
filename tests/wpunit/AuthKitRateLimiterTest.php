@@ -9,6 +9,7 @@ namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\RateLimiter;
+use WP_Error;
 
 /**
  * Fixed-window limiter semantics.
@@ -51,7 +52,7 @@ class AuthKitRateLimiterTest extends WPTestCase {
 
 		$result = $this->limiter->attempt( 'test_bucket', '192.168.0.1', 3, 60 );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'workos_rate_limited', $result->get_error_code() );
 
 		$data = $result->get_error_data();
@@ -88,7 +89,7 @@ class AuthKitRateLimiterTest extends WPTestCase {
 		for ( $i = 0; $i < 3; $i++ ) {
 			$this->limiter->attempt( 'test_bucket', '192.168.0.1', 3, 60 );
 		}
-		$this->assertInstanceOf( \WP_Error::class, $this->limiter->attempt( 'test_bucket', '192.168.0.1', 3, 60 ) );
+		$this->assertInstanceOf( WP_Error::class, $this->limiter->attempt( 'test_bucket', '192.168.0.1', 3, 60 ) );
 
 		$this->limiter->reset( 'test_bucket', '192.168.0.1' );
 

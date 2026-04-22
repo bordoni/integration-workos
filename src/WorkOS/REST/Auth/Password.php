@@ -8,6 +8,9 @@
 namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -62,11 +65,11 @@ class Password extends BaseEndpoint {
 	/**
 	 * POST /auth/password/authenticate
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function authenticate( \WP_REST_Request $request ) {
+	public function authenticate( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -78,7 +81,7 @@ class Password extends BaseEndpoint {
 		}
 
 		if ( ! $profile->has_method( Profile::METHOD_PASSWORD ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_method_disabled',
 				__( 'Password sign-in is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -89,7 +92,7 @@ class Password extends BaseEndpoint {
 		$password = (string) $request->get_param( 'password' );
 
 		if ( '' === $email || ! is_email( $email ) || '' === $password ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'Enter a valid email and password.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -127,17 +130,17 @@ class Password extends BaseEndpoint {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new WP_REST_Response( $result, 200 );
 	}
 
 	/**
 	 * POST /auth/password/reset/start
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function reset_start( \WP_REST_Request $request ) {
+	public function reset_start( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -149,7 +152,7 @@ class Password extends BaseEndpoint {
 		}
 
 		if ( ! $profile->is_password_reset_flow_enabled() ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_reset_disabled',
 				__( 'Password reset is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -158,7 +161,7 @@ class Password extends BaseEndpoint {
 
 		$email = strtolower( trim( (string) $request->get_param( 'email' ) ) );
 		if ( '' === $email || ! is_email( $email ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'Enter a valid email.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -184,7 +187,7 @@ class Password extends BaseEndpoint {
 			$this->get_radar_token( $request )
 		);
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'ok'      => true,
 				'message' => __( 'If an account exists for this email, a password reset link is on its way.', 'integration-workos' ),
@@ -196,11 +199,11 @@ class Password extends BaseEndpoint {
 	/**
 	 * POST /auth/password/reset/confirm
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function reset_confirm( \WP_REST_Request $request ) {
+	public function reset_confirm( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -212,7 +215,7 @@ class Password extends BaseEndpoint {
 		}
 
 		if ( ! $profile->is_password_reset_flow_enabled() ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_reset_disabled',
 				__( 'Password reset is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -223,7 +226,7 @@ class Password extends BaseEndpoint {
 		$new_password = (string) $request->get_param( 'new_password' );
 
 		if ( '' === $token || '' === $new_password ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'A reset token and new password are required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -250,7 +253,7 @@ class Password extends BaseEndpoint {
 			return $workos_response;
 		}
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[ 'ok' => true ],
 			200
 		);

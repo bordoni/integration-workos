@@ -10,6 +10,7 @@ namespace WorkOS\Tests\Wpunit;
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Profile;
+use WP_Error;
 
 /**
  * Ensures the profile's MFA policy (`mfa.enforce` + `mfa.factors`) is
@@ -63,7 +64,7 @@ class AuthKitLoginCompleterMfaTest extends WPTestCase {
 			''
 		);
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'workos_authkit_mfa_required', $result->get_error_code() );
 		$this->assertSame( 403, $result->get_error_data()['status'] );
 	}
@@ -122,7 +123,7 @@ class AuthKitLoginCompleterMfaTest extends WPTestCase {
 			$profile
 		);
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'workos_authkit_factor_not_allowed', $result->get_error_code() );
 	}
 

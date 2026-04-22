@@ -7,6 +7,8 @@
 
 namespace WorkOS\Auth\AuthKit;
 
+use WP_REST_Request;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -83,11 +85,11 @@ class Radar {
 	 * Returns null when absent so callers can pass it through to the API
 	 * client, which already treats null as "omit the header".
 	 *
-	 * @param \WP_REST_Request $request REST request object.
+	 * @param WP_REST_Request $request REST request object.
 	 *
 	 * @return string|null
 	 */
-	public function extract_from_request( \WP_REST_Request $request ): ?string {
+	public function extract_from_request( WP_REST_Request $request ): ?string {
 		$token = $request->get_header( self::REQUEST_HEADER );
 
 		if ( ! is_string( $token ) || '' === trim( $token ) ) {

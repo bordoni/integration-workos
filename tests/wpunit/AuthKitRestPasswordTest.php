@@ -11,6 +11,8 @@ use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
+use WP_REST_Request;
+use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\Auth\AuthKit\RateLimiter;
@@ -154,8 +156,8 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	/**
 	 * Helper to dispatch with nonce header.
 	 */
-	private function dispatch_with_nonce( string $method, string $route, array $body = [] ): \WP_REST_Response {
-		$request = new \WP_REST_Request( $method, $route );
+	private function dispatch_with_nonce( string $method, string $route, array $body = [] ): WP_REST_Response {
+		$request = new WP_REST_Request( $method, $route );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( $this->profile->get_slug() ) );
 		$request->set_body( wp_json_encode( $body ) );
@@ -166,7 +168,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	 * Missing profile returns 400.
 	 */
 	public function test_authenticate_requires_profile(): void {
-		$request = new \WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
+		$request = new WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_body( wp_json_encode( [ 'email' => 'a@b.c', 'password' => 'x' ] ) );
 
@@ -195,7 +197,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	 * Missing nonce returns 403.
 	 */
 	public function test_authenticate_rejects_missing_nonce(): void {
-		$request = new \WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
+		$request = new WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_body(
 			wp_json_encode(
@@ -229,7 +231,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		);
 		$this->assertInstanceOf( Profile::class, $magic_only );
 
-		$request = new \WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
+		$request = new WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( 'magic-only' ) );
 		$request->set_body(
@@ -322,7 +324,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	 * Radar header is forwarded to WorkOS.
 	 */
 	public function test_authenticate_forwards_radar_header(): void {
-		$request = new \WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
+		$request = new WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( 'members' ) );
 		$request->set_header( 'X-WorkOS-Radar-Action-Token', 'radar_tok' );

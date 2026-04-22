@@ -7,6 +7,9 @@
 
 namespace WorkOS\Auth\AuthKit;
 
+use WP_Error;
+use WP_Post;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -143,12 +146,12 @@ class ProfileRepository {
 	 *
 	 * @param Profile $profile Profile to persist.
 	 *
-	 * @return Profile|\WP_Error The saved profile (with its post ID), or WP_Error on failure.
+	 * @return Profile|WP_Error The saved profile (with its post ID), or WP_Error on failure.
 	 */
 	public function save( Profile $profile ) {
 		$slug = $profile->get_slug();
 		if ( '' === $slug ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_profile_invalid_slug',
 				__( 'Profile slug cannot be empty.', 'integration-workos' )
 			);
@@ -157,7 +160,7 @@ class ProfileRepository {
 		// Enforce slug uniqueness against any other profile.
 		$existing = $this->find_by_slug( $slug );
 		if ( $existing && $existing->get_id() !== $profile->get_id() ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_profile_slug_taken',
 				sprintf(
 					/* translators: %s: slug */
@@ -197,19 +200,19 @@ class ProfileRepository {
 	 *
 	 * @param int $id Post ID.
 	 *
-	 * @return true|\WP_Error
+	 * @return true|WP_Error
 	 */
 	public function delete( int $id ) {
 		$profile = $this->find_by_id( $id );
 		if ( ! $profile ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_profile_not_found',
 				__( 'Profile not found.', 'integration-workos' )
 			);
 		}
 
 		if ( Profile::DEFAULT_SLUG === $profile->get_slug() ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_profile_default_locked',
 				__( 'The default Login Profile cannot be deleted.', 'integration-workos' )
 			);
@@ -217,7 +220,7 @@ class ProfileRepository {
 
 		$result = wp_delete_post( $id, true );
 		if ( ! $result ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_profile_delete_failed',
 				__( 'Failed to delete the Login Profile.', 'integration-workos' )
 			);
@@ -252,11 +255,11 @@ class ProfileRepository {
 	/**
 	 * Hydrate a Profile from a WP_Post.
 	 *
-	 * @param \WP_Post $post Post object.
+	 * @param WP_Post $post Post object.
 	 *
 	 * @return Profile|null Returns null if the meta payload is corrupt beyond recovery.
 	 */
-	private function hydrate( \WP_Post $post ): ?Profile {
+	private function hydrate( WP_Post $post ): ?Profile {
 		$raw = get_post_meta( $post->ID, self::META_KEY, true );
 
 		$data = [];

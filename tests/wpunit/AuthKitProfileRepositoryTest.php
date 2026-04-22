@@ -10,6 +10,7 @@ namespace WorkOS\Tests\Wpunit;
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WP_Error;
 
 /**
  * CRUD, default seeding, and slug-uniqueness coverage for ProfileRepository.
@@ -147,7 +148,7 @@ class AuthKitProfileRepositoryTest extends WPTestCase {
 			)
 		);
 
-		$this->assertInstanceOf( \WP_Error::class, $second );
+		$this->assertInstanceOf( WP_Error::class, $second );
 		$this->assertSame( 'workos_profile_slug_taken', $second->get_error_code() );
 	}
 
@@ -159,7 +160,7 @@ class AuthKitProfileRepositoryTest extends WPTestCase {
 
 		$result = $this->repository->save( $profile );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'workos_profile_invalid_slug', $result->get_error_code() );
 	}
 
@@ -201,7 +202,7 @@ class AuthKitProfileRepositoryTest extends WPTestCase {
 
 		$result = $this->repository->delete( $default->get_id() );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'workos_profile_default_locked', $result->get_error_code() );
 		$this->assertNotNull( $this->repository->find_by_slug( Profile::DEFAULT_SLUG ) );
 	}
@@ -212,7 +213,7 @@ class AuthKitProfileRepositoryTest extends WPTestCase {
 	public function test_delete_unknown_id_returns_error(): void {
 		$result = $this->repository->delete( 999999 );
 
-		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'workos_profile_not_found', $result->get_error_code() );
 	}
 

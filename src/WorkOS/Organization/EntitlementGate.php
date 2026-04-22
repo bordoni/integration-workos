@@ -9,6 +9,7 @@ namespace WorkOS\Organization;
 
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Config;
+use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -65,7 +66,7 @@ class EntitlementGate {
 	 * @param int   $user_id     WP user ID.
 	 * @param array $workos_data WorkOS auth response data.
 	 *
-	 * @return true|\WP_Error True when allowed; WP_Error(403) when denied.
+	 * @return true|WP_Error True when allowed; WP_Error(403) when denied.
 	 */
 	public static function evaluate( int $user_id, array $workos_data ) {
 		if ( ! self::is_enabled() ) {
@@ -133,10 +134,10 @@ class EntitlementGate {
 	 *
 	 * @param string $reason Denial reason.
 	 *
-	 * @return \WP_Error
+	 * @return WP_Error
 	 */
-	private static function denial_error( string $reason ): \WP_Error {
-		return new \WP_Error(
+	private static function denial_error( string $reason ): WP_Error {
+		return new WP_Error(
 			'workos_entitlement_denied',
 			__( 'Access denied. You do not have an active membership in the required organization.', 'integration-workos' ),
 			[

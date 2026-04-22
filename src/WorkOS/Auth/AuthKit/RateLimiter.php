@@ -7,6 +7,8 @@
 
 namespace WorkOS\Auth\AuthKit;
 
+use WP_Error;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -41,7 +43,7 @@ class RateLimiter {
 	 * @param int    $limit          Maximum attempts allowed in the window.
 	 * @param int    $window_seconds Window length in seconds.
 	 *
-	 * @return true|\WP_Error True when the attempt is allowed; WP_Error with status 429 otherwise.
+	 * @return true|WP_Error True when the attempt is allowed; WP_Error with status 429 otherwise.
 	 */
 	public function attempt( string $bucket, string $subject, int $limit, int $window_seconds ) {
 		if ( $limit <= 0 || $window_seconds <= 0 ) {
@@ -77,7 +79,7 @@ class RateLimiter {
 		if ( $state['count'] > $limit ) {
 			$retry_after = max( 1, ( (int) $state['first_seen'] + $window_seconds ) - $now );
 
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_rate_limited',
 				__( 'Too many requests. Please try again shortly.', 'integration-workos' ),
 				[

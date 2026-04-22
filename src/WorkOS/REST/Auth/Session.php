@@ -9,6 +9,9 @@ namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\Login;
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -63,17 +66,17 @@ class Session extends BaseEndpoint {
 	 * the Radar public site key when configured so the browser SDK can
 	 * bootstrap without a second round-trip.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function nonce( \WP_REST_Request $request ) {
+	public function nonce( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
 		}
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'nonce'          => $this->nonce->mint( $profile->get_slug() ),
 				'radar_site_key' => $this->radar->get_site_key(),
@@ -89,14 +92,14 @@ class Session extends BaseEndpoint {
 	 * new access/refresh pair. Requires a logged-in WP session — the
 	 * refresh token never leaves PHP.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function refresh( \WP_REST_Request $request ) {
+	public function refresh( WP_REST_Request $request ) {
 		$user_id = get_current_user_id();
 		if ( $user_id <= 0 ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_not_logged_in',
 				__( 'You are not currently signed in.', 'integration-workos' ),
 				[ 'status' => 401 ]
@@ -105,7 +108,7 @@ class Session extends BaseEndpoint {
 
 		$refresh_token = (string) get_user_meta( $user_id, '_workos_refresh_token', true );
 		if ( '' === $refresh_token ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_no_refresh_token',
 				__( 'No refresh token is available for this session.', 'integration-workos' ),
 				[ 'status' => 409 ]
@@ -119,7 +122,7 @@ class Session extends BaseEndpoint {
 
 		Login::store_tokens( $user_id, $workos_response );
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'ok' => true,
 				// Expose the access-token `exp` so the React shell can
@@ -136,11 +139,11 @@ class Session extends BaseEndpoint {
 	 * Clears the WP auth cookie and revokes the WorkOS session so neither
 	 * side holds stale credentials. Safe to call while logged out.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response
+	 * @return WP_REST_Response
 	 */
-	public function logout( \WP_REST_Request $request ) {
+	public function logout( WP_REST_Request $request ) {
 		$user_id = get_current_user_id();
 
 		if ( $user_id > 0 ) {
@@ -149,7 +152,7 @@ class Session extends BaseEndpoint {
 			wp_logout();
 		}
 
-		return new \WP_REST_Response( [ 'ok' => true ], 200 );
+		return new WP_REST_Response( [ 'ok' => true ], 200 );
 	}
 
 	/**

@@ -7,6 +7,10 @@
 
 namespace WorkOS\REST\Auth;
 
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -56,14 +60,14 @@ class Invitation extends BaseEndpoint {
 	/**
 	 * GET /auth/invitation/{token}
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function lookup( \WP_REST_Request $request ) {
+	public function lookup( WP_REST_Request $request ) {
 		$token = (string) $request['token'];
 		if ( '' === $token ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'Invitation token is required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -84,7 +88,7 @@ class Invitation extends BaseEndpoint {
 			return $invitation;
 		}
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'id'              => (string) ( $invitation['id'] ?? '' ),
 				'email'           => (string) ( $invitation['email'] ?? '' ),
@@ -114,11 +118,11 @@ class Invitation extends BaseEndpoint {
 	 * existing WP admins who happened to receive an invitation to their
 	 * address.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function accept( \WP_REST_Request $request ) {
+	public function accept( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -130,7 +134,7 @@ class Invitation extends BaseEndpoint {
 		}
 
 		if ( ! $profile->is_invite_flow_enabled() ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invitation_disabled',
 				__( 'Invitation acceptance is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -141,7 +145,7 @@ class Invitation extends BaseEndpoint {
 		$password = (string) $request->get_param( 'password' );
 
 		if ( '' === $token || '' === $password ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'Invitation token and password are required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -177,6 +181,6 @@ class Invitation extends BaseEndpoint {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new WP_REST_Response( $result, 200 );
 	}
 }

@@ -8,6 +8,7 @@
 namespace WorkOS\REST;
 
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -83,9 +84,9 @@ class TokenAuth {
 	/**
 	 * Report authentication errors to the REST API.
 	 *
-	 * @param \WP_Error|null|true $error Current error state.
+	 * @param WP_Error|null|true $error Current error state.
 	 *
-	 * @return \WP_Error|null|true
+	 * @return WP_Error|null|true
 	 */
 	public function check_errors( $error ) {
 		if ( ! empty( $error ) ) {
@@ -145,7 +146,7 @@ class TokenAuth {
 	/**
 	 * Stored auth error from token verification.
 	 *
-	 * @var \WP_Error|null
+	 * @var WP_Error|null
 	 */
-	private ?\WP_Error $auth_error = null;
+	private ?WP_Error $auth_error = null;
 }

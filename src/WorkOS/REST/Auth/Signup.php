@@ -8,6 +8,9 @@
 namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -56,11 +59,11 @@ class Signup extends BaseEndpoint {
 	/**
 	 * POST /auth/signup/create
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function create( \WP_REST_Request $request ) {
+	public function create( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -73,7 +76,7 @@ class Signup extends BaseEndpoint {
 
 		$signup = $profile->get_signup();
 		if ( empty( $signup['enabled'] ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_signup_disabled',
 				__( 'Sign-up is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -81,7 +84,7 @@ class Signup extends BaseEndpoint {
 		}
 
 		if ( ! empty( $signup['require_invite'] ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invitation_required',
 				__( 'This login requires an invitation to sign up.', 'integration-workos' ),
 				[ 'status' => 403 ]
@@ -94,7 +97,7 @@ class Signup extends BaseEndpoint {
 		$last_name  = sanitize_text_field( (string) $request->get_param( 'last_name' ) );
 
 		if ( '' === $email || ! is_email( $email ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'Enter a valid email.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -135,7 +138,7 @@ class Signup extends BaseEndpoint {
 			workos()->api()->send_verification_email( $user['id'] );
 		}
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'user'                 => [
 					'id'             => (string) ( $user['id'] ?? '' ),
@@ -151,11 +154,11 @@ class Signup extends BaseEndpoint {
 	/**
 	 * POST /auth/signup/verify
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function verify( \WP_REST_Request $request ) {
+	public function verify( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -170,7 +173,7 @@ class Signup extends BaseEndpoint {
 		$code    = (string) $request->get_param( 'code' );
 
 		if ( '' === $user_id || '' === $code ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'A user and verification code are required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -201,7 +204,7 @@ class Signup extends BaseEndpoint {
 		// *not* log the user in automatically — the React shell transitions
 		// to the sign-in step with the email pre-filled. This keeps signup
 		// and login flows isolated (each one only has one way to succeed).
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'ok'   => true,
 				'user' => [

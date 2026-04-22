@@ -9,6 +9,7 @@ namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\Radar;
+use WP_REST_Request;
 
 /**
  * Site-key resolution + request header extraction.
@@ -75,7 +76,7 @@ class AuthKitRadarTest extends WPTestCase {
 	 * extract_from_request returns the header value.
 	 */
 	public function test_extract_from_request_returns_trimmed_token(): void {
-		$request = new \WP_REST_Request( 'POST', '/test' );
+		$request = new WP_REST_Request( 'POST', '/test' );
 		$request->set_header( Radar::REQUEST_HEADER, '  token_value  ' );
 
 		$this->assertSame( 'token_value', $this->radar->extract_from_request( $request ) );
@@ -85,7 +86,7 @@ class AuthKitRadarTest extends WPTestCase {
 	 * extract_from_request returns null when header is missing.
 	 */
 	public function test_extract_from_request_returns_null_when_missing(): void {
-		$request = new \WP_REST_Request( 'POST', '/test' );
+		$request = new WP_REST_Request( 'POST', '/test' );
 
 		$this->assertNull( $this->radar->extract_from_request( $request ) );
 	}
@@ -94,7 +95,7 @@ class AuthKitRadarTest extends WPTestCase {
 	 * extract_from_request returns null when header is blank whitespace only.
 	 */
 	public function test_extract_from_request_returns_null_when_blank(): void {
-		$request = new \WP_REST_Request( 'POST', '/test' );
+		$request = new WP_REST_Request( 'POST', '/test' );
 		$request->set_header( Radar::REQUEST_HEADER, '   ' );
 
 		$this->assertNull( $this->radar->extract_from_request( $request ) );

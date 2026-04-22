@@ -9,6 +9,9 @@ namespace WorkOS\Admin\LoginProfiles;
 
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -99,11 +102,11 @@ class RestApi {
 	/**
 	 * Permission check — admin capability required.
 	 *
-	 * @return true|\WP_Error
+	 * @return true|WP_Error
 	 */
 	public function permission_check() {
 		if ( ! current_user_can( 'manage_options' ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_forbidden',
 				__( 'You do not have permission to manage Login Profiles.', 'integration-workos' ),
 				[ 'status' => 403 ]
@@ -116,45 +119,45 @@ class RestApi {
 	/**
 	 * GET /admin/profiles — list all profiles.
 	 *
-	 * @return \WP_REST_Response
+	 * @return WP_REST_Response
 	 */
-	public function list_profiles(): \WP_REST_Response {
+	public function list_profiles(): WP_REST_Response {
 		$profiles = array_map(
 			static fn( Profile $profile ): array => $profile->to_array(),
 			$this->repository->all()
 		);
 
-		return new \WP_REST_Response( [ 'profiles' => $profiles ], 200 );
+		return new WP_REST_Response( [ 'profiles' => $profiles ], 200 );
 	}
 
 	/**
 	 * GET /admin/profiles/{id} — fetch a single profile.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function get_profile( \WP_REST_Request $request ) {
+	public function get_profile( WP_REST_Request $request ) {
 		$profile = $this->repository->find_by_id( (int) $request['id'] );
 		if ( ! $profile ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_profile_not_found',
 				__( 'Profile not found.', 'integration-workos' ),
 				[ 'status' => 404 ]
 			);
 		}
 
-		return new \WP_REST_Response( $profile->to_array(), 200 );
+		return new WP_REST_Response( $profile->to_array(), 200 );
 	}
 
 	/**
 	 * POST /admin/profiles — create a new profile.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function create_profile( \WP_REST_Request $request ) {
+	public function create_profile( WP_REST_Request $request ) {
 		$params = (array) $request->get_json_params();
 		// Force a clean insert — ignore any client-supplied ID.
 		$params['id'] = 0;
@@ -166,21 +169,21 @@ class RestApi {
 			return $this->error_with_status( $saved, 400 );
 		}
 
-		return new \WP_REST_Response( $saved->to_array(), 201 );
+		return new WP_REST_Response( $saved->to_array(), 201 );
 	}
 
 	/**
 	 * PUT /admin/profiles/{id} — update an existing profile.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function update_profile( \WP_REST_Request $request ) {
+	public function update_profile( WP_REST_Request $request ) {
 		$id       = (int) $request['id'];
 		$existing = $this->repository->find_by_id( $id );
 		if ( ! $existing ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_profile_not_found',
 				__( 'Profile not found.', 'integration-workos' ),
 				[ 'status' => 404 ]
@@ -207,17 +210,17 @@ class RestApi {
 			return $this->error_with_status( $saved, 400 );
 		}
 
-		return new \WP_REST_Response( $saved->to_array(), 200 );
+		return new WP_REST_Response( $saved->to_array(), 200 );
 	}
 
 	/**
 	 * DELETE /admin/profiles/{id} — delete a profile.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function delete_profile( \WP_REST_Request $request ) {
+	public function delete_profile( WP_REST_Request $request ) {
 		$id     = (int) $request['id'];
 		$result = $this->repository->delete( $id );
 		if ( is_wp_error( $result ) ) {
@@ -225,18 +228,18 @@ class RestApi {
 			return $this->error_with_status( $result, $status );
 		}
 
-		return new \WP_REST_Response( [ 'deleted' => true, 'id' => $id ], 200 );
+		return new WP_REST_Response( [ 'deleted' => true, 'id' => $id ], 200 );
 	}
 
 	/**
 	 * Attach an HTTP status to a WP_Error returned by the repository.
 	 *
-	 * @param \WP_Error $error   Error from the repository.
+	 * @param WP_Error $error   Error from the repository.
 	 * @param int       $default_status HTTP status to set when the error has no status data.
 	 *
-	 * @return \WP_Error
+	 * @return WP_Error
 	 */
-	private function error_with_status( \WP_Error $error, int $default_status ): \WP_Error {
+	private function error_with_status( WP_Error $error, int $default_status ): WP_Error {
 		$data = $error->get_error_data();
 		if ( ! is_array( $data ) || ! isset( $data['status'] ) ) {
 			$error->add_data( [ 'status' => $default_status ] );

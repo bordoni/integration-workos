@@ -8,6 +8,9 @@
 namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
+use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -102,11 +105,11 @@ class Mfa extends BaseEndpoint {
 	/**
 	 * Permission check for the settings-style endpoints.
 	 *
-	 * @return true|\WP_Error
+	 * @return true|WP_Error
 	 */
 	public function authenticated_permission() {
 		if ( get_current_user_id() <= 0 ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_not_logged_in',
 				__( 'You must be signed in to manage MFA factors.', 'integration-workos' ),
 				[ 'status' => 401 ]
@@ -121,11 +124,11 @@ class Mfa extends BaseEndpoint {
 	 * Starts a challenge on a chosen factor. For SMS this triggers the
 	 * text message; for TOTP it just returns a challenge id.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function challenge( \WP_REST_Request $request ) {
+	public function challenge( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -138,7 +141,7 @@ class Mfa extends BaseEndpoint {
 
 		$factor_id = (string) $request->get_param( 'factor_id' );
 		if ( '' === $factor_id ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'A factor id is required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -159,7 +162,7 @@ class Mfa extends BaseEndpoint {
 			return $result;
 		}
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'challenge_id' => (string) ( $result['id'] ?? '' ),
 				'expires_at'   => (string) ( $result['expires_at'] ?? '' ),
@@ -173,11 +176,11 @@ class Mfa extends BaseEndpoint {
 	 *
 	 * Completes the previously-pending authentication with a TOTP/SMS code.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function verify( \WP_REST_Request $request ) {
+	public function verify( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -193,7 +196,7 @@ class Mfa extends BaseEndpoint {
 		$code               = (string) $request->get_param( 'code' );
 
 		if ( '' === $pending_auth_token || '' === $challenge_id || '' === $code ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'A pending authentication token, challenge id, and code are required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -230,20 +233,20 @@ class Mfa extends BaseEndpoint {
 			return $result;
 		}
 
-		return new \WP_REST_Response( $result, 200 );
+		return new WP_REST_Response( $result, 200 );
 	}
 
 	/**
 	 * GET /auth/mfa/factors
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function list_factors( \WP_REST_Request $request ) {
+	public function list_factors( WP_REST_Request $request ) {
 		$workos_user_id = (string) get_user_meta( get_current_user_id(), '_workos_user_id', true );
 		if ( '' === $workos_user_id ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_no_workos_user',
 				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -266,17 +269,17 @@ class Mfa extends BaseEndpoint {
 			(array) ( $result['data'] ?? $result )
 		);
 
-		return new \WP_REST_Response( [ 'factors' => $factors ], 200 );
+		return new WP_REST_Response( [ 'factors' => $factors ], 200 );
 	}
 
 	/**
 	 * POST /auth/mfa/totp/enroll
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function enroll_totp( \WP_REST_Request $request ) {
+	public function enroll_totp( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -288,7 +291,7 @@ class Mfa extends BaseEndpoint {
 		}
 
 		if ( ! $profile->allows_factor( Profile::FACTOR_TOTP ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_factor_disabled',
 				__( 'TOTP is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -298,7 +301,7 @@ class Mfa extends BaseEndpoint {
 		$user           = wp_get_current_user();
 		$workos_user_id = (string) get_user_meta( $user->ID, '_workos_user_id', true );
 		if ( '' === $workos_user_id ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_no_workos_user',
 				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -315,7 +318,7 @@ class Mfa extends BaseEndpoint {
 
 		$totp = $result['totp'] ?? [];
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'factor_id'    => (string) ( $result['id'] ?? '' ),
 				'qr_code'      => (string) ( $totp['qr_code'] ?? '' ),
@@ -329,11 +332,11 @@ class Mfa extends BaseEndpoint {
 	/**
 	 * POST /auth/mfa/sms/enroll
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function enroll_sms( \WP_REST_Request $request ) {
+	public function enroll_sms( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -345,7 +348,7 @@ class Mfa extends BaseEndpoint {
 		}
 
 		if ( ! $profile->allows_factor( Profile::FACTOR_SMS ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_factor_disabled',
 				__( 'SMS is not enabled for this login.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -354,7 +357,7 @@ class Mfa extends BaseEndpoint {
 
 		$phone_number = preg_replace( '/[^\+0-9]/', '', (string) $request->get_param( 'phone_number' ) );
 		if ( '' === $phone_number ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'A phone number is required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -363,7 +366,7 @@ class Mfa extends BaseEndpoint {
 
 		$workos_user_id = (string) get_user_meta( get_current_user_id(), '_workos_user_id', true );
 		if ( '' === $workos_user_id ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_no_workos_user',
 				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -375,7 +378,7 @@ class Mfa extends BaseEndpoint {
 			return $result;
 		}
 
-		return new \WP_REST_Response(
+		return new WP_REST_Response(
 			[
 				'factor_id' => (string) ( $result['id'] ?? '' ),
 				'type'      => 'sms',
@@ -394,11 +397,11 @@ class Mfa extends BaseEndpoint {
 	 * user could strip MFA from any other user's account by submitting
 	 * that user's factor_id.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return WP_REST_Response|WP_Error
 	 */
-	public function delete_factor( \WP_REST_Request $request ) {
+	public function delete_factor( WP_REST_Request $request ) {
 		$profile = $this->resolve_profile( $request );
 		if ( is_wp_error( $profile ) ) {
 			return $profile;
@@ -411,7 +414,7 @@ class Mfa extends BaseEndpoint {
 
 		$factor_id = (string) $request->get_param( 'factor_id' );
 		if ( '' === $factor_id ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_input',
 				__( 'A factor id is required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -420,7 +423,7 @@ class Mfa extends BaseEndpoint {
 
 		$workos_user_id = (string) get_user_meta( get_current_user_id(), '_workos_user_id', true );
 		if ( '' === $workos_user_id ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_no_workos_user',
 				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -440,7 +443,7 @@ class Mfa extends BaseEndpoint {
 		if ( ! in_array( $factor_id, $owned_ids, true ) ) {
 			// Return 404 rather than 403 so we don't leak the existence of
 			// factor IDs that belong to other users.
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_factor_not_found',
 				__( 'Factor not found.', 'integration-workos' ),
 				[ 'status' => 404 ]
@@ -452,6 +455,6 @@ class Mfa extends BaseEndpoint {
 			return $result;
 		}
 
-		return new \WP_REST_Response( [ 'deleted' => true ], 200 );
+		return new WP_REST_Response( [ 'deleted' => true ], 200 );
 	}
 }

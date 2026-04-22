@@ -11,6 +11,8 @@ use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Admin\LoginProfiles\RestApi;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WP_REST_Request;
+use WP_REST_Response;
 
 /**
  * REST routes for admin Login Profile CRUD.
@@ -74,8 +76,8 @@ class AuthKitLoginProfilesRestApiTest extends WPTestCase {
 	/**
 	 * Dispatch a request through the REST server.
 	 */
-	private function dispatch( string $method, string $route, array $body = null ): \WP_REST_Response {
-		$request = new \WP_REST_Request( $method, $route );
+	private function dispatch( string $method, string $route, array $body = null ): WP_REST_Response {
+		$request = new WP_REST_Request( $method, $route );
 		if ( null !== $body ) {
 			$request->set_header( 'Content-Type', 'application/json' );
 			$request->set_body( wp_json_encode( $body ) );

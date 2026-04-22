@@ -13,6 +13,8 @@ use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\Auth\AuthKit\RateLimiter;
+use WP_Error;
+use WP_REST_Request;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -113,14 +115,14 @@ abstract class BaseEndpoint {
 	/**
 	 * Resolve the Login Profile for a request.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
-	 * @return Profile|\WP_Error
+	 * @return Profile|WP_Error
 	 */
-	protected function resolve_profile( \WP_REST_Request $request ) {
+	protected function resolve_profile( WP_REST_Request $request ) {
 		$slug = sanitize_title( (string) $request->get_param( 'profile' ) );
 		if ( '' === $slug ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_missing_profile',
 				__( 'A profile is required.', 'integration-workos' ),
 				[ 'status' => 400 ]
@@ -129,7 +131,7 @@ abstract class BaseEndpoint {
 
 		$profile = $this->profiles->find_by_slug( $slug );
 		if ( ! $profile ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_profile_not_found',
 				__( 'Login Profile not found.', 'integration-workos' ),
 				[ 'status' => 404 ]
@@ -145,19 +147,19 @@ abstract class BaseEndpoint {
 	 * Accepts either the `X-WP-Nonce` header (preferred) or a `_nonce`
 	 * body/query param for simple form submissions.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 * @param Profile          $profile Resolved profile.
 	 *
-	 * @return true|\WP_Error
+	 * @return true|WP_Error
 	 */
-	protected function verify_nonce( \WP_REST_Request $request, Profile $profile ) {
+	protected function verify_nonce( WP_REST_Request $request, Profile $profile ) {
 		$nonce = (string) $request->get_header( 'X-WP-Nonce' );
 		if ( '' === $nonce ) {
 			$nonce = (string) $request->get_param( '_nonce' );
 		}
 
 		if ( ! $this->nonce->verify( $nonce, $profile->get_slug() ) ) {
-			return new \WP_Error(
+			return new WP_Error(
 				'workos_authkit_invalid_nonce',
 				__( 'Your login session has expired. Please refresh and try again.', 'integration-workos' ),
 				[ 'status' => 403 ]
@@ -176,7 +178,7 @@ abstract class BaseEndpoint {
 	 *
 	 * @param array<int, array{0:string,1:string,2:int,3:int}> $rules Rate-limit rules.
 	 *
-	 * @return true|\WP_Error
+	 * @return true|WP_Error
 	 */
 	protected function rate_limit( array $rules ) {
 		foreach ( $rules as $rule ) {
@@ -196,11 +198,11 @@ abstract class BaseEndpoint {
 	/**
 	 * Extract Radar action token from a request.
 	 *
-	 * @param \WP_REST_Request $request REST request.
+	 * @param WP_REST_Request $request REST request.
 	 *
 	 * @return string|null
 	 */
-	protected function get_radar_token( \WP_REST_Request $request ): ?string {
+	protected function get_radar_token( WP_REST_Request $request ): ?string {
 		return $this->radar->extract_from_request( $request );
 	}
 
