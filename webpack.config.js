@@ -10,7 +10,7 @@ module.exports = {
 		'logout-redirect-urls': path.resolve( __dirname, 'src/js/logout-redirect-urls.js' ),
 		'login-button': path.resolve( __dirname, 'src/js/login-button/index.js' ),
 		'onboarding': path.resolve( __dirname, 'src/js/onboarding.js' ),
-		'authkit': path.resolve( __dirname, 'src/js/authkit/index.js' ),
-		'admin-profiles': path.resolve( __dirname, 'src/js/admin-profiles/index.js' ),
+		'authkit': path.resolve( __dirname, 'src/js/authkit/index.tsx' ),
+		'admin-profiles': path.resolve( __dirname, 'src/js/admin-profiles/index.tsx' ),
 	},
 };

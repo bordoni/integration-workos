@@ -9,24 +9,33 @@
  *
  * Integration points:
  *   - load( siteKey ) starts the SDK load but does not block rendering.
- *   - getActionToken( action ) returns a string or null. api.js threads
+ *   - getActionToken( action ) returns a string or null. api.ts threads
  *     that into the X-WorkOS-Radar-Action-Token header on every mutation.
  */
+
+interface WorkOSRadarSdk {
+	init( options: { siteKey: string } ): void;
+	getActionToken( options: { action: string } ): Promise< string >;
+}
+
+declare global {
+	interface Window {
+		WorkOSRadar?: WorkOSRadarSdk;
+	}
+}
 
 const SDK_URL = 'https://radar.workos.com/v1/radar.js';
 const SDK_ID = 'workos-radar-sdk';
 const READY_TIMEOUT_MS = 4000;
 
-let readyPromise = null;
+let readyPromise: Promise< WorkOSRadarSdk | null > | null = null;
 
 /**
  * Load the Radar SDK, idempotent. Resolves when `window.WorkOSRadar` is
- * available, rejects on timeout (so callers can fall through cleanly).
- *
- * @param {string} siteKey Radar public site key.
- * @returns {Promise<object|null>} Resolves to the SDK or null.
+ * available, resolves to null on timeout / load failure so callers can
+ * fall through cleanly.
  */
-export function load( siteKey ) {
+export function load( siteKey: string ): Promise< WorkOSRadarSdk | null > {
 	if ( ! siteKey || typeof window === 'undefined' ) {
 		return Promise.resolve( null );
 	}
@@ -54,9 +63,12 @@ export function load( siteKey ) {
 	return readyPromise;
 }
 
-function waitForGlobal( siteKey, resolve ) {
+function waitForGlobal(
+	siteKey: string,
+	resolve: ( sdk: WorkOSRadarSdk | null ) => void
+): void {
 	const start = Date.now();
-	const tick = () => {
+	const tick = (): void => {
 		const radar = window.WorkOSRadar;
 		if ( radar && typeof radar.init === 'function' ) {
 			try {
@@ -78,11 +90,10 @@ function waitForGlobal( siteKey, resolve ) {
 
 /**
  * Ask the loaded SDK for an action token.
- *
- * @param {string} action Action name to associate with the token.
- * @returns {Promise<string|null>}
  */
-export async function getActionToken( action ) {
+export async function getActionToken(
+	action: string
+): Promise< string | null > {
 	if ( ! readyPromise ) {
 		return null;
 	}
