@@ -6,8 +6,9 @@
  * component from flows.js; transitions are plain setStep() calls.
  */
 
-import { createElement as h, useEffect, useState } from '@wordpress/element';
+import { createElement as h, useEffect, useRef, useState } from '@wordpress/element';
 import { createClient } from './api';
+import * as Radar from './radar';
 import {
 	Complete,
 	InvitationAccept,
@@ -31,13 +32,40 @@ export function App( props ) {
 	const [ magicEmail, setMagicEmail ] = useState( '' );
 	const [ signupContext, setSignupContext ] = useState( null );
 	const [ booted, setBooted ] = useState( false );
+	const radarTokenRef = useRef( null );
 	const [ client ] = useState( () => createClient( {
 		profile: profile.slug,
 		baseUrl: profile.restBaseUrl,
+		radarToken: () => radarTokenRef.current,
 	} ) );
 
 	useEffect( () => {
-		client.bootstrap().then( () => setBooted( true ) ).catch( () => setBooted( true ) );
+		let cancelled = false;
+
+		( async () => {
+			const bootstrap = await client.bootstrap().catch( () => null );
+
+			// Start Radar once we know the site key. Fire-and-forget; tokens
+			// become available whenever the SDK finishes loading.
+			const siteKey = bootstrap?.radar_site_key || client.radarSiteKey;
+			if ( siteKey ) {
+				Radar.load( siteKey ).then( async () => {
+					if ( cancelled ) {
+						return;
+					}
+					const token = await Radar.getActionToken( 'authkit_signin' );
+					radarTokenRef.current = token;
+				} );
+			}
+
+			if ( ! cancelled ) {
+				setBooted( true );
+			}
+		} )();
+
+		return () => {
+			cancelled = true;
+		};
 	}, [ client ] );
 
 	if ( ! booted ) {

@@ -26,6 +26,12 @@ class Controller extends BaseController {
 	protected function doRegister(): void {
 		$this->container->singleton( RestApi::class );
 		$this->container->get( RestApi::class );
+
+		// AdminPage is a no-op outside wp-admin, but the React bundle it
+		// enqueues is served from admin_enqueue_scripts so registering
+		// unconditionally is fine.
+		$this->container->singleton( AdminPage::class );
+		$this->container->get( AdminPage::class )->register();
 	}
 
 	/**
