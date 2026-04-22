@@ -30,10 +30,21 @@ class Controller extends BaseController {
 		$this->container->singleton( RateLimiter::class );
 		$this->container->singleton( Nonce::class );
 		$this->container->singleton( Radar::class );
+		$this->container->singleton( Renderer::class );
+		$this->container->singleton( LoginTakeover::class );
+		$this->container->singleton( Shortcode::class );
+		$this->container->singleton( FrontendRoute::class );
 
 		// Register the CPT early — `init` priority 5 so other components that
 		// query the type on `init` (priority 10+) see a registered post type.
 		add_action( 'init', [ $this, 'register_post_type' ], 5 );
+
+		// Activate the wp-login.php takeover, the shortcode, and the
+		// dedicated /workos/login/{profile} route. Each no-ops when the
+		// resolved profile is in legacy AuthKit-redirect mode.
+		$this->container->get( LoginTakeover::class )->register();
+		$this->container->get( Shortcode::class )->register();
+		$this->container->get( FrontendRoute::class )->register();
 	}
 
 	/**
@@ -43,6 +54,8 @@ class Controller extends BaseController {
 	 */
 	protected function doUnregister(): void {
 		remove_action( 'init', [ $this, 'register_post_type' ], 5 );
+
+		$this->container->get( LoginTakeover::class )->unregister();
 	}
 
 	/**

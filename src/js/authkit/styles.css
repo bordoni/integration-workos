@@ -1,0 +1,192 @@
+/*
+ * AuthKit React shell styles.
+ *
+ * All selectors scoped under #workos-authkit-root so the stylesheet can
+ * safely ship on the frontend, wp-login.php, and inside shortcode/block
+ * contexts without leaking into theme or admin styles.
+ *
+ * Custom properties are overridable per profile — the Renderer emits a
+ * <style> tag setting --wa-* values from profile.branding.
+ */
+
+#workos-authkit-root {
+	--wa-primary: #0057ff;
+	--wa-primary-fg: #ffffff;
+	--wa-border: #d8dde6;
+	--wa-surface: #ffffff;
+	--wa-text: #111827;
+	--wa-muted: #6b7280;
+	--wa-danger: #b91c1c;
+	--wa-danger-bg: #fee2e2;
+	--wa-gap: 12px;
+	--wa-radius: 6px;
+
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+	color: var(--wa-text);
+	max-width: 420px;
+	margin: 48px auto;
+	padding: 16px;
+	box-sizing: border-box;
+}
+
+#workos-authkit-root *,
+#workos-authkit-root *::before,
+#workos-authkit-root *::after {
+	box-sizing: border-box;
+}
+
+#workos-authkit-root .wa-card {
+	background: var(--wa-surface);
+	border: 1px solid var(--wa-border);
+	border-radius: var(--wa-radius);
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--wa-gap);
+	box-shadow: 0 2px 8px rgba( 0, 0, 0, 0.04 );
+}
+
+#workos-authkit-root .wa-heading {
+	font-size: 1.5rem;
+	margin: 0 0 4px;
+	font-weight: 600;
+}
+
+#workos-authkit-root .wa-subheading {
+	margin: 0 0 8px;
+	color: var(--wa-muted);
+	font-size: 0.95rem;
+}
+
+#workos-authkit-root .wa-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#workos-authkit-root .wa-label {
+	font-size: 0.875rem;
+	font-weight: 500;
+}
+
+#workos-authkit-root .wa-input {
+	width: 100%;
+	padding: 10px 12px;
+	font-size: 1rem;
+	border: 1px solid var(--wa-border);
+	border-radius: var(--wa-radius);
+	background: var(--wa-surface);
+	color: var(--wa-text);
+}
+
+#workos-authkit-root .wa-input:focus-visible {
+	outline: 2px solid var(--wa-primary);
+	outline-offset: 1px;
+}
+
+#workos-authkit-root .wa-field-error {
+	margin: 0;
+	font-size: 0.825rem;
+	color: var(--wa-danger);
+}
+
+#workos-authkit-root .wa-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 10px 16px;
+	font-size: 1rem;
+	font-weight: 500;
+	border: 1px solid transparent;
+	border-radius: var(--wa-radius);
+	cursor: pointer;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+#workos-authkit-root .wa-btn-primary {
+	background: var(--wa-primary);
+	color: var(--wa-primary-fg);
+}
+
+#workos-authkit-root .wa-btn-primary:hover {
+	filter: brightness( 1.05 );
+}
+
+#workos-authkit-root .wa-btn-secondary {
+	background: var(--wa-surface);
+	color: var(--wa-text);
+	border-color: var(--wa-border);
+}
+
+#workos-authkit-root .wa-btn-secondary:hover {
+	background: #f9fafb;
+}
+
+#workos-authkit-root .wa-btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+#workos-authkit-root .wa-alert {
+	padding: 10px 12px;
+	border-radius: var(--wa-radius);
+	font-size: 0.9rem;
+}
+
+#workos-authkit-root .wa-alert-error {
+	background: var(--wa-danger-bg);
+	color: var(--wa-danger);
+	border: 1px solid rgba( 185, 28, 28, 0.2 );
+}
+
+#workos-authkit-root .wa-divider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	color: var(--wa-muted);
+	font-size: 0.85rem;
+}
+
+#workos-authkit-root .wa-divider::before,
+#workos-authkit-root .wa-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--wa-border);
+}
+
+#workos-authkit-root .wa-divider-label {
+	flex: 0;
+}
+
+#workos-authkit-root .wa-footer {
+	text-align: center;
+	margin: 8px 0 0;
+	color: var(--wa-muted);
+	font-size: 0.875rem;
+}
+
+#workos-authkit-root .wa-linkbtn {
+	background: none;
+	border: none;
+	padding: 0;
+	color: var(--wa-primary);
+	cursor: pointer;
+	font: inherit;
+	text-decoration: underline;
+}
+
+#workos-authkit-root .wa-spinner {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border: 2px solid currentColor;
+	border-top-color: transparent;
+	border-radius: 50%;
+	animation: wa-spin 0.8s linear infinite;
+}
+
+@keyframes wa-spin {
+	to { transform: rotate( 360deg ); }
+}

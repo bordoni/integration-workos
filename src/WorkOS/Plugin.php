@@ -175,8 +175,15 @@ class Plugin {
 
 		Database\Schema::activate();
 
-		// Register the rewrite rule before flushing so it gets persisted.
+		// Register rewrite rules before flushing so they all get persisted:
+		//   - /workos/callback  (OAuth callback for both AuthKit-redirect and custom modes)
+		//   - /workos/login/{profile}  (dedicated frontend login page)
 		Auth\Login::register_rewrite();
+		add_rewrite_rule(
+			Auth\AuthKit\FrontendRoute::REWRITE,
+			'index.php?' . Auth\AuthKit\FrontendRoute::QUERY_VAR . '=$matches[1]',
+			'top'
+		);
 		flush_rewrite_rules();
 
 		// Seed the reserved default Login Profile so wp-login.php takeover
