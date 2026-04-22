@@ -8,14 +8,27 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 
 ## Features
 
-- **Single Sign-On (SSO)** via WorkOS AuthKit — redirect or headless login modes
+### Custom AuthKit (WordPress-hosted login)
+
+- **React login shell** on wp-login.php, `[workos_login_v2]` shortcode, `workos/login-form` block, and a dedicated `/workos/login/{profile}` route — all driven by the same TypeScript bundle
+- **Login Profiles** — admin-defined presets (enabled methods, pinned organization, signup/invite/reset toggles, MFA policy, branding) managed through a React admin editor at **WorkOS → Login Profiles**
+- **Sign-in methods**: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey
+- **In-app flows**: self-serve sign-up with email verification, invitation acceptance, password reset
+- **MFA** — TOTP, SMS, WebAuthn/passkey with full enrollment + challenge UI; profile-level `mfa.enforce` (`never` / `if_required` / `always`) and factor allowlist
+- **Profile routing rules** — ordered `redirect_to` glob / `referrer_host` / `user_role` matchers pick the right profile per request
+- **WorkOS Radar** anti-fraud integration — browser SDK supplies an action token the plugin forwards on every server-side auth call
+- **No WorkOS PHP SDK** — every WorkOS call is `wp_remote_request` from PHP, so the API key never leaves the server
+
+### Base platform
+
+- **Single Sign-On (SSO)** via WorkOS AuthKit — redirect or headless login modes (legacy path, selectable per-profile)
 - **Directory Sync (SCIM)** — automatic user provisioning and deprovisioning from your identity provider
 - **Role Mapping** — map WorkOS organization roles to WordPress roles
 - **Organization Management** — local caching of WorkOS organizations with multisite support
 - **Entitlement Gate** — require organization membership to log in
 - **Webhook Processing** — real-time sync of user, organization, and directory events
 - **REST API Authentication** — Bearer token auth for headless/decoupled WordPress
-- **Login Button** — shortcode (`[workos_login]`), Gutenberg block, and classic widget
+- **Legacy Login Button** — shortcode (`[workos_login]`), Gutenberg block, and classic widget (AuthKit-redirect flow)
 - **Login Bypass** — access the native WordPress login form via `?fallback=1` when WorkOS is unavailable
 - **Activity Logging** — local database table with admin viewer for tracking authentication and sync events
 - **Audit Logging** — forward WordPress events (login, logout, post changes, user changes) to WorkOS Audit Logs
@@ -80,21 +93,100 @@ define( 'WORKOS_STAGING_API_KEY', 'sk_test_...' );
 
 ## Authentication
 
-### Redirect Mode (Default)
+The plugin ships three login modes. Each Login Profile picks its `mode`:
+`custom` uses the React shell, `authkit_redirect` uses the legacy redirect
+path. `login_mode=headless` (global) remains available for custom forms.
 
-Users visiting `wp-login.php` are redirected to WorkOS AuthKit. After authentication, WorkOS redirects back to `/workos/callback` where the plugin exchanges the authorization code for user data and tokens.
+### Custom Mode — React shell (default for the `default` Login Profile)
+
+`wp-login.php?action=login` is intercepted on `login_init` and the React shell
+renders in its place. All other actions — `logout`, `register`,
+`lostpassword`, `resetpass`, `confirmaction`, `postpass`, `?fallback=1`,
+`?workos=0` — pass through to core WP so WooCommerce, WP-CLI password
+resets, and email confirmation links keep working.
+
+The shell also mounts on `[workos_login_v2 profile="slug"]`, a `workos/login-form`
+Gutenberg block, and the `/workos/login/{profile}` rewrite. Every mount
+reads configuration from `data-*` attributes emitted by `Auth\AuthKit\Renderer`
+and talks to `/wp-json/workos/v1/auth/*` for everything — no WorkOS calls
+are proxied through the browser.
+
+### AuthKit-Redirect Mode (legacy)
+
+Set a Login Profile's `mode` to `authkit_redirect` and `wp-login.php` sends
+users to WorkOS's hosted AuthKit. WorkOS returns to `/workos/callback` where
+the plugin exchanges the authorization code. Use this mode for SSO
+(SAML/OIDC) or any profile that needs WorkOS-hosted UX.
 
 ### Headless Mode
 
-The plugin intercepts WordPress's `authenticate` filter and validates credentials directly against the WorkOS API using email and password. This mode is useful for custom login forms.
+The plugin intercepts WordPress's `authenticate` filter and validates
+credentials directly against the WorkOS API using email and password. This
+mode is useful for custom login forms you render yourself.
 
 ### Password Fallback
 
-When enabled, WordPress native password authentication remains available alongside WorkOS. Password reset and registration forms fall back to WordPress defaults.
+When enabled, WordPress native password authentication remains available
+alongside WorkOS. Password reset and registration forms fall back to
+WordPress defaults.
 
 ### Login Bypass
 
-If WorkOS is down or misconfigured, users can access the native WordPress login form by appending `?fallback=1` to the login URL. This bypasses the WorkOS redirect entirely.
+If WorkOS is down or misconfigured, users can access the native WordPress
+login form by appending `?fallback=1` to the login URL. This bypasses the
+WorkOS redirect — and the React shell takeover — entirely.
+
+## Login Profiles
+
+A Login Profile is a stored configuration unit that governs a single login
+entry point. Manage profiles under **WorkOS → Login Profiles** (React
+editor backed by `/wp-json/workos/v1/admin/profiles`).
+
+Each profile stores:
+
+| Field                    | Purpose                                                          |
+|--------------------------|------------------------------------------------------------------|
+| `slug`                   | URL-friendly id; reserved `default` drives wp-login.php takeover |
+| `title`                  | Admin-facing label                                               |
+| `methods[]`              | Enabled sign-in methods (any subset of `password`, `magic_code`, `oauth_google`, `oauth_microsoft`, `oauth_github`, `oauth_apple`, `passkey`) |
+| `organization_id`        | Server-side pinned WorkOS org; passed on auth calls              |
+| `signup`                 | `{enabled, require_invite}` — toggles self-serve signup          |
+| `invite_flow`            | Allow invitation acceptance                                      |
+| `password_reset_flow`    | Allow in-app password reset                                      |
+| `mfa`                    | `{enforce: never|if_required|always, factors: [totp,sms,webauthn]}` |
+| `branding`               | `{logo_attachment_id, primary_color, heading, subheading}`       |
+| `post_login_redirect`    | URL the React shell navigates to on success (beats `redirect_to`)|
+| `mode`                   | `custom` (React) or `authkit_redirect` (legacy)                  |
+
+### Profile routing rules
+
+Rules stored under the `workos_profile_routing_rules` option pick the right
+profile when no slug is explicit. Each rule is
+`{ profile: slug, matcher: { type, value } }` where `type` is one of
+`redirect_to` (glob), `referrer_host` (exact host), or `user_role` (role slug).
+Rules evaluate top-down; first match wins; the `default` profile is the
+fallback.
+
+### MFA policy
+
+Profile-level MFA enforcement is applied by `Auth\AuthKit\LoginCompleter`:
+
+- `enforce: never` — single-step login is always accepted
+- `enforce: if_required` (default) — MFA step surfaces when WorkOS returns
+  a pending factor; otherwise single-step is accepted
+- `enforce: always` — single-step success is rejected with
+  `workos_authkit_mfa_required`; the user must enroll a factor first
+
+Factor types WorkOS returns in a pending-factor response are checked against
+the profile's `mfa.factors` allowlist; disallowed types are rejected.
+
+### WorkOS Radar
+
+Set `workos_radar_site_key` (plugin option) or define
+`WORKOS_RADAR_SITE_KEY` to enable Radar. The React shell loads
+`https://radar.workos.com/v1/radar.js`, fetches an action token, and the
+plugin forwards it as `X-WorkOS-Radar-Action-Token` on every
+user-management auth call, so WorkOS can score the attempt server-side.
 
 ## Webhooks
 
@@ -504,16 +596,30 @@ All commands that display data support these output formats:
 
 - PHP 7.4+
 - Composer
-- bun (for JS/CSS assets)
-- [slic](https://github.com/developer-starter/slic) (for running tests)
+- Node.js 20+ (npm; bun also works)
+- [slic](https://github.com/stellarwp/slic) (for running tests)
 
 ### Setup
 
 ```bash
 composer install
-bun install    # Install JS dependencies
-bun run build  # Build JS/CSS assets
+npm install      # Pulls @wordpress/scripts, TypeScript, @types/react
+npm run build    # Build JS/CSS assets
 ```
+
+### Browser code (TypeScript + TSX)
+
+The React shell (`src/js/authkit/`) and the admin Profile editor
+(`src/js/admin-profiles/`) are TypeScript. `@wordpress/scripts` v30
+transpiles `.ts` / `.tsx` natively via its default babel preset; no extra
+build config is required. Type-check with:
+
+```bash
+npm run lint:ts      # tsc --noEmit against src/js/authkit + src/js/admin-profiles
+```
+
+Shared types live in `src/js/authkit/types.ts` and mirror
+`Profile::to_array()` from `src/WorkOS/Auth/AuthKit/Profile.php`.
 
 ### Running Tests
 
@@ -531,11 +637,9 @@ composer test:wpunit
 ### Code Standards
 
 ```bash
-# Check
-composer lint
-
-# Auto-fix
-composer lint:fix
+composer lint         # PHP (check)
+composer lint:fix     # PHP (auto-fix)
+npm run lint:ts       # TypeScript
 ```
 
 ### Architecture
@@ -544,19 +648,71 @@ The plugin uses a DI container (di52) with a feature-controller pattern:
 
 ```
 integration-workos.php            # Entry point
-src/WorkOS/Plugin.php             # Bootstrap, container init
+src/WorkOS/Plugin.php             # Bootstrap, container init, activation hook
 src/WorkOS/Controller.php         # Main controller, registers feature controllers
 src/WorkOS/Config.php             # Centralized config with constant overrides
 src/WorkOS/
-  Admin/Controller.php            # Settings UI, user list, onboarding, diagnostics
-  Auth/Controller.php             # Login, registration, password reset, redirects
+  Admin/
+    Controller.php                # Settings UI, user list, onboarding, diagnostics
+    LoginProfiles/
+      Controller.php              # Admin controller for Login Profile editor
+      AdminPage.php               # Renders the React admin mount point
+      RestApi.php                 # /wp-json/workos/v1/admin/profiles CRUD
+  Auth/
+    Controller.php                # Login, registration, password reset, redirects
+    Login.php                     # Legacy AuthKit redirect + headless flows
+    AuthKit/                      # Custom AuthKit (React shell) — see below
+      Controller.php              # Wires everything, registers CPT + takeover
+      Profile.php                 # Immutable Profile value object
+      ProfileRepository.php       # CPT-backed CRUD
+      ProfileRouter.php           # Rule-based profile resolution
+      LoginCompleter.php          # Shared post-auth finalizer (entitlement + MFA)
+      LoginTakeover.php           # wp-login.php takeover (action=login only)
+      FrontendRoute.php           # /workos/login/{profile} rewrite
+      Shortcode.php               # [workos_login_v2] shortcode
+      Renderer.php                # HTML shell + bundle enqueue
+      Nonce.php                   # Profile-scoped CSRF nonces
+      RateLimiter.php             # Per-IP / per-email transient buckets
+      Radar.php                   # Site-key resolution + request-header extraction
+  REST/
+    Controller.php                # REST controller (registers Auth and TokenAuth)
+    TokenAuth.php                 # REST API Bearer token authentication
+    Auth/                         # Public /wp-json/workos/v1/auth/* endpoints
+      Controller.php              # Wires all endpoint classes
+      BaseEndpoint.php            # Shared profile + nonce + rate-limit + Radar
+      Password.php                # password/authenticate + reset/{start,confirm}
+      MagicCode.php               # magic/{send,verify}
+      Session.php                 # nonce + session/{refresh,logout}
+      Signup.php                  # signup/{create,verify}
+      Invitation.php              # invitation/{token} + invitation/accept
+      OAuth.php                   # oauth/authorize-url
+      Mfa.php                     # mfa/{challenge,verify,factors,…}
   Sync/Controller.php             # UserSync, RoleMapper, DirectorySync, AuditLog
-  REST/Controller.php             # Bearer token authentication
-  Webhook/Controller.php          # Webhook receiver
+  Webhook/Controller.php          # Webhook receiver + signature verification
   Organization/Controller.php     # Organization management, entitlement gate
   CLI/Controller.php              # WP-CLI commands
-  UI/Controller.php               # Login button (shortcode, block, widget)
+  UI/Controller.php               # Legacy login button (shortcode, block, widget)
   ActivityLog/Controller.php      # Local activity logging
+
+src/js/
+  authkit/                        # Custom AuthKit React shell (TypeScript + TSX)
+    index.tsx                     # Mount + data-* hydration
+    App.tsx                       # Step machine
+    api.ts                        # Fetch client w/ nonce + refresh + Radar
+    flows.tsx                     # 11 flow components (password, magic, mfa, ...)
+    ui.tsx                        # 11 primitives (Button, Input, Card, ...)
+    radar.ts                      # WorkOS Radar SDK loader
+    types.ts                      # Shared interfaces
+    styles.css                    # Scoped styles (CSS vars)
+  admin-profiles/
+    index.tsx                     # Admin Login Profile editor (CRUD)
+    styles.css                    # Scoped admin styles
 ```
 
-Each controller extends `Contracts\Controller` and implements `isActive()` for conditional activation (e.g., `Admin\Controller` only activates in `is_admin()`, `CLI\Controller` only activates under `WP_CLI`).
+Each controller extends `Contracts\Controller` and implements `isActive()`
+for conditional activation (e.g., `Admin\Controller` only activates in
+`is_admin()`, `CLI\Controller` only activates under `WP_CLI`). The new
+`Auth\AuthKit\Controller` and `REST\Auth\Controller` are always active —
+the former because the CPT and wp-login.php takeover must boot on every
+request, the latter because anonymous visitors need to reach the auth
+endpoints.

@@ -79,6 +79,10 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Admin/DiagnosticsPage.php` | System diagnostics page |
 | `src/WorkOS/Admin/OnboardingPage.php` | Onboarding wizard UI |
 | `src/WorkOS/Admin/OnboardingAjax.php` | Onboarding wizard AJAX handlers |
+| **Admin — Login Profiles (Custom AuthKit)** | |
+| `src/WorkOS/Admin/LoginProfiles/Controller.php` | Wires Login Profile admin page + CRUD REST |
+| `src/WorkOS/Admin/LoginProfiles/AdminPage.php` | Admin submenu that mounts the React editor |
+| `src/WorkOS/Admin/LoginProfiles/RestApi.php` | `/wp-json/workos/v1/admin/profiles` CRUD (manage_options) |
 | **Auth** | |
 | `src/WorkOS/Auth/Controller.php` | Auth controller (login, registration, password reset, redirects) |
 | `src/WorkOS/Auth/Login.php` | SSO login flow (redirect + headless modes) |
@@ -87,6 +91,19 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/PasswordReset.php` | Password reset flow |
 | `src/WorkOS/Auth/Redirect.php` | Role-based login redirects |
 | `src/WorkOS/Auth/LogoutRedirect.php` | Role-based logout redirects |
+| **Auth — Custom AuthKit (React shell)** | |
+| `src/WorkOS/Auth/AuthKit/Controller.php` | Wires Login Profile CPT + takeover + shortcode + route |
+| `src/WorkOS/Auth/AuthKit/Profile.php` | Immutable Login Profile value object |
+| `src/WorkOS/Auth/AuthKit/ProfileRepository.php` | CPT-backed CRUD + default seeding |
+| `src/WorkOS/Auth/AuthKit/ProfileRouter.php` | Rule-based profile resolution |
+| `src/WorkOS/Auth/AuthKit/LoginCompleter.php` | Post-auth finalizer (EntitlementGate + MFA policy) |
+| `src/WorkOS/Auth/AuthKit/LoginTakeover.php` | wp-login.php `action=login` takeover |
+| `src/WorkOS/Auth/AuthKit/FrontendRoute.php` | `/workos/login/{profile}` rewrite + static `register_rewrite()` |
+| `src/WorkOS/Auth/AuthKit/Shortcode.php` | `[workos_login_v2]` shortcode |
+| `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue |
+| `src/WorkOS/Auth/AuthKit/Nonce.php` | Profile-scoped CSRF nonces |
+| `src/WorkOS/Auth/AuthKit/RateLimiter.php` | Per-IP / per-email transient buckets |
+| `src/WorkOS/Auth/AuthKit/Radar.php` | WorkOS Radar site-key + request-header extraction |
 | **Organization** | |
 | `src/WorkOS/Organization/Controller.php` | Organization controller |
 | `src/WorkOS/Organization/Manager.php` | Organization CRUD and caching |
@@ -117,8 +134,18 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Sync/AuditLog.php` | Forward WP events to WorkOS Audit Logs |
 | `src/WorkOS/Sync/AuditLogController.php` | Audit log controller |
 | **REST** | |
-| `src/WorkOS/REST/Controller.php` | REST controller |
-| `src/WorkOS/REST/TokenAuth.php` | REST API Bearer token authentication |
+| `src/WorkOS/REST/Controller.php` | REST controller (registers TokenAuth + Auth) |
+| `src/WorkOS/REST/TokenAuth.php` | REST API Bearer token authentication (no lazy refresh) |
+| **REST — Public Auth (Custom AuthKit)** | |
+| `src/WorkOS/REST/Auth/Controller.php` | Wires all public `/wp-json/workos/v1/auth/*` endpoints |
+| `src/WorkOS/REST/Auth/BaseEndpoint.php` | Shared profile + nonce + rate-limit + Radar helpers |
+| `src/WorkOS/REST/Auth/Password.php` | `password/authenticate`, `password/reset/{start,confirm}` |
+| `src/WorkOS/REST/Auth/MagicCode.php` | `magic/{send,verify}` |
+| `src/WorkOS/REST/Auth/Session.php` | `nonce`, `session/{refresh,logout}` |
+| `src/WorkOS/REST/Auth/Signup.php` | `signup/{create,verify}` |
+| `src/WorkOS/REST/Auth/Invitation.php` | `invitation/{token}`, `invitation/accept` |
+| `src/WorkOS/REST/Auth/OAuth.php` | `oauth/authorize-url` |
+| `src/WorkOS/REST/Auth/Mfa.php` | `mfa/{challenge,verify,factors,totp/enroll,sms/enroll,factor/delete}` |
 | **Webhook** | |
 | `src/WorkOS/Webhook/Controller.php` | Webhook controller |
 | `src/WorkOS/Webhook/Receiver.php` | Webhook event processing and signature verification |
@@ -132,26 +159,44 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
 | **Helpers** | |
 | `src/includes/functions-helpers.php` | Global `workos()` and `workos_log()` helpers |
+| **Browser — Custom AuthKit (TypeScript + TSX)** | |
+| `src/js/authkit/index.tsx` | Entry + data-* hydration |
+| `src/js/authkit/App.tsx` | Top-level step machine |
+| `src/js/authkit/api.ts` | Fetch client w/ nonce + 401 refresh + Radar header |
+| `src/js/authkit/flows.tsx` | 11 flow components (password, magic, signup, reset, mfa, invitation, complete) |
+| `src/js/authkit/ui.tsx` | 11 primitives (Button, Input, Card, …) |
+| `src/js/authkit/radar.ts` | WorkOS Radar SDK loader (+ `window.WorkOSRadar` augmentation) |
+| `src/js/authkit/types.ts` | Shared interfaces (Profile, AuthResult, MfaRequired, Step, …) |
+| `src/js/authkit/styles.css` | Scoped shell styles (CSS vars) |
+| `src/js/admin-profiles/index.tsx` | Admin Login Profile editor (CRUD) |
+| `src/js/admin-profiles/styles.css` | Scoped admin styles |
 | **Build** | |
 | `composer.json` | PHP dependencies |
-| `package.json` | JS dependencies (bun) |
+| `package.json` | JS dependencies (npm via `@wordpress/scripts` v30, TypeScript strict) |
+| `tsconfig.json` | TypeScript config (strict, `jsx: react-jsx`, `noEmit: true`) |
+| `webpack.config.js` | Extends `@wordpress/scripts` default config with authkit + admin-profiles entries |
 
 ## Build System
 
 ### Requirements
 
 - Node.js >= 20 (see `.nvmrc`)
-- bun
+- npm (bun works too if you prefer)
 
 ### Commands
 
 ```bash
-bun install          # Install dependencies
-bun run build        # Production build (wp-scripts)
-bun run start        # Development with watch
-bun run lint:php     # Lint PHP via PHPCS
-bun run lint:php:fix # Auto-fix PHP lint issues
+npm install           # Install dependencies
+npm run build         # Production build (wp-scripts; transpiles .ts/.tsx via babel)
+npm run start         # Development with watch
+npm run lint:ts       # Type-check TypeScript (tsc --noEmit)
+npm run lint:php      # Lint PHP via PHPCS
+npm run lint:php:fix  # Auto-fix PHP lint issues
 ```
+
+`@wordpress/scripts` v30 transpiles `.ts` / `.tsx` natively via its default
+babel preset (no ts-loader, no custom webpack rules). `tsc` runs in
+`noEmit` mode purely for strict type-checking and editor IntelliSense.
 
 ## Testing
 
@@ -180,31 +225,47 @@ tests/
 │   └── WpunitTester.php           # Codeception actor
 ├── wpunit.suite.dist.yml          # Suite configuration (WPLoader module)
 └── wpunit/
-    ├── _bootstrap.php             # Suite-level bootstrap
-    ├── ConfigTest.php             # Config class tests
-    ├── DirectorySyncTest.php      # Directory sync tests
-    ├── EntitlementGateTest.php    # Entitlement gate tests
-    ├── EventLoggerTest.php        # Activity log event logger tests
-    ├── LoginBypassTest.php        # Login bypass tests
-    ├── LoginLogoutTest.php        # Login logout session revocation tests
-    ├── LoginSessionTest.php       # Login session tests
-    ├── LoginTokensTest.php        # Login tokens tests
-    ├── LogoutRedirectTest.php     # Logout redirect tests
-    ├── OnboardingSyncTest.php     # Onboarding sync tests
-    ├── OptionsTest.php            # Options classes tests
-    ├── OrganizationManagerTest.php # Organization manager tests
-    ├── PasswordResetTest.php      # Password reset tests
-    ├── PluginTest.php             # Plugin singleton + constants tests
-    ├── RedirectTest.php           # Login redirect tests
-    ├── RoleMapperTest.php         # Role mapper tests
-    ├── SchemaTest.php             # Database schema tests
-    ├── UserSyncDeprovisionTest.php # User deprovisioning tests
-    ├── UserSyncFindOrCreateTest.php # User find-or-create tests
-    ├── UserSyncLinkTest.php       # User linking tests
-    ├── UserSyncPushTest.php       # Outbound user sync tests
-    ├── UserSyncResyncTest.php     # User re-sync tests
-    ├── WebhookReceiverTest.php    # Webhook receiver tests
-    └── WebhookSignatureTest.php   # Webhook signature verification tests
+    ├── _bootstrap.php                              # Suite-level bootstrap
+    ├── ApiClientAuthKitTest.php                    # Api\Client Custom-AuthKit methods (magic, totp, reset, mfa, invitation grant, refresh)
+    ├── AuthKitLoginCompleterMfaTest.php            # Profile MFA policy enforcement (enforce=always, factor allowlist)
+    ├── AuthKitLoginProfilesRestApiTest.php         # /wp-json/workos/v1/admin/profiles CRUD
+    ├── AuthKitNonceTest.php                        # Profile-scoped nonce mint/verify
+    ├── AuthKitProfileRepositoryTest.php            # Profile CRUD, default seeding, slug uniqueness
+    ├── AuthKitProfileRouterTest.php                # Rule matching (redirect_to / referrer_host / user_role)
+    ├── AuthKitProfileTest.php                      # Profile value object + enum validation
+    ├── AuthKitRadarTest.php                        # Radar site-key resolution + header extraction
+    ├── AuthKitRateLimiterTest.php                  # Fixed-window IP + email bucket limits
+    ├── AuthKitRendererTest.php                     # Renderer markup + shortcode + takeover hook wiring
+    ├── AuthKitRestMagicSessionTest.php             # magic/{send,verify}, session/{refresh,logout}, /nonce
+    ├── AuthKitRestMfaTest.php                      # mfa/{challenge,verify,factors,*/enroll,factor/delete}
+    ├── AuthKitRestPasswordTest.php                 # password/{authenticate,reset/start,reset/confirm}
+    ├── AuthKitRestSignupInvitationOAuthTest.php    # signup/{create,verify}, invitation/{token,accept}, oauth/authorize-url
+    ├── ConfigTest.php                              # Config class tests
+    ├── DirectorySyncTest.php                       # Directory sync tests
+    ├── EntitlementGateTest.php                     # Entitlement gate tests
+    ├── EventLoggerTest.php                         # Activity log event logger tests
+    ├── LoginBypassTest.php                         # Login bypass tests
+    ├── LoginLogoutTest.php                         # Login logout session revocation tests
+    ├── LoginSessionTest.php                        # Login session tests
+    ├── LoginTokensTest.php                         # Login tokens tests
+    ├── LogoutRedirectTest.php                      # Logout redirect tests
+    ├── OnboardingSyncTest.php                      # Onboarding sync tests
+    ├── OptionsTest.php                             # Options classes tests
+    ├── OrganizationManagerTest.php                 # Organization manager tests
+    ├── PasswordResetTest.php                       # Password reset tests
+    ├── PluginTest.php                              # Plugin singleton + constants tests
+    ├── RedirectTest.php                            # Login redirect tests
+    ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
+    ├── RoleMapperTest.php                          # Role mapper tests
+    ├── SchemaTest.php                              # Database schema tests
+    ├── TokenAuthRefreshTest.php                    # TokenAuth regression: rejects unsigned/expired Bearer JWTs
+    ├── UserSyncDeprovisionTest.php                 # User deprovisioning tests
+    ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
+    ├── UserSyncLinkTest.php                        # User linking tests
+    ├── UserSyncPushTest.php                        # Outbound user sync tests
+    ├── UserSyncResyncTest.php                      # User re-sync tests
+    ├── WebhookReceiverTest.php                     # Webhook receiver tests
+    └── WebhookSignatureTest.php                    # Webhook signature verification tests
 ```
 
 ### Writing Tests

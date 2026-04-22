@@ -3,6 +3,63 @@
 ## [1.0.0] - 2026-04-14
 
 ### Added
+
+#### Custom AuthKit — WordPress-hosted login experience
+
+A React login shell mounted inside WordPress, replacing the redirect to
+WorkOS's hosted AuthKit page for first-factor methods that don't
+inherently require one. All WorkOS API calls stay server-side; the
+browser only ever talks to `/wp-json/workos/v1/auth/*`.
+
+- **Login Profiles** — new `workos_login_profile` CPT + React admin
+  editor at WorkOS → Login Profiles. Each profile picks enabled sign-in
+  methods, pins an organization server-side, toggles signup /
+  invitation / password-reset flows, configures MFA policy and factor
+  allowlist, and carries branding (logo, primary color, headings).
+  Reserved `default` profile drives wp-login.php takeover.
+- **wp-login.php takeover** — `action=login` renders the React shell.
+  `logout`, `register`, `lostpassword`, `resetpass`, `confirmaction`,
+  `postpass`, `?fallback=1`, `?workos=0` still pass through to WP
+  defaults.
+- **Entry points** — `[workos_login_v2]` shortcode, `workos/login-form`
+  block, and `/workos/login/{profile}` rewrite all render the same
+  shell.
+- **Profile routing rules** — ordered `redirect_to` glob /
+  `referrer_host` / `user_role` matchers pick which profile applies to
+  a request; first match wins, falls back to the `default` profile.
+- **Sign-in methods** — email + password, magic code, social OAuth
+  (Google, Microsoft, GitHub, Apple), passkey. Legacy AuthKit redirect
+  mode remains per-profile selectable for SSO (SAML/OIDC).
+- **Self-serve sign-up** — in-app account creation + email code
+  verification, gated by `signup.enabled` on the profile.
+- **Invitation acceptance** — clicking a WorkOS invitation email lands
+  in the React shell, which consumes the token atomically via WorkOS's
+  invitation-token grant (caller cannot substitute email or force
+  verified state).
+- **In-app password reset** — request + confirm handled by the React
+  shell; reset links route to `/wp-login.php?workos_action=reset-password`
+  which the takeover hands to the confirm step.
+- **MFA** — TOTP + SMS + WebAuthn/passkey. Factor enrollment,
+  challenge, and verify are all in-app. Profile `mfa.enforce=always`
+  rejects single-step logins; `mfa.factors[]` allowlist is applied at
+  challenge time.
+- **WorkOS Radar** integration — browser SDK produces an action token
+  on sensitive interactions; the token rides along as
+  `X-WorkOS-Radar-Action-Token` on every server-side auth call, so
+  WorkOS can score risk equivalently to the hosted AuthKit.
+- **Public REST surface** at `/wp-json/workos/v1/auth/*`:
+  `password/{authenticate,reset/start,reset/confirm}`,
+  `magic/{send,verify}`, `signup/{create,verify}`,
+  `invitation/{token,accept}`, `oauth/authorize-url`,
+  `mfa/{challenge,verify,factors,totp/enroll,sms/enroll,factor/delete}`,
+  `session/{refresh,logout}`, `nonce`. Every mutation is guarded by a
+  profile-scoped WP nonce + per-IP and per-email rate limits.
+- **Admin REST** at `/wp-json/workos/v1/admin/profiles` (gated by
+  `manage_options`) — full CRUD for Login Profiles consumed by the
+  React admin editor.
+
+#### Base platform
+
 - AuthKit redirect and headless API authentication flows.
 - Directory sync (SCIM) user provisioning and deprovisioning.
 - Role mapping between WorkOS organization roles and WordPress roles.
@@ -11,3 +68,36 @@
 - REST API authentication via WorkOS access tokens (JWT).
 - Admin settings page with full configuration UI.
 - Webhook receiver with signature verification.
+
+### Changed
+
+- Browser code (`src/js/authkit/*`, `src/js/admin-profiles/*`) is
+  TypeScript + TSX. `@wordpress/scripts` v30 transpiles `.ts`/`.tsx`
+  natively; `npm run lint:ts` runs strict type checking.
+- `Auth\AuthKit\FrontendRoute::register_rewrite()` is the canonical
+  registration point for the `/workos/login/{profile}` rule; called
+  both from activation and the `init` hook (same convention as
+  `Auth\Login::register_rewrite()`).
+
+### Security
+
+Findings surfaced by the phase-6 `/security-review` on the custom
+AuthKit branch and fixed before launch:
+
+- **Signature-verification bypass in `REST\TokenAuth` removed.** The
+  previous lazy-refresh path trusted the `sub` claim of an unverified
+  JWT to pick a user and exchange their stored refresh token. Clients
+  that need to rotate tokens must now use `POST /auth/session/refresh`,
+  which is authenticated via the WP auth cookie.
+- **Invitation acceptance no longer allows account takeover.** The
+  endpoint now issues a single atomic call to WorkOS with
+  `grant_type=urn:workos:oauth:grant-type:invitation_token`. Callers
+  can no longer substitute an arbitrary email or force
+  `email_verified=true`; the invitation token is authoritatively bound
+  to its original recipient by WorkOS.
+- **MFA factor delete enforces ownership.** `POST /auth/mfa/factor/delete`
+  verifies the factor belongs to the caller before forwarding to
+  WorkOS; mismatched factor IDs return 404.
+- **Profile MFA policy is enforced at login.** `LoginCompleter` rejects
+  single-step success when `mfa.enforce=always`, and denies pending
+  factors whose `type` is not in the profile's `mfa.factors` allowlist.
