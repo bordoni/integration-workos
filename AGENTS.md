@@ -172,7 +172,8 @@ Per-environment constants (take priority over generic):
 | `src/js/admin-profiles/styles.css` | Scoped admin styles |
 | **Build** | |
 | `composer.json` | PHP dependencies |
-| `package.json` | JS dependencies (npm via `@wordpress/scripts` v30, TypeScript strict) |
+| `package.json` | JS dependencies (bun; uses `@wordpress/scripts` v30 + TypeScript strict) |
+| `bun.lock` | Locked dependency graph (committed) |
 | `tsconfig.json` | TypeScript config (strict, `jsx: react-jsx`, `noEmit: true`) |
 | `webpack.config.js` | Extends `@wordpress/scripts` default config with authkit + admin-profiles entries |
 
@@ -181,17 +182,17 @@ Per-environment constants (take priority over generic):
 ### Requirements
 
 - Node.js >= 20 (see `.nvmrc`)
-- npm (bun works too if you prefer)
+- bun
 
 ### Commands
 
 ```bash
-npm install           # Install dependencies
-npm run build         # Production build (wp-scripts; transpiles .ts/.tsx via babel)
-npm run start         # Development with watch
-npm run lint:ts       # Type-check TypeScript (tsc --noEmit)
-npm run lint:php      # Lint PHP via PHPCS
-npm run lint:php:fix  # Auto-fix PHP lint issues
+bun install           # Install dependencies
+bun run build         # Production build (wp-scripts; transpiles .ts/.tsx via babel)
+bun run start         # Development with watch
+bun run lint:ts       # Type-check TypeScript (tsc --noEmit)
+bun run lint:php      # Lint PHP via PHPCS
+bun run lint:php:fix  # Auto-fix PHP lint issues
 ```
 
 `@wordpress/scripts` v30 transpiles `.ts` / `.tsx` natively via its default

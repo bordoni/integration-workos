@@ -596,15 +596,16 @@ All commands that display data support these output formats:
 
 - PHP 7.4+
 - Composer
-- Node.js 20+ (npm; bun also works)
+- Node.js 20+
+- bun
 - [slic](https://github.com/stellarwp/slic) (for running tests)
 
 ### Setup
 
 ```bash
 composer install
-npm install      # Pulls @wordpress/scripts, TypeScript, @types/react
-npm run build    # Build JS/CSS assets
+bun install      # Pulls @wordpress/scripts, TypeScript, @types/react
+bun run build    # Build JS/CSS assets
 ```
 
 ### Browser code (TypeScript + TSX)
@@ -615,7 +616,7 @@ transpiles `.ts` / `.tsx` natively via its default babel preset; no extra
 build config is required. Type-check with:
 
 ```bash
-npm run lint:ts      # tsc --noEmit against src/js/authkit + src/js/admin-profiles
+bun run lint:ts      # tsc --noEmit against src/js/authkit + src/js/admin-profiles
 ```
 
 Shared types live in `src/js/authkit/types.ts` and mirror
@@ -639,7 +640,7 @@ composer test:wpunit
 ```bash
 composer lint         # PHP (check)
 composer lint:fix     # PHP (auto-fix)
-npm run lint:ts       # TypeScript
+bun run lint:ts       # TypeScript
 ```
 
 ### Architecture

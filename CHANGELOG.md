@@ -73,7 +73,7 @@ browser only ever talks to `/wp-json/workos/v1/auth/*`.
 
 - Browser code (`src/js/authkit/*`, `src/js/admin-profiles/*`) is
   TypeScript + TSX. `@wordpress/scripts` v30 transpiles `.ts`/`.tsx`
-  natively; `npm run lint:ts` runs strict type checking.
+  natively; `bun run lint:ts` runs strict type checking.
 - `Auth\AuthKit\FrontendRoute::register_rewrite()` is the canonical
   registration point for the `/workos/login/{profile}` rule; called
   both from activation and the `init` hook (same convention as
