@@ -196,7 +196,16 @@ class Signup extends BaseEndpoint {
 		);
 
 		if ( is_wp_error( $verify_response ) ) {
-			return $verify_response;
+			// Return a clean, generic error. Do NOT echo back the WorkOS
+			// response body (which may include the user_id we looked up)
+			// or the caller-supplied user_id — the caller already knows
+			// their input, and echoing it on a failed verification adds no
+			// value and risks leaking internal identifiers.
+			return new WP_Error(
+				'workos_authkit_verify_failed',
+				__( 'That code is not valid. Request a new one and try again.', 'integration-workos' ),
+				[ 'status' => 400 ]
+			);
 		}
 
 		// After email verification, WorkOS returns the user record. We do
