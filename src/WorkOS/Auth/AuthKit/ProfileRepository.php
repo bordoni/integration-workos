@@ -190,7 +190,19 @@ class ProfileRepository {
 
 		update_post_meta( $post_id, self::META_KEY, wp_json_encode( $profile->to_array() ) );
 
-		return $profile->with_id( (int) $post_id );
+		$saved = $profile->with_id( (int) $post_id );
+
+		/**
+		 * Fires after a Login Profile is saved.
+		 *
+		 * Lets other subsystems react (e.g. keep the global `login_mode`
+		 * env option aligned with the default profile's mode field).
+		 *
+		 * @param Profile $saved The freshly-saved profile (with its post ID).
+		 */
+		do_action( 'workos_login_profile_saved', $saved );
+
+		return $saved;
 	}
 
 	/**

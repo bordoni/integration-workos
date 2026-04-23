@@ -34,6 +34,7 @@ class Controller extends BaseController {
 		$this->container->singleton( LoginTakeover::class );
 		$this->container->singleton( Shortcode::class );
 		$this->container->singleton( FrontendRoute::class );
+		$this->container->singleton( ModeSyncer::class );
 
 		// Register the CPT early — `init` priority 5 so other components that
 		// query the type on `init` (priority 10+) see a registered post type.
@@ -45,6 +46,7 @@ class Controller extends BaseController {
 		$this->container->get( LoginTakeover::class )->register();
 		$this->container->get( Shortcode::class )->register();
 		$this->container->get( FrontendRoute::class )->register();
+		$this->container->get( ModeSyncer::class )->register();
 	}
 
 	/**

@@ -31,7 +31,7 @@ class Staging extends Options {
 			'webhook_secret'            => '',
 			'organization_id'           => '',
 			'environment_id'            => '',
-			'login_mode'                => 'redirect',
+			'login_mode'                => 'custom',
 			'allow_password_fallback'   => true,
 			'deprovision_action'        => 'deactivate',
 			'reassign_user'             => 0,
