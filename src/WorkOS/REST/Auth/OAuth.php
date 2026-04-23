@@ -112,15 +112,16 @@ class OAuth extends BaseEndpoint {
 			$redirect_to = admin_url();
 		}
 
-		// State threads a nonce + the final redirect + the profile slug so
-		// the existing callback handler can restore context. We use a
-		// single-use wp_create_nonce for the nonce portion; the profile
-		// slug is bound into the state so an attacker can't swap profiles
-		// between request and callback.
+		// State threads a *profile-scoped* nonce + the final redirect + the
+		// profile slug. Nonce::mint uses an action tied to the profile slug
+		// (`workos_authkit_<slug>`) — the same primitive every other REST
+		// endpoint uses — so a nonce minted for profile A cannot be
+		// consumed by a callback that claims profile B. Login::handle_callback
+		// verifies this nonce against whichever profile the state carries.
 		$state = implode(
 			'|',
 			[
-				wp_create_nonce( 'workos_auth' ),
+				$this->nonce->mint( $profile->get_slug() ),
 				$redirect_to,
 				$profile->get_slug(),
 			]

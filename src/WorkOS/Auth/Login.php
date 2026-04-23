@@ -212,13 +212,27 @@ class Login {
 			);
 		}
 
-		// Parse state.
-		$state       = SuperGlobals::get_get_var( 'state' ) ?? '';
-		$state_parts = explode( '|', $state, 2 );
-		$nonce       = $state_parts[0] ?? '';
-		$redirect_to = $state_parts[1] ?? admin_url();
+		// Parse state. Two formats are accepted:
+		// 1. Legacy AuthKit-redirect mode: `nonce|redirect_to`, nonce minted
+		// with the generic `workos_auth` action by `maybe_redirect_to_authkit`.
+		// 2. Custom AuthKit OAuth: `nonce|redirect_to|profile_slug`, nonce
+		// minted profile-scoped by `WorkOS\Auth\AuthKit\Nonce::mint()`.
+		$state        = SuperGlobals::get_get_var( 'state' ) ?? '';
+		$state_parts  = explode( '|', $state, 3 );
+		$nonce        = $state_parts[0] ?? '';
+		$redirect_to  = $state_parts[1] ?? admin_url();
+		$profile_slug = isset( $state_parts[2] ) ? sanitize_title( $state_parts[2] ) : '';
 
-		if ( ! wp_verify_nonce( $nonce, 'workos_auth' ) ) {
+		$nonce_ok = false;
+		if ( '' !== $profile_slug ) {
+			$nonce_ok = ( new \WorkOS\Auth\AuthKit\Nonce() )->verify( $nonce, $profile_slug );
+		}
+		if ( ! $nonce_ok ) {
+			// Back-compat: legacy AuthKit-redirect callbacks carry the generic nonce.
+			$nonce_ok = (bool) wp_verify_nonce( $nonce, 'workos_auth' );
+		}
+
+		if ( ! $nonce_ok ) {
 			wp_die(
 				esc_html__( 'Security check failed. Please try logging in again.', 'integration-workos' ),
 				esc_html__( 'Authentication Error', 'integration-workos' ),
