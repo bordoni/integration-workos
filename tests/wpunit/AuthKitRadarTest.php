@@ -100,4 +100,28 @@ class AuthKitRadarTest extends WPTestCase {
 
 		$this->assertNull( $this->radar->extract_from_request( $request ) );
 	}
+
+	/**
+	 * Tokens at or below MAX_TOKEN_LENGTH pass through.
+	 */
+	public function test_extract_from_request_accepts_tokens_up_to_cap(): void {
+		$request = new WP_REST_Request( 'POST', '/test' );
+		$request->set_header( Radar::REQUEST_HEADER, str_repeat( 'a', Radar::MAX_TOKEN_LENGTH ) );
+
+		$this->assertSame(
+			str_repeat( 'a', Radar::MAX_TOKEN_LENGTH ),
+			$this->radar->extract_from_request( $request )
+		);
+	}
+
+	/**
+	 * Tokens above MAX_TOKEN_LENGTH are dropped so a hostile client
+	 * cannot inflate every outbound WorkOS call.
+	 */
+	public function test_extract_from_request_rejects_oversize_token(): void {
+		$request = new WP_REST_Request( 'POST', '/test' );
+		$request->set_header( Radar::REQUEST_HEADER, str_repeat( 'a', Radar::MAX_TOKEN_LENGTH + 1 ) );
+
+		$this->assertNull( $this->radar->extract_from_request( $request ) );
+	}
 }

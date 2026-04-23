@@ -37,6 +37,16 @@ class Radar {
 	public const REQUEST_HEADER = 'X-WorkOS-Radar-Action-Token';
 
 	/**
+	 * Maximum accepted length for a Radar action token.
+	 *
+	 * Real tokens produced by the WorkOS Radar SDK are a few hundred
+	 * bytes. Cap well above that (2 KB) so a hostile client can't push a
+	 * multi-megabyte header value and force the plugin to forward it on
+	 * every outbound WorkOS call.
+	 */
+	public const MAX_TOKEN_LENGTH = 2048;
+
+	/**
 	 * Plugin option key for the Radar public site key.
 	 */
 	public const SITE_KEY_OPTION = 'radar_site_key';
@@ -92,10 +102,22 @@ class Radar {
 	public function extract_from_request( WP_REST_Request $request ): ?string {
 		$token = $request->get_header( self::REQUEST_HEADER );
 
-		if ( ! is_string( $token ) || '' === trim( $token ) ) {
+		if ( ! is_string( $token ) ) {
 			return null;
 		}
 
-		return trim( $token );
+		$trimmed = trim( $token );
+		if ( '' === $trimmed ) {
+			return null;
+		}
+
+		// Silently drop absurdly large values rather than forwarding them
+		// to WorkOS. A hostile client cannot inflate every outbound auth
+		// call by stuffing megabytes into the header.
+		if ( strlen( $trimmed ) > self::MAX_TOKEN_LENGTH ) {
+			return null;
+		}
+
+		return $trimmed;
 	}
 }
