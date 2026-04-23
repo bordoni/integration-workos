@@ -990,7 +990,7 @@ class Client {
 	 * @return array|\WP_Error
 	 */
 	private function delete( string $path, array $extra_headers = [] ) {
-		$response = wp_remote_request(
+		$response = wp_safe_remote_request(
 			self::BASE_URL . $path,
 			[
 				'method'  => 'DELETE',

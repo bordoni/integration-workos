@@ -561,7 +561,7 @@ class Settings {
 		add_settings_section(
 			'workos_auth',
 			__( 'Authentication', 'integration-workos' ),
-			function () {
+			static function (): void {
 				$profiles_url = admin_url( 'admin.php?page=workos-login-profiles' );
 				echo '<p>' . esc_html__( 'Configure how users authenticate with your site.', 'integration-workos' ) . '</p>';
 				echo '<p class="description">';

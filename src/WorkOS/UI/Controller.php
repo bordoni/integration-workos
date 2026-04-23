@@ -87,7 +87,10 @@ class Controller extends BaseController {
 		$asset_file = WORKOS_DIR . 'build/login-button-frontend.asset.php';
 		$asset      = file_exists( $asset_file )
 			? include $asset_file
-			: [ 'dependencies' => [], 'version' => WORKOS_VERSION ];
+			: [
+				'dependencies' => [],
+				'version'      => WORKOS_VERSION,
+			];
 
 		wp_enqueue_script(
 			'workos-login-button-frontend',

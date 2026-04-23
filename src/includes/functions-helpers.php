@@ -7,6 +7,8 @@
  * @package WorkOS
  */
 
+use WorkOS\User;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -57,7 +59,7 @@ function workos_log( string $message, string $level = 'debug' ): void {
  * @return bool
  */
 function workos_is_sso_user( int $user_id = 0 ): bool {
-	return \WorkOS\User::is_sso( $user_id );
+	return User::is_sso( $user_id );
 }
 
 /**
@@ -73,7 +75,7 @@ function workos_is_sso_user( int $user_id = 0 ): bool {
  * @return bool
  */
 function workos_has_active_session( int $user_id = 0 ): bool {
-	return \WorkOS\User::has_active_session( $user_id );
+	return User::has_active_session( $user_id );
 }
 
 /**
@@ -84,7 +86,7 @@ function workos_has_active_session( int $user_id = 0 ): bool {
  * @return string
  */
 function workos_get_user_id( int $user_id = 0 ): string {
-	return \WorkOS\User::get_workos_id( $user_id );
+	return User::get_workos_id( $user_id );
 }
 
 /**
@@ -98,5 +100,5 @@ function workos_get_user_id( int $user_id = 0 ): string {
  * @return string
  */
 function workos_get_access_token( int $user_id = 0 ): string {
-	return \WorkOS\User::get_access_token( $user_id );
+	return User::get_access_token( $user_id );
 }

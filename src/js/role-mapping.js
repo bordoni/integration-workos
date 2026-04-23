@@ -115,7 +115,7 @@ import '../css/role-mapping.css';
 
 		const blank       = document.createElement( 'option' );
 		blank.value       = '';
-		blank.textContent = __( '\u2014 No Role \u2014', 'integration-workos' );
+		blank.textContent = `— ${ __( 'No Role', 'integration-workos' ) } —`;
 		select.appendChild( blank );
 
 		Object.keys( wpRoles ).forEach(
@@ -142,7 +142,7 @@ import '../css/role-mapping.css';
 
 			const blank       = document.createElement( 'option' );
 			blank.value       = '';
-			blank.textContent = __( '\u2014 No Role \u2014', 'integration-workos' );
+			blank.textContent = `— ${ __( 'No Role', 'integration-workos' ) } —`;
 			select.appendChild( blank );
 
 			Object.keys( workosRoles ).forEach(
@@ -161,7 +161,7 @@ import '../css/role-mapping.css';
 		input.type        = 'text';
 		input.name        = 'workos_' + env + '[role_map][keys][]';
 		input.className   = 'regular-text';
-		input.placeholder = __( 'New WorkOS role\u2026', 'integration-workos' );
+		input.placeholder = __( 'New WorkOS role', 'integration-workos' ) + '…';
 		return input;
 	}
 

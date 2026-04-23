@@ -442,7 +442,9 @@ class Mfa extends BaseEndpoint {
 		}
 
 		$owned_ids = array_map(
-			static fn( array $factor ): string => (string) ( $factor['id'] ?? '' ),
+			static function ( array $factor ): string {
+				return (string) ( $factor['id'] ?? '' );
+			},
 			(array) ( $factors['data'] ?? $factors )
 		);
 

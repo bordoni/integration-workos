@@ -35,7 +35,7 @@ import '../css/logout-redirect-urls.css';
 
 		const blank       = document.createElement( 'option' );
 		blank.value       = '';
-		blank.textContent = __( '\u2014 Select Role \u2014', 'integration-workos' );
+		blank.textContent = `— ${ __( 'Select Role', 'integration-workos' ) } —`;
 		select.appendChild( blank );
 
 		Object.keys( wpRoles ).forEach(
@@ -123,7 +123,7 @@ import '../css/logout-redirect-urls.css';
 			input.type        = 'text';
 			input.name        = 'workos_' + env + '[logout_redirect_urls][values][' + index + ']';
 			input.className   = 'regular-text';
-			input.placeholder = __( '/goodbye', 'integration-workos' );
+			input.placeholder = '/' + __( 'goodbye', 'integration-workos' );
 			tdInput.appendChild( input );
 			row.appendChild( tdInput );
 

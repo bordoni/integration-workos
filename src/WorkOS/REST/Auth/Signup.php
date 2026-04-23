@@ -122,32 +122,34 @@ class Signup extends BaseEndpoint {
 				'first_name' => '' !== $first_name ? $first_name : null,
 				'last_name'  => '' !== $last_name ? $last_name : null,
 			],
-			static fn( $value ) => null !== $value
+			static function ( $value ): bool {
+				return null !== $value;
+			}
 		);
 
-			$user = workos()->api()->create_user( $payload, $this->get_radar_token( $request ) );
+		$user = workos()->api()->create_user( $payload, $this->get_radar_token( $request ) );
 
-			if ( is_wp_error( $user ) ) {
-				return $user;
-			}
+		if ( is_wp_error( $user ) ) {
+			return $user;
+		}
 
-			// If the user still needs to verify their email, kick off the code
-			// email so the React shell can transition straight to the verify step.
-			if ( empty( $user['email_verified'] ) && ! empty( $user['id'] ) ) {
-				workos()->api()->send_verification_email( $user['id'] );
-			}
+		// If the user still needs to verify their email, kick off the code
+		// email so the React shell can transition straight to the verify step.
+		if ( empty( $user['email_verified'] ) && ! empty( $user['id'] ) ) {
+			workos()->api()->send_verification_email( $user['id'] );
+		}
 
-			return new WP_REST_Response(
-				[
-					'user'                => [
-						'id'             => (string) ( $user['id'] ?? '' ),
-						'email'          => (string) ( $user['email'] ?? $email ),
-						'email_verified' => (bool) ( $user['email_verified'] ?? false ),
-					],
-					'verification_needed' => empty( $user['email_verified'] ),
+		return new WP_REST_Response(
+			[
+				'user'                => [
+					'id'             => (string) ( $user['id'] ?? '' ),
+					'email'          => (string) ( $user['email'] ?? $email ),
+					'email_verified' => (bool) ( $user['email_verified'] ?? false ),
 				],
-				201
-			);
+				'verification_needed' => empty( $user['email_verified'] ),
+			],
+			201
+		);
 	}
 
 	/**

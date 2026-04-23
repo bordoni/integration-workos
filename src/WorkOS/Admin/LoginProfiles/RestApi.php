@@ -136,7 +136,9 @@ class RestApi {
 	 */
 	public function list_profiles(): WP_REST_Response {
 		$profiles = array_map(
-			static fn( Profile $profile ): array => $profile->to_array(),
+			static function ( Profile $profile ): array {
+				return $profile->to_array();
+			},
 			$this->repository->all()
 		);
 
@@ -317,7 +319,9 @@ class RestApi {
 
 		usort(
 			$shaped,
-			static fn( array $a, array $b ): int => strcasecmp( $a['name'], $b['name'] )
+			static function ( array $a, array $b ): int {
+				return strcasecmp( $a['name'], $b['name'] );
+			}
 		);
 
 		return $shaped;
