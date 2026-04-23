@@ -26,6 +26,17 @@ class Password extends BaseEndpoint {
 	private const RATE_LIMIT_WINDOW         = 60;
 
 	/**
+	 * Minimum observable response time for reset_start, in microseconds.
+	 *
+	 * The WorkOS send-reset API answers visibly faster when the email is
+	 * unknown (no message queued) than when it's a valid account. A
+	 * floor larger than the typical delta flattens both paths so an
+	 * attacker cannot distinguish them via response-time timing.
+	 * 900 ms is well above both cases on healthy networks.
+	 */
+	private const RESPONSE_TIME_FLOOR_US = 900000;
+
+	/**
 	 * Register routes.
 	 *
 	 * @return void
@@ -181,11 +192,19 @@ class Password extends BaseEndpoint {
 
 		// Fire the WorkOS send call but *always* return 200 to prevent email
 		// enumeration (an attacker cannot tell whether an account exists).
+		// Also normalize response time: WorkOS answers valid + unknown
+		// emails at visibly different latencies, which leaks existence via
+		// side-channel timing despite the identical body. A fixed floor
+		// flattens both paths to the same observable wall-clock.
+		$start_ns = hrtime( true );
+
 		workos()->api()->send_password_reset(
 			$email,
 			$this->build_password_reset_url( $profile ),
 			$this->get_radar_token( $request )
 		);
+
+		$this->sleep_until_floor( $start_ns, self::RESPONSE_TIME_FLOOR_US );
 
 		return new WP_REST_Response(
 			[
@@ -274,5 +293,25 @@ class Password extends BaseEndpoint {
 			],
 			wp_login_url()
 		);
+	}
+
+	/**
+	 * Sleep the caller's thread until at least $floor_us microseconds
+	 * have elapsed since $start_ns.
+	 *
+	 * Used to flatten response-time differences that would otherwise
+	 * leak whether a submitted email corresponds to a real account.
+	 *
+	 * @param float $start_ns hrtime(true) timestamp taken at the start.
+	 * @param int   $floor_us Minimum observable elapsed microseconds.
+	 *
+	 * @return void
+	 */
+	private function sleep_until_floor( float $start_ns, int $floor_us ): void {
+		$elapsed_us = (int) ( ( hrtime( true ) - $start_ns ) / 1000 );
+		$remaining  = $floor_us - $elapsed_us;
+		if ( $remaining > 0 ) {
+			usleep( $remaining );
+		}
 	}
 }
