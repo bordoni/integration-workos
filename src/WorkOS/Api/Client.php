@@ -86,6 +86,42 @@ class Client {
 		exit;
 	}
 
+	/**
+	 * Perform an outbound HTTP request to the WorkOS API through
+	 * `wp_safe_remote_request()`.
+	 *
+	 * Mirrors {@see self::safe_redirect()}: temporarily allows the WorkOS
+	 * API host in WordPress's outbound-URL allowlist so the "safe" variant
+	 * never rejects our own API when `BASE_URL` points at a private host
+	 * (local mock server, staging tunnel, IP literal, etc.). The filter is
+	 * a no-op for public production hosts since `wp_http_validate_url()`
+	 * only consults it for reserved / private addresses — but it keeps
+	 * every outbound call symmetric with `safe_redirect()` so switching
+	 * `BASE_URL` for tests never silently 400s the request layer.
+	 *
+	 * @param string $url  Absolute URL on the WorkOS API host.
+	 * @param array  $args wp_remote_request-style args.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public static function safe_remote_request( string $url, array $args = [] ) {
+		$allowed_host = wp_parse_url( self::BASE_URL, PHP_URL_HOST );
+
+		$filter = static function ( bool $external, string $host ) use ( $allowed_host ): bool {
+			if ( $host === $allowed_host ) {
+				return true;
+			}
+
+			return $external;
+		};
+
+		add_filter( 'http_request_host_is_external', $filter, 10, 2 );
+		$response = wp_safe_remote_request( $url, $args );
+		remove_filter( 'http_request_host_is_external', $filter, 10 );
+
+		return $response;
+	}
+
 	// -------------------------------------------------------------------------
 	// Authentication
 	// -------------------------------------------------------------------------
@@ -990,7 +1026,7 @@ class Client {
 	 * @return array|\WP_Error
 	 */
 	private function delete( string $path, array $extra_headers = [] ) {
-		$response = wp_safe_remote_request(
+		$response = self::safe_remote_request(
 			self::BASE_URL . $path,
 			[
 				'method'  => 'DELETE',
