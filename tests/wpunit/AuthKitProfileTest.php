@@ -104,6 +104,34 @@ class AuthKitProfileTest extends WPTestCase {
 	}
 
 	/**
+	 * Malformed organization_id values are stripped.
+	 */
+	public function test_from_array_rejects_malformed_organization_id(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'            => 'partner',
+				'organization_id' => 'not-an-org',
+			]
+		);
+
+		$this->assertSame( '', $profile->get_organization_id() );
+	}
+
+	/**
+	 * Well-formed org_ ids pass through unchanged.
+	 */
+	public function test_from_array_accepts_wellformed_organization_id(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'            => 'partner',
+				'organization_id' => 'org_01HXYZABC123',
+			]
+		);
+
+		$this->assertSame( 'org_01HXYZABC123', $profile->get_organization_id() );
+	}
+
+	/**
 	 * Non-hex primary colors are stripped.
 	 */
 	public function test_from_array_rejects_non_hex_primary_color(): void {

@@ -236,7 +236,13 @@ class Profile {
 			$mode = self::MODE_CUSTOM;
 		}
 
+		// WorkOS organization ids follow `org_` + Crockford-style base32.
+		// Drop anything that doesn't match the shape rather than letting
+		// it reach the API layer and surface as a confusing remote error.
 		$organization_id = sanitize_text_field( (string) ( $data['organization_id'] ?? '' ) );
+		if ( '' !== $organization_id && ! preg_match( '/^org_[A-Za-z0-9]+$/', $organization_id ) ) {
+			$organization_id = '';
+		}
 
 		$primary_color = (string) ( $data['branding']['primary_color'] ?? '' );
 		if ( '' !== $primary_color && ! preg_match( '/^#[0-9a-fA-F]{3,8}$/', $primary_color ) ) {
