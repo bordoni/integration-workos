@@ -307,4 +307,83 @@ class AuthKitLoginProfilesRestApiTest extends WPTestCase {
 
 		$this->assertSame( 404, $response->get_status() );
 	}
+
+	/**
+	 * Save with a `branding.logo_attachment_id` that points at a non-image
+	 * attachment (e.g. a PDF) is rejected with 400.
+	 */
+	public function test_create_rejects_non_image_logo_attachment(): void {
+		$this->become_admin();
+
+		$pdf_id = self::factory()->post->create(
+			[
+				'post_type'      => 'attachment',
+				'post_mime_type' => 'application/pdf',
+				'post_status'    => 'inherit',
+				'post_title'     => 'Brochure',
+			]
+		);
+
+		$response = $this->dispatch(
+			'POST',
+			self::ROUTE_BASE,
+			[
+				'slug'     => 'members',
+				'title'    => 'Members',
+				'branding' => [ 'logo_attachment_id' => $pdf_id ],
+			]
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_profile_logo_not_image', $response->get_data()['code'] );
+	}
+
+	/**
+	 * Image attachments pass through.
+	 */
+	public function test_create_accepts_image_logo_attachment(): void {
+		$this->become_admin();
+
+		$image_id = self::factory()->post->create(
+			[
+				'post_type'      => 'attachment',
+				'post_mime_type' => 'image/png',
+				'post_status'    => 'inherit',
+				'post_title'     => 'Logo',
+			]
+		);
+
+		$response = $this->dispatch(
+			'POST',
+			self::ROUTE_BASE,
+			[
+				'slug'     => 'members',
+				'title'    => 'Members',
+				'branding' => [ 'logo_attachment_id' => $image_id ],
+			]
+		);
+
+		$this->assertSame( 201, $response->get_status() );
+		$this->assertSame( $image_id, $response->get_data()['branding']['logo_attachment_id'] );
+	}
+
+	/**
+	 * A non-existent attachment id is rejected with a clear error code.
+	 */
+	public function test_create_rejects_missing_logo_attachment(): void {
+		$this->become_admin();
+
+		$response = $this->dispatch(
+			'POST',
+			self::ROUTE_BASE,
+			[
+				'slug'     => 'members',
+				'title'    => 'Members',
+				'branding' => [ 'logo_attachment_id' => 999999 ],
+			]
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_profile_logo_not_found', $response->get_data()['code'] );
+	}
 }

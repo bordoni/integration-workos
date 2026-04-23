@@ -162,6 +162,11 @@ class RestApi {
 		// Force a clean insert — ignore any client-supplied ID.
 		$params['id'] = 0;
 
+		$logo_error = $this->validate_logo_attachment( $params );
+		if ( is_wp_error( $logo_error ) ) {
+			return $this->error_with_status( $logo_error, 400 );
+		}
+
 		$profile = Profile::from_array( $params );
 
 		$saved = $this->repository->save( $profile );
@@ -191,6 +196,11 @@ class RestApi {
 		}
 
 		$params = (array) $request->get_json_params();
+
+		$logo_error = $this->validate_logo_attachment( $params );
+		if ( is_wp_error( $logo_error ) ) {
+			return $this->error_with_status( $logo_error, 400 );
+		}
 
 		// Merge into the existing payload so partial updates are safe — the
 		// React editor only sends fields the user touched.
@@ -235,6 +245,48 @@ class RestApi {
 			],
 			200
 		);
+	}
+
+	/**
+	 * Confirm a supplied `branding.logo_attachment_id` points at an image.
+	 *
+	 * A non-image attachment (PDF, mp3, etc.) would render a broken
+	 * `<img>` tag in the login shell. Validate the stored MIME type on
+	 * save so the bad reference never lands in the Profile payload.
+	 *
+	 * @param array $params Incoming JSON body.
+	 *
+	 * @return WP_Error|null WP_Error when the attachment is not a usable
+	 *                       image; null when absent, zero, or valid.
+	 */
+	private function validate_logo_attachment( array $params ): ?WP_Error {
+		$branding      = isset( $params['branding'] ) && is_array( $params['branding'] )
+			? $params['branding']
+			: [];
+		$attachment_id = isset( $branding['logo_attachment_id'] )
+			? (int) $branding['logo_attachment_id']
+			: 0;
+
+		if ( $attachment_id <= 0 ) {
+			return null;
+		}
+
+		$post = get_post( $attachment_id );
+		if ( ! $post || 'attachment' !== $post->post_type ) {
+			return new WP_Error(
+				'workos_profile_logo_not_found',
+				__( 'The selected logo attachment does not exist.', 'integration-workos' )
+			);
+		}
+
+		if ( 0 !== strpos( (string) $post->post_mime_type, 'image/' ) ) {
+			return new WP_Error(
+				'workos_profile_logo_not_image',
+				__( 'The selected logo must be an image file.', 'integration-workos' )
+			);
+		}
+
+		return null;
 	}
 
 	/**
