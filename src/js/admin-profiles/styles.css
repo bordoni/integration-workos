@@ -13,12 +13,8 @@
 #workos-profiles-admin-root .wpa-list-header {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-end;
 	margin-bottom: var(--wpa-gap);
-}
-
-#workos-profiles-admin-root .wpa-list-header h2 {
-	margin: 0;
 }
 
 #workos-profiles-admin-root .wpa-row {

@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0] - 2026-04-14
+## [1.0.0] - 2026-04-23
 
 ### Added
 
@@ -56,7 +56,30 @@ browser only ever talks to `/wp-json/workos/v1/auth/*`.
   profile-scoped WP nonce + per-IP and per-email rate limits.
 - **Admin REST** at `/wp-json/workos/v1/admin/profiles` (gated by
   `manage_options`) — full CRUD for Login Profiles consumed by the
-  React admin editor.
+  React admin editor. Adds a sibling
+  `GET /admin/profiles/organizations` endpoint that returns the
+  active environment's WorkOS organizations (reusing the same
+  `workos_organizations_cache_{env}` transient as the settings page)
+  so the editor can present a searchable organization picker instead
+  of asking admins to paste `org_01…` IDs by hand.
+- **Pinned-organization picker** in the Login Profile editor — a
+  select populated from WorkOS with a "Custom ID…" escape hatch for
+  orgs that aren't in the fetched list (legacy or paginated-out
+  records keep working). Falls back to a plain text input if WorkOS
+  is unconfigured or the API is unreachable. The Login Profiles list
+  now shows organization names instead of raw IDs.
+
+#### Browser internationalization
+
+- Every user-facing string in the React/TS/JS bundles (AuthKit shell,
+  Login Profile editor, onboarding, role mapping, redirect URLs,
+  login button block + frontend) now goes through
+  `@wordpress/i18n`'s `__`/`_n`/`sprintf` with the
+  `integration-workos` text domain. Every enqueued script calls
+  `wp_set_script_translations()` (block editor translations come
+  from `block.json` `textdomain`), and the previously unbundled
+  `login-button-frontend.js` now ships through webpack so its
+  `wp-i18n` dependency is declared in its `.asset.php`.
 
 #### Public API for third-party integrations
 

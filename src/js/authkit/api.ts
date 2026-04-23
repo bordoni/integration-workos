@@ -10,6 +10,7 @@
  * Not a Radix. Not axios. Just fetch + retry.
  */
 
+import { __ } from '@wordpress/i18n';
 import type { ApiResponse, NonceResponse } from './types';
 
 type RadarTokenGetter = () => string | null;
@@ -49,7 +50,9 @@ class AuthKitClient {
 			{ credentials: 'same-origin' }
 		);
 		if ( ! resp.ok ) {
-			throw new Error( 'Failed to bootstrap authentication.' );
+			throw new Error(
+				__( 'Failed to bootstrap authentication.', 'integration-workos' )
+			);
 		}
 		const data = ( await resp.json() ) as NonceResponse;
 		this.nonce = data.nonce;

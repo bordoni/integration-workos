@@ -260,6 +260,8 @@ class Settings {
 			true
 		);
 
+		wp_set_script_translations( 'workos-role-mapping', 'integration-workos' );
+
 		wp_enqueue_style(
 			'workos-role-mapping',
 			WORKOS_URL . 'build/role-mapping.css',
@@ -300,6 +302,8 @@ class Settings {
 			$asset['version'],
 			true
 		);
+
+		wp_set_script_translations( 'workos-redirect-urls', 'integration-workos' );
 
 		wp_enqueue_style(
 			'workos-redirect-urls',
@@ -343,6 +347,8 @@ class Settings {
 			$asset['version'],
 			true
 		);
+
+		wp_set_script_translations( 'workos-logout-redirect-urls', 'integration-workos' );
 
 		wp_enqueue_style(
 			'workos-logout-redirect-urls',

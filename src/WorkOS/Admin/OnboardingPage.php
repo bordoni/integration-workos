@@ -61,6 +61,8 @@ class OnboardingPage {
 			true
 		);
 
+		wp_set_script_translations( 'workos-onboarding', 'integration-workos' );
+
 		wp_localize_script(
 			'workos-onboarding',
 			'workosOnboarding',

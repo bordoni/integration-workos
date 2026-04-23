@@ -7,6 +7,7 @@
  */
 
 import { createRoot, useEffect, useState } from '@wordpress/element';
+import { __, sprintf } from '@wordpress/i18n';
 import type { ChangeEvent, ReactNode } from 'react';
 import './styles.css';
 
@@ -58,36 +59,49 @@ interface ApiResult< T > {
 	data: T;
 }
 
+interface Organization {
+	id: string;
+	name: string;
+}
+
+interface OrganizationsResponse {
+	organizations?: Organization[];
+	error?: string;
+	message?: string;
+}
+
+const CUSTOM_ORG_SENTINEL = '__workos_custom_org__';
+
 interface OptionItem< V extends string > {
 	value: V;
 	label: string;
 }
 
-const METHOD_OPTIONS: OptionItem< AuthMethod >[] = [
-	{ value: 'password',        label: 'Email + password' },
-	{ value: 'magic_code',      label: 'Magic link / email code' },
-	{ value: 'oauth_google',    label: 'Google' },
-	{ value: 'oauth_microsoft', label: 'Microsoft' },
-	{ value: 'oauth_github',    label: 'GitHub' },
-	{ value: 'oauth_apple',     label: 'Apple' },
-	{ value: 'passkey',         label: 'Passkey' },
+const methodOptions = (): OptionItem< AuthMethod >[] => [
+	{ value: 'password',        label: __( 'Email + password', 'integration-workos' ) },
+	{ value: 'magic_code',      label: __( 'Magic link / email code', 'integration-workos' ) },
+	{ value: 'oauth_google',    label: __( 'Google', 'integration-workos' ) },
+	{ value: 'oauth_microsoft', label: __( 'Microsoft', 'integration-workos' ) },
+	{ value: 'oauth_github',    label: __( 'GitHub', 'integration-workos' ) },
+	{ value: 'oauth_apple',     label: __( 'Apple', 'integration-workos' ) },
+	{ value: 'passkey',         label: __( 'Passkey', 'integration-workos' ) },
 ];
 
-const FACTOR_OPTIONS: OptionItem< MfaFactor >[] = [
-	{ value: 'totp',     label: 'Authenticator app (TOTP)' },
-	{ value: 'sms',      label: 'SMS' },
-	{ value: 'webauthn', label: 'WebAuthn / passkey' },
+const factorOptions = (): OptionItem< MfaFactor >[] => [
+	{ value: 'totp',     label: __( 'Authenticator app (TOTP)', 'integration-workos' ) },
+	{ value: 'sms',      label: __( 'SMS', 'integration-workos' ) },
+	{ value: 'webauthn', label: __( 'WebAuthn / passkey', 'integration-workos' ) },
 ];
 
-const ENFORCE_OPTIONS: OptionItem< MfaEnforce >[] = [
-	{ value: 'never',       label: 'Never' },
-	{ value: 'if_required', label: 'When WorkOS requires it' },
-	{ value: 'always',      label: 'Always' },
+const enforceOptions = (): OptionItem< MfaEnforce >[] => [
+	{ value: 'never',       label: __( 'Never', 'integration-workos' ) },
+	{ value: 'if_required', label: __( 'When WorkOS requires it', 'integration-workos' ) },
+	{ value: 'always',      label: __( 'Always', 'integration-workos' ) },
 ];
 
-const MODE_OPTIONS: OptionItem< ProfileMode >[] = [
-	{ value: 'custom',           label: 'Custom (React UI)' },
-	{ value: 'authkit_redirect', label: 'Legacy AuthKit redirect' },
+const modeOptions = (): OptionItem< ProfileMode >[] => [
+	{ value: 'custom',           label: __( 'Custom (React UI)', 'integration-workos' ) },
+	{ value: 'authkit_redirect', label: __( 'Legacy AuthKit redirect', 'integration-workos' ) },
 ];
 
 function apiUrl( path = '' ): string {
@@ -213,6 +227,107 @@ function TextField( {
 	);
 }
 
+interface OrganizationFieldProps {
+	value: string;
+	organizations: Organization[];
+	loading: boolean;
+	error: string;
+	onChange: ( next: string ) => void;
+}
+
+/**
+ * Pinned-organization picker. Renders a select when we have a list from
+ * WorkOS, with a "Custom ID…" escape hatch so an org that isn't in the
+ * first page of results can still be pinned by pasting its ID.
+ */
+function OrganizationField( {
+	value,
+	organizations,
+	loading,
+	error,
+	onChange,
+}: OrganizationFieldProps ) {
+	const inList = organizations.some( ( o ) => o.id === value );
+	const [ customMode, setCustomMode ] = useState< boolean >(
+		() => value !== '' && ! inList
+	);
+
+	// If the orgs list arrives after mount and contains the current value,
+	// collapse back out of custom mode so the select reflects the choice.
+	useEffect( () => {
+		if ( value !== '' && organizations.some( ( o ) => o.id === value ) ) {
+			setCustomMode( false );
+		}
+	}, [ value, organizations ] );
+
+	const selectValue = customMode ? CUSTOM_ORG_SENTINEL : value;
+
+	const handleSelect = ( next: string ): void => {
+		if ( next === CUSTOM_ORG_SENTINEL ) {
+			setCustomMode( true );
+			return;
+		}
+		setCustomMode( false );
+		onChange( next );
+	};
+
+	// No orgs to pick from — fall back to plain text entry so the field
+	// remains usable when WorkOS is unconfigured or the API is down.
+	if ( ! loading && organizations.length === 0 ) {
+		return (
+			<label className="wpa-field">
+				<span>{ __( 'Pinned organization', 'integration-workos' ) }</span>
+				<input
+					type="text"
+					value={ value }
+					onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+						onChange( e.target.value )
+					}
+					placeholder={ __( 'org_01ABC…', 'integration-workos' ) }
+				/>
+				{ error && <span className="description">{ error }</span> }
+			</label>
+		);
+	}
+
+	return (
+		<label className="wpa-field">
+			<span>{ __( 'Pinned organization', 'integration-workos' ) }</span>
+			<select
+				value={ selectValue }
+				disabled={ loading }
+				onChange={ ( e: ChangeEvent< HTMLSelectElement > ) =>
+					handleSelect( e.target.value )
+				}
+			>
+				<option value="">
+					{ loading
+						? __( 'Loading organizations…', 'integration-workos' )
+						: __( '— No pinned organization —', 'integration-workos' ) }
+				</option>
+				{ organizations.map( ( org ) => (
+					<option key={ org.id } value={ org.id }>
+						{ org.name } ({ org.id })
+					</option>
+				) ) }
+				<option value={ CUSTOM_ORG_SENTINEL }>
+					{ __( 'Custom ID…', 'integration-workos' ) }
+				</option>
+			</select>
+			{ customMode && (
+				<input
+					type="text"
+					value={ value }
+					onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+						onChange( e.target.value )
+					}
+					placeholder={ __( 'org_01ABC…', 'integration-workos' ) }
+				/>
+			) }
+		</label>
+	);
+}
+
 function emptyProfile(): Profile {
 	return {
 		id: 0,
@@ -237,13 +352,25 @@ function emptyProfile(): Profile {
 
 interface EditorProps {
 	profile: Profile;
+	organizations: Organization[];
+	organizationsLoading: boolean;
+	organizationsError: string;
 	onSave: ( profile: Profile ) => void;
 	onCancel: () => void;
 	onDelete: ( profile: Profile ) => void;
 	saving: boolean;
 }
 
-function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) {
+function Editor( {
+	profile,
+	organizations,
+	organizationsLoading,
+	organizationsError,
+	onSave,
+	onCancel,
+	onDelete,
+	saving,
+}: EditorProps ) {
 	const [ data, setData ] = useState< Profile >( profile );
 
 	useEffect( () => setData( profile ), [ profile.id, profile.slug ] );
@@ -261,52 +388,61 @@ function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) 
 
 	return (
 		<div className="wpa-editor">
-			<h2>{ data.id ? `Edit: ${ data.title }` : 'New Login Profile' }</h2>
+			<h2>
+				{ data.id
+					? sprintf(
+							/* translators: %s: profile title. */
+							__( 'Edit: %s', 'integration-workos' ),
+							data.title
+					  )
+					: __( 'New Login Profile', 'integration-workos' ) }
+			</h2>
 
 			<TextField
-				label="Title"
+				label={ __( 'Title', 'integration-workos' ) }
 				value={ data.title }
 				onChange={ ( v ) => set( { title: v } ) }
 			/>
 
 			<TextField
-				label="Slug"
+				label={ __( 'Slug', 'integration-workos' ) }
 				value={ data.slug }
 				onChange={ ( v ) => set( { slug: v } ) }
 				disabled={ isDefault }
-				placeholder="members-area"
+				placeholder={ __( 'members-area', 'integration-workos' ) }
 			/>
 
 			<Select< ProfileMode >
-				label="Mode"
+				label={ __( 'Mode', 'integration-workos' ) }
 				value={ data.mode }
 				onChange={ ( v ) => set( { mode: v } ) }
-				options={ MODE_OPTIONS }
+				options={ modeOptions() }
 			/>
 
 			<Checkboxes< AuthMethod >
-				label="Enabled sign-in methods"
-				options={ METHOD_OPTIONS }
+				label={ __( 'Enabled sign-in methods', 'integration-workos' ) }
+				options={ methodOptions() }
 				values={ data.methods }
 				onChange={ ( v ) => set( { methods: v } ) }
 			/>
 
-			<TextField
-				label="Pinned organization ID"
+			<OrganizationField
 				value={ data.organization_id }
+				organizations={ organizations }
+				loading={ organizationsLoading }
+				error={ organizationsError }
 				onChange={ ( v ) => set( { organization_id: v } ) }
-				placeholder="org_01ABC…"
 			/>
 
 			<TextField
-				label="Redirect after login"
+				label={ __( 'Redirect after login', 'integration-workos' ) }
 				value={ data.post_login_redirect }
 				onChange={ ( v ) => set( { post_login_redirect: v } ) }
-				placeholder="/dashboard"
+				placeholder={ __( '/dashboard', 'integration-workos' ) }
 			/>
 
 			<fieldset className="wpa-fieldset">
-				<legend>Sign-up</legend>
+				<legend>{ __( 'Sign-up', 'integration-workos' ) }</legend>
 				<label className="wpa-check">
 					<input
 						type="checkbox"
@@ -315,7 +451,7 @@ function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) 
 							setSignup( { enabled: e.target.checked } )
 						}
 					/>
-					Allow sign-up
+					{ __( 'Allow sign-up', 'integration-workos' ) }
 				</label>
 				<label className="wpa-check">
 					<input
@@ -325,12 +461,12 @@ function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) 
 							setSignup( { require_invite: e.target.checked } )
 						}
 					/>
-					Require invitation
+					{ __( 'Require invitation', 'integration-workos' ) }
 				</label>
 			</fieldset>
 
 			<fieldset className="wpa-fieldset">
-				<legend>Flows</legend>
+				<legend>{ __( 'Flows', 'integration-workos' ) }</legend>
 				<label className="wpa-check">
 					<input
 						type="checkbox"
@@ -339,7 +475,7 @@ function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) 
 							set( { invite_flow: e.target.checked } )
 						}
 					/>
-					Invitation acceptance
+					{ __( 'Invitation acceptance', 'integration-workos' ) }
 				</label>
 				<label className="wpa-check">
 					<input
@@ -349,41 +485,41 @@ function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) 
 							set( { password_reset_flow: e.target.checked } )
 						}
 					/>
-					Password reset
+					{ __( 'Password reset', 'integration-workos' ) }
 				</label>
 			</fieldset>
 
 			<Select< MfaEnforce >
-				label="MFA enforcement"
+				label={ __( 'MFA enforcement', 'integration-workos' ) }
 				value={ data.mfa.enforce }
 				onChange={ ( v ) => setMfa( { enforce: v } ) }
-				options={ ENFORCE_OPTIONS }
+				options={ enforceOptions() }
 			/>
 
 			<Checkboxes< MfaFactor >
-				label="MFA factors"
-				options={ FACTOR_OPTIONS }
+				label={ __( 'MFA factors', 'integration-workos' ) }
+				options={ factorOptions() }
 				values={ data.mfa.factors }
 				onChange={ ( v ) => setMfa( { factors: v } ) }
 			/>
 
 			<fieldset className="wpa-fieldset">
-				<legend>Branding</legend>
+				<legend>{ __( 'Branding', 'integration-workos' ) }</legend>
 				<TextField
-					label="Heading"
+					label={ __( 'Heading', 'integration-workos' ) }
 					value={ data.branding.heading }
 					onChange={ ( v ) => setBranding( { heading: v } ) }
 				/>
 				<TextField
-					label="Subheading"
+					label={ __( 'Subheading', 'integration-workos' ) }
 					value={ data.branding.subheading }
 					onChange={ ( v ) => setBranding( { subheading: v } ) }
 				/>
 				<TextField
-					label="Primary color"
+					label={ __( 'Primary color', 'integration-workos' ) }
 					value={ data.branding.primary_color }
 					onChange={ ( v ) => setBranding( { primary_color: v } ) }
-					placeholder="#0057ff"
+					placeholder={ __( '#0057ff', 'integration-workos' ) }
 				/>
 			</fieldset>
 
@@ -393,21 +529,28 @@ function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) 
 					disabled={ saving }
 					onClick={ () => onSave( data ) }
 				>
-					{ saving ? 'Saving…' : 'Save profile' }
+					{ saving
+						? __( 'Saving…', 'integration-workos' )
+						: __( 'Save profile', 'integration-workos' ) }
 				</button>
 				<button className="button" onClick={ onCancel }>
-					Cancel
+					{ __( 'Cancel', 'integration-workos' ) }
 				</button>
 				{ data.id > 0 && ! isDefault && (
 					<button
 						className="button button-link-delete"
 						onClick={ () => {
-							if ( window.confirm( `Delete "${ data.title }"?` ) ) {
+							const message = sprintf(
+								/* translators: %s: profile title. */
+								__( 'Delete “%s”?', 'integration-workos' ),
+								data.title
+							);
+							if ( window.confirm( message ) ) {
 								onDelete( data );
 							}
 						} }
 					>
-						Delete
+						{ __( 'Delete', 'integration-workos' ) }
 					</button>
 				) }
 			</div>
@@ -417,27 +560,34 @@ function Editor( { profile, onSave, onCancel, onDelete, saving }: EditorProps ) 
 
 interface ListProps {
 	profiles: Profile[];
+	organizations: Organization[];
 	onSelect: ( profile: Profile ) => void;
 	onCreate: () => void;
 }
 
-function List( { profiles, onSelect, onCreate }: ListProps ) {
+function List( { profiles, organizations, onSelect, onCreate }: ListProps ) {
+	const orgName = ( id: string ): string => {
+		if ( '' === id ) {
+			return '—';
+		}
+		const match = organizations.find( ( o ) => o.id === id );
+		return match ? match.name : id;
+	};
 	return (
 		<div className="wpa-list">
 			<div className="wpa-list-header">
-				<h2>Login Profiles</h2>
 				<button className="button button-primary" onClick={ onCreate }>
-					Add profile
+					{ __( 'Add profile', 'integration-workos' ) }
 				</button>
 			</div>
 			<table className="wp-list-table widefat striped">
 				<thead>
 					<tr>
-						<th>Title</th>
-						<th>Slug</th>
-						<th>Mode</th>
-						<th>Methods</th>
-						<th>Organization</th>
+						<th>{ __( 'Title', 'integration-workos' ) }</th>
+						<th>{ __( 'Slug', 'integration-workos' ) }</th>
+						<th>{ __( 'Mode', 'integration-workos' ) }</th>
+						<th>{ __( 'Methods', 'integration-workos' ) }</th>
+						<th>{ __( 'Organization', 'integration-workos' ) }</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -457,7 +607,7 @@ function List( { profiles, onSelect, onCreate }: ListProps ) {
 							</td>
 							<td>{ p.mode }</td>
 							<td>{ ( p.methods || [] ).join( ', ' ) }</td>
-							<td>{ p.organization_id || '—' }</td>
+							<td>{ orgName( p.organization_id ) }</td>
 						</tr>
 					) ) }
 				</tbody>
@@ -477,6 +627,9 @@ function App(): ReactNode {
 	const [ error, setError ] = useState( '' );
 	const [ saving, setSaving ] = useState( false );
 	const [ loading, setLoading ] = useState( true );
+	const [ organizations, setOrganizations ] = useState< Organization[] >( [] );
+	const [ organizationsLoading, setOrganizationsLoading ] = useState( true );
+	const [ organizationsError, setOrganizationsError ] = useState( '' );
 
 	const load = async (): Promise< void > => {
 		setLoading( true );
@@ -485,12 +638,34 @@ function App(): ReactNode {
 		if ( ok ) {
 			setProfiles( data.profiles || [] );
 		} else {
-			setError( data.message || 'Failed to load profiles.' );
+			setError(
+				data.message || __( 'Failed to load profiles.', 'integration-workos' )
+			);
 		}
+	};
+
+	const loadOrganizations = async (): Promise< void > => {
+		setOrganizationsLoading( true );
+		const { ok, data } = await apiCall< OrganizationsResponse >(
+			'GET',
+			'/organizations'
+		);
+		setOrganizationsLoading( false );
+		if ( ok ) {
+			setOrganizations( data.organizations || [] );
+			setOrganizationsError( data.error || '' );
+			return;
+		}
+		setOrganizationsError(
+			data.message ||
+				data.error ||
+				__( 'Failed to load organizations.', 'integration-workos' )
+		);
 	};
 
 	useEffect( () => {
 		load();
+		loadOrganizations();
 	}, [] );
 
 	const handleSave = async ( profile: Profile ): Promise< void > => {
@@ -504,7 +679,9 @@ function App(): ReactNode {
 		);
 		setSaving( false );
 		if ( ! ok ) {
-			setError( data.message || 'Failed to save.' );
+			setError(
+				data.message || __( 'Failed to save.', 'integration-workos' )
+			);
 			return;
 		}
 		await load();
@@ -517,7 +694,9 @@ function App(): ReactNode {
 			`/${ profile.id }`
 		);
 		if ( ! ok ) {
-			setError( data.message || 'Failed to delete.' );
+			setError(
+				data.message || __( 'Failed to delete.', 'integration-workos' )
+			);
 			return;
 		}
 		setSelected( null );
@@ -525,7 +704,7 @@ function App(): ReactNode {
 	};
 
 	if ( loading ) {
-		return <p>Loading profiles…</p>;
+		return <p>{ __( 'Loading profiles…', 'integration-workos' ) }</p>;
 	}
 
 	return (
@@ -538,6 +717,9 @@ function App(): ReactNode {
 			{ selected ? (
 				<Editor
 					profile={ selected }
+					organizations={ organizations }
+					organizationsLoading={ organizationsLoading }
+					organizationsError={ organizationsError }
 					onSave={ handleSave }
 					onCancel={ () => setSelected( null ) }
 					onDelete={ handleDelete }
@@ -546,6 +728,7 @@ function App(): ReactNode {
 			) : (
 				<List
 					profiles={ profiles }
+					organizations={ organizations }
 					onSelect={ ( p ) => setSelected( p ) }
 					onCreate={ () => setSelected( emptyProfile() ) }
 				/>

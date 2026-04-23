@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from '@wordpress/element';
+import { __, sprintf } from '@wordpress/i18n';
 import type { FormEvent } from 'react';
 import type { AuthKitClient } from './api';
 import type {
@@ -34,19 +35,27 @@ import {
 	Subheading,
 } from './ui';
 
-const METHOD_LABELS: Partial< Record< AuthMethod, { label: string; key: string } > > = {
-	oauth_google:    { label: 'Continue with Google',    key: 'google' },
-	oauth_microsoft: { label: 'Continue with Microsoft', key: 'microsoft' },
-	oauth_github:    { label: 'Continue with GitHub',    key: 'github' },
-	oauth_apple:     { label: 'Continue with Apple',     key: 'apple' },
-};
+function methodLabel( method: AuthMethod ): string {
+	switch ( method ) {
+		case 'oauth_google':
+			return __( 'Continue with Google', 'integration-workos' );
+		case 'oauth_microsoft':
+			return __( 'Continue with Microsoft', 'integration-workos' );
+		case 'oauth_github':
+			return __( 'Continue with GitHub', 'integration-workos' );
+		case 'oauth_apple':
+			return __( 'Continue with Apple', 'integration-workos' );
+		default:
+			return method;
+	}
+}
 
 function errorMessage( data: unknown ): string {
 	if ( ! data || typeof data !== 'object' ) {
-		return 'Something went wrong. Please try again.';
+		return __( 'Something went wrong. Please try again.', 'integration-workos' );
 	}
 	const err = data as ApiError;
-	return err.message || err.code || 'Unexpected error.';
+	return err.message || err.code || __( 'Unexpected error.', 'integration-workos' );
 }
 
 // ---------------------------------------------------------------- MethodPicker
@@ -80,13 +89,15 @@ export function MethodPicker( { profile, onChoose, onError }: MethodPickerProps 
 				onError( errorMessage( data ) );
 			}
 		} catch ( _ ) {
-			onError( 'Unable to start social sign-in.' );
+			onError( __( 'Unable to start social sign-in.', 'integration-workos' ) );
 		}
 	};
 
 	return (
 		<Card>
-			<Heading>{ profile.branding.heading || 'Sign in' }</Heading>
+			<Heading>
+				{ profile.branding.heading || __( 'Sign in', 'integration-workos' ) }
+			</Heading>
 			{ profile.branding.subheading && (
 				<Subheading>{ profile.branding.subheading }</Subheading>
 			) }
@@ -97,31 +108,31 @@ export function MethodPicker( { profile, onChoose, onError }: MethodPickerProps 
 					variant="secondary"
 					onClick={ () => handleOAuth( method ) }
 				>
-					{ METHOD_LABELS[ method ]?.label || method }
+					{ methodLabel( method ) }
 				</Button>
 			) ) }
 
 			{ oauthMethods.length > 0 && ( hasPassword || hasMagic ) && (
-				<Divider>or</Divider>
+				<Divider>{ __( 'or', 'integration-workos' ) }</Divider>
 			) }
 
 			{ hasMagic && (
 				<Button onClick={ () => onChoose( 'magic_send' ) }>
-					Sign in with a code by email
+					{ __( 'Sign in with a code by email', 'integration-workos' ) }
 				</Button>
 			) }
 
 			{ hasPassword && (
 				<Button variant="secondary" onClick={ () => onChoose( 'password' ) }>
-					Sign in with password
+					{ __( 'Sign in with password', 'integration-workos' ) }
 				</Button>
 			) }
 
 			{ profile.signup?.enabled && ! profile.signup?.require_invite && (
 				<p className="wa-footer">
-					New here?{ ' ' }
+					{ __( 'New here?', 'integration-workos' ) }{ ' ' }
 					<LinkButton onClick={ () => onChoose( 'signup' ) }>
-						Create an account
+						{ __( 'Create an account', 'integration-workos' ) }
 					</LinkButton>
 				</p>
 			) }
@@ -168,10 +179,10 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 
 	return (
 		<Card>
-			<Heading>Sign in</Heading>
+			<Heading>{ __( 'Sign in', 'integration-workos' ) }</Heading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Email" htmlFor="wa-email">
+				<Field label={ __( 'Email', 'integration-workos' ) } htmlFor="wa-email">
 					<Input
 						id="wa-email"
 						type="email"
@@ -182,7 +193,7 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 						required={ true }
 					/>
 				</Field>
-				<Field label="Password" htmlFor="wa-password">
+				<Field label={ __( 'Password', 'integration-workos' ) } htmlFor="wa-password">
 					<Input
 						id="wa-password"
 						type="password"
@@ -193,18 +204,20 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Sign in' }
+					{ loading ? <Spinner /> : __( 'Sign in', 'integration-workos' ) }
 				</Button>
 			</form>
 			{ profile.password_reset_flow && (
 				<p className="wa-footer">
 					<LinkButton onClick={ () => onBack( 'reset' ) }>
-						Forgot your password?
+						{ __( 'Forgot your password?', 'integration-workos' ) }
 					</LinkButton>
 				</p>
 			) }
 			<p className="wa-footer">
-				<LinkButton onClick={ () => onBack() }>← Back</LinkButton>
+				<LinkButton onClick={ () => onBack() }>
+					{ __( '← Back', 'integration-workos' ) }
+				</LinkButton>
 			</p>
 		</Card>
 	);
@@ -238,11 +251,13 @@ export function MagicSend( { client, onCodeSent, onBack }: MagicSendProps ) {
 
 	return (
 		<Card>
-			<Heading>Sign in with a code</Heading>
-			<Subheading>We&apos;ll email you a short code to sign in.</Subheading>
+			<Heading>{ __( 'Sign in with a code', 'integration-workos' ) }</Heading>
+			<Subheading>
+				{ __( 'We’ll email you a short code to sign in.', 'integration-workos' ) }
+			</Subheading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Email" htmlFor="wa-email-magic">
+				<Field label={ __( 'Email', 'integration-workos' ) } htmlFor="wa-email-magic">
 					<Input
 						id="wa-email-magic"
 						type="email"
@@ -254,11 +269,13 @@ export function MagicSend( { client, onCodeSent, onBack }: MagicSendProps ) {
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Send code' }
+					{ loading ? <Spinner /> : __( 'Send code', 'integration-workos' ) }
 				</Button>
 			</form>
 			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>← Back</LinkButton>
+				<LinkButton onClick={ onBack }>
+					{ __( '← Back', 'integration-workos' ) }
+				</LinkButton>
 			</p>
 		</Card>
 	);
@@ -311,11 +328,17 @@ export function MagicVerify( {
 
 	return (
 		<Card>
-			<Heading>Enter your code</Heading>
-			<Subheading>We sent a code to { email }.</Subheading>
+			<Heading>{ __( 'Enter your code', 'integration-workos' ) }</Heading>
+			<Subheading>
+				{ sprintf(
+					/* translators: %s: email address. */
+					__( 'We sent a code to %s.', 'integration-workos' ),
+					email
+				) }
+			</Subheading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Code" htmlFor="wa-code">
+				<Field label={ __( 'Code', 'integration-workos' ) } htmlFor="wa-code">
 					<Input
 						id="wa-code"
 						type="text"
@@ -328,11 +351,13 @@ export function MagicVerify( {
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Sign in' }
+					{ loading ? <Spinner /> : __( 'Sign in', 'integration-workos' ) }
 				</Button>
 			</form>
 			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>← Back</LinkButton>
+				<LinkButton onClick={ onBack }>
+					{ __( '← Back', 'integration-workos' ) }
+				</LinkButton>
 			</p>
 		</Card>
 	);
@@ -398,15 +423,21 @@ export function MfaChallenge( {
 
 	return (
 		<Card>
-			<Heading>Verify your identity</Heading>
+			<Heading>{ __( 'Verify your identity', 'integration-workos' ) }</Heading>
 			<Subheading>
 				{ firstFactor?.type === 'sms'
-					? 'Enter the code we just sent to your phone.'
-					: 'Enter the 6-digit code from your authenticator app.' }
+					? __(
+							'Enter the code we just sent to your phone.',
+							'integration-workos'
+					  )
+					: __(
+							'Enter the 6-digit code from your authenticator app.',
+							'integration-workos'
+					  ) }
 			</Subheading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Code" htmlFor="wa-mfa-code">
+				<Field label={ __( 'Code', 'integration-workos' ) } htmlFor="wa-mfa-code">
 					<Input
 						id="wa-mfa-code"
 						type="text"
@@ -419,7 +450,7 @@ export function MfaChallenge( {
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading || ! challengeId }>
-					{ loading ? <Spinner /> : 'Verify' }
+					{ loading ? <Spinner /> : __( 'Verify', 'integration-workos' ) }
 				</Button>
 			</form>
 		</Card>
@@ -469,10 +500,13 @@ export function Signup( { client, onVerify, onBack }: SignupProps ) {
 
 	return (
 		<Card>
-			<Heading>Create your account</Heading>
+			<Heading>{ __( 'Create your account', 'integration-workos' ) }</Heading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Email" htmlFor="wa-signup-email">
+				<Field
+					label={ __( 'Email', 'integration-workos' ) }
+					htmlFor="wa-signup-email"
+				>
 					<Input
 						id="wa-signup-email"
 						type="email"
@@ -483,7 +517,10 @@ export function Signup( { client, onVerify, onBack }: SignupProps ) {
 						required={ true }
 					/>
 				</Field>
-				<Field label="Password" htmlFor="wa-signup-pw">
+				<Field
+					label={ __( 'Password', 'integration-workos' ) }
+					htmlFor="wa-signup-pw"
+				>
 					<Input
 						id="wa-signup-pw"
 						type="password"
@@ -494,11 +531,13 @@ export function Signup( { client, onVerify, onBack }: SignupProps ) {
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Create account' }
+					{ loading ? <Spinner /> : __( 'Create account', 'integration-workos' ) }
 				</Button>
 			</form>
 			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>Already have an account? Sign in</LinkButton>
+				<LinkButton onClick={ onBack }>
+					{ __( 'Already have an account? Sign in', 'integration-workos' ) }
+				</LinkButton>
 			</p>
 		</Card>
 	);
@@ -536,11 +575,17 @@ export function SignupVerify( { client, userId, email, onDone }: SignupVerifyPro
 
 	return (
 		<Card>
-			<Heading>Verify your email</Heading>
-			<Subheading>Enter the code we sent to { email }.</Subheading>
+			<Heading>{ __( 'Verify your email', 'integration-workos' ) }</Heading>
+			<Subheading>
+				{ sprintf(
+					/* translators: %s: email address. */
+					__( 'Enter the code we sent to %s.', 'integration-workos' ),
+					email
+				) }
+			</Subheading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Code" htmlFor="wa-verify">
+				<Field label={ __( 'Code', 'integration-workos' ) } htmlFor="wa-verify">
 					<Input
 						id="wa-verify"
 						type="text"
@@ -552,7 +597,7 @@ export function SignupVerify( { client, userId, email, onDone }: SignupVerifyPro
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Verify' }
+					{ loading ? <Spinner /> : __( 'Verify', 'integration-workos' ) }
 				</Button>
 			</form>
 		</Card>
@@ -589,11 +634,19 @@ export function ResetRequest( { client, onSent, onBack }: ResetRequestProps ) {
 
 	return (
 		<Card>
-			<Heading>Reset your password</Heading>
-			<Subheading>Enter your email and we&apos;ll send a reset link.</Subheading>
+			<Heading>{ __( 'Reset your password', 'integration-workos' ) }</Heading>
+			<Subheading>
+				{ __(
+					'Enter your email and we’ll send a reset link.',
+					'integration-workos'
+				) }
+			</Subheading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Email" htmlFor="wa-reset-email">
+				<Field
+					label={ __( 'Email', 'integration-workos' ) }
+					htmlFor="wa-reset-email"
+				>
 					<Input
 						id="wa-reset-email"
 						type="email"
@@ -605,11 +658,13 @@ export function ResetRequest( { client, onSent, onBack }: ResetRequestProps ) {
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Send reset link' }
+					{ loading ? <Spinner /> : __( 'Send reset link', 'integration-workos' ) }
 				</Button>
 			</form>
 			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>← Back</LinkButton>
+				<LinkButton onClick={ onBack }>
+					{ __( '← Back', 'integration-workos' ) }
+				</LinkButton>
 			</p>
 		</Card>
 	);
@@ -646,19 +701,29 @@ export function ResetConfirm( { client, token, onDone }: ResetConfirmProps ) {
 	if ( success ) {
 		return (
 			<Card>
-				<Heading>Password reset</Heading>
-				<Subheading>You can now sign in with your new password.</Subheading>
-				<Button onClick={ onDone }>Continue to sign in</Button>
+				<Heading>{ __( 'Password reset', 'integration-workos' ) }</Heading>
+				<Subheading>
+					{ __(
+						'You can now sign in with your new password.',
+						'integration-workos'
+					) }
+				</Subheading>
+				<Button onClick={ onDone }>
+					{ __( 'Continue to sign in', 'integration-workos' ) }
+				</Button>
 			</Card>
 		);
 	}
 
 	return (
 		<Card>
-			<Heading>Set a new password</Heading>
+			<Heading>{ __( 'Set a new password', 'integration-workos' ) }</Heading>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="New password" htmlFor="wa-new-pw">
+				<Field
+					label={ __( 'New password', 'integration-workos' ) }
+					htmlFor="wa-new-pw"
+				>
 					<Input
 						id="wa-new-pw"
 						type="password"
@@ -670,7 +735,7 @@ export function ResetConfirm( { client, token, onDone }: ResetConfirmProps ) {
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Save new password' }
+					{ loading ? <Spinner /> : __( 'Save new password', 'integration-workos' ) }
 				</Button>
 			</form>
 		</Card>
@@ -738,11 +803,22 @@ export function InvitationAccept( {
 
 	return (
 		<Card>
-			<Heading>Accept your invitation</Heading>
-			{ invitation && <Subheading>Welcome, { invitation.email }.</Subheading> }
+			<Heading>{ __( 'Accept your invitation', 'integration-workos' ) }</Heading>
+			{ invitation && (
+				<Subheading>
+					{ sprintf(
+						/* translators: %s: email address. */
+						__( 'Welcome, %s.', 'integration-workos' ),
+						invitation.email
+					) }
+				</Subheading>
+			) }
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
-				<Field label="Set a password" htmlFor="wa-inv-pw">
+				<Field
+					label={ __( 'Set a password', 'integration-workos' ) }
+					htmlFor="wa-inv-pw"
+				>
 					<Input
 						id="wa-inv-pw"
 						type="password"
@@ -754,7 +830,7 @@ export function InvitationAccept( {
 					/>
 				</Field>
 				<Button type="submit" disabled={ loading }>
-					{ loading ? <Spinner /> : 'Accept invitation' }
+					{ loading ? <Spinner /> : __( 'Accept invitation', 'integration-workos' ) }
 				</Button>
 			</form>
 		</Card>
@@ -772,8 +848,8 @@ export function Complete( { redirectTo }: { redirectTo: string } ) {
 
 	return (
 		<Card>
-			<Heading>Signed in</Heading>
-			<Subheading>Redirecting…</Subheading>
+			<Heading>{ __( 'Signed in', 'integration-workos' ) }</Heading>
+			<Subheading>{ __( 'Redirecting…', 'integration-workos' ) }</Subheading>
 			<Spinner />
 		</Card>
 	);

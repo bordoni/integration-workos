@@ -24,7 +24,7 @@ Integration with WorkOS connects your WordPress site with [WorkOS](https://worko
 = Custom AuthKit =
 
 * **WordPress-hosted React login** — no redirect to WorkOS for password, magic code, signup, invitation, or MFA. Mounts on wp-login.php, a shortcode (`[workos_login_v2]`), a Gutenberg block, and a dedicated `/workos/login/{profile}` route.
-* **Login Profiles** — admin-defined presets (enabled sign-in methods, pinned organization, signup/invite toggles, MFA policy, branding) edited from **WorkOS → Login Profiles**.
+* **Login Profiles** — admin-defined presets (enabled sign-in methods, pinned organization, signup/invite toggles, MFA policy, branding) edited from **WorkOS → Login Profiles**. The organization picker loads live from WorkOS so admins pick an org by name instead of pasting raw IDs.
 * **Sign-in methods** — email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), and passkey. Each profile chooses its own subset.
 * **MFA** — TOTP, SMS, and WebAuthn/passkey with in-app enrollment + challenge. Profile-level `mfa.enforce` (`never`/`if_required`/`always`) and factor allowlist are applied at login time.
 * **Self-serve sign-up + invitation acceptance + in-app password reset** — all handled by the React shell; no third-party pages.
@@ -166,17 +166,19 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
-= 1.0.0 - 2026-04-14 =
+= 1.0.0 - 2026-04-23 =
 
 Custom AuthKit (WordPress-hosted login):
 * React login shell on wp-login.php, `[workos_login_v2]` shortcode, `workos/login-form` block, and `/workos/login/{profile}` route.
 * Login Profiles — admin-defined presets for enabled methods, pinned organization, signup/invite/reset flows, MFA policy, and branding, managed at WorkOS → Login Profiles.
+* Pinned-organization picker in the Profile editor reads live from WorkOS (with a "Custom ID…" fallback for legacy or unlisted orgs), and the Profiles list renders organization names instead of raw IDs.
 * Sign-in methods: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey.
 * Full MFA support — TOTP, SMS, WebAuthn/passkey with in-app enrollment + challenge.
 * Self-serve sign-up, invitation acceptance, and in-app password reset.
 * Profile routing rules (redirect_to glob / referrer host / user role).
 * WorkOS Radar anti-fraud integration (set `WORKOS_RADAR_SITE_KEY`).
 * Public REST at `/wp-json/workos/v1/auth/*` with profile-scoped nonces, per-IP/per-email rate limits, and signature-verified tokens.
+* Full browser internationalization — every user-facing React/TS/JS string ships through `@wordpress/i18n` with the `integration-workos` text domain and `wp_set_script_translations()` wiring.
 
 Base platform:
 * SSO login via WorkOS AuthKit (legacy redirect mode, per-profile selectable).

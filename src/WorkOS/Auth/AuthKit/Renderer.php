@@ -76,6 +76,8 @@ class Renderer {
 			true
 		);
 
+		wp_set_script_translations( self::SCRIPT_HANDLE, 'integration-workos' );
+
 		wp_enqueue_style(
 			self::STYLE_HANDLE,
 			$this->assets_url . 'authkit.css',

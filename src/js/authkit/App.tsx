@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import { createClient } from './api';
 import type { AuthKitClient } from './api';
 import * as Radar from './radar';
@@ -209,12 +210,17 @@ export function App( props: AppProps ) {
 		case 'reset_sent':
 			return (
 				<div className="wa-card">
-					<h1 className="wa-heading">Check your email</h1>
+					<h1 className="wa-heading">
+						{ __( 'Check your email', 'integration-workos' ) }
+					</h1>
 					<p className="wa-subheading">
-						If an account exists for that email, we&apos;ve sent a reset link.
+						{ __(
+							'If an account exists for that email, we’ve sent a reset link.',
+							'integration-workos'
+						) }
 					</p>
 					<button className="wa-linkbtn" onClick={ () => setStep( 'pick' ) }>
-						Back to sign in
+						{ __( 'Back to sign in', 'integration-workos' ) }
 					</button>
 				</div>
 			);

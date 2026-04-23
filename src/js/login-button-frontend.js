@@ -2,10 +2,12 @@
  * WorkOS Login Button — Frontend JS
  *
  * Handles headless form toggle and AJAX submission.
- * Vanilla JS IIFE, no framework dependencies.
  *
  * @package WorkOS
  */
+
+import { __ } from '@wordpress/i18n';
+
 ( function () {
 	'use strict';
 
@@ -100,7 +102,7 @@
 					if ( data.success && data.data && data.data.redirect_to ) {
 							window.location.href = data.data.redirect_to;
 					} else {
-						var msg = ( data.data && data.data.message ) || ( config.i18n && config.i18n.error ) || 'Login failed.';
+						var msg = ( data.data && data.data.message ) || __( 'Login failed.', 'integration-workos' );
 						if ( errorEl ) {
 							errorEl.textContent = msg;
 						}
@@ -111,7 +113,7 @@
 				function () {
 					form.removeAttribute( 'aria-busy' );
 					if ( errorEl ) {
-							errorEl.textContent = ( config.i18n && config.i18n.error ) || 'An error occurred. Please try again.';
+							errorEl.textContent = __( 'An error occurred. Please try again.', 'integration-workos' );
 					}
 				}
 			);

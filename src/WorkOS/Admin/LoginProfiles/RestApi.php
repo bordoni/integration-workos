@@ -9,6 +9,7 @@ namespace WorkOS\Admin\LoginProfiles;
 
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WorkOS\Config;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -62,6 +63,18 @@ class RestApi {
 				[
 					'methods'             => 'POST',
 					'callback'            => [ $this, 'create_profile' ],
+					'permission_callback' => [ $this, 'permission_check' ],
+				],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			self::BASE . '/organizations',
+			[
+				[
+					'methods'             => 'GET',
+					'callback'            => [ $this, 'list_organizations' ],
 					'permission_callback' => [ $this, 'permission_check' ],
 				],
 			]
@@ -221,6 +234,93 @@ class RestApi {
 		}
 
 		return new WP_REST_Response( $saved->to_array(), 200 );
+	}
+
+	/**
+	 * GET /admin/profiles/organizations — list WorkOS organizations for the
+	 * profile editor's pinned-org picker.
+	 *
+	 * Returns `{ organizations: [{ id, name }], error?: string }`. Uses the
+	 * same transient cache key as the main settings org picker so a single
+	 * lookup serves both UIs. Always returns 200 — the editor degrades to a
+	 * free-text input when `organizations` is empty and surfaces `error`
+	 * inline.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function list_organizations(): WP_REST_Response {
+		if ( ! workos()->is_enabled() ) {
+			return new WP_REST_Response(
+				[
+					'organizations' => [],
+					'error'         => __( 'WorkOS is not configured. Save API credentials to enable org selection.', 'integration-workos' ),
+				],
+				200
+			);
+		}
+
+		$cache_key = 'workos_organizations_cache_' . Config::get_active_environment();
+		$cached    = get_transient( $cache_key );
+		if ( is_array( $cached ) ) {
+			return new WP_REST_Response(
+				[ 'organizations' => $this->shape_organizations( $cached ) ],
+				200
+			);
+		}
+
+		$result = workos()->api()->list_organizations( [ 'limit' => 100 ] );
+		if ( is_wp_error( $result ) ) {
+			return new WP_REST_Response(
+				[
+					'organizations' => [],
+					'error'         => $result->get_error_message(),
+				],
+				200
+			);
+		}
+
+		$organizations = isset( $result['data'] ) && is_array( $result['data'] )
+			? $result['data']
+			: [];
+
+		set_transient( $cache_key, $organizations, 5 * MINUTE_IN_SECONDS );
+
+		return new WP_REST_Response(
+			[ 'organizations' => $this->shape_organizations( $organizations ) ],
+			200
+		);
+	}
+
+	/**
+	 * Trim the WorkOS organization payload down to the two fields the
+	 * editor needs.
+	 *
+	 * @param array $organizations Raw organizations from the WorkOS API.
+	 *
+	 * @return array<int, array{id: string, name: string}>
+	 */
+	private function shape_organizations( array $organizations ): array {
+		$shaped = [];
+		foreach ( $organizations as $org ) {
+			if ( ! is_array( $org ) ) {
+				continue;
+			}
+			$id = isset( $org['id'] ) ? (string) $org['id'] : '';
+			if ( '' === $id ) {
+				continue;
+			}
+			$shaped[] = [
+				'id'   => $id,
+				'name' => isset( $org['name'] ) ? (string) $org['name'] : $id,
+			];
+		}
+
+		usort(
+			$shaped,
+			static fn( array $a, array $b ): int => strcasecmp( $a['name'], $b['name'] )
+		);
+
+		return $shaped;
 	}
 
 	/**
