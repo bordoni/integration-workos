@@ -32,8 +32,9 @@ defined( 'ABSPATH' ) || exit;
  */
 class Mfa extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS = 10;
-	private const RATE_LIMIT_WINDOW      = 60;
+	private const RATE_LIMIT_IP_ATTEMPTS     = 10;
+	private const RATE_LIMIT_FACTOR_ATTEMPTS = 5;
+	private const RATE_LIMIT_WINDOW          = 60;
 
 	/**
 	 * Register routes.
@@ -148,9 +149,14 @@ class Mfa extends BaseEndpoint {
 			);
 		}
 
+		// Second bucket keyed on the factor id closes a gap in the
+		// IP-only limit: a user with multiple enrolled factors could
+		// otherwise be targeted by rotating `factor_id` values from a
+		// single IP and collecting a fresh OTP on each one.
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'mfa_challenge_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'mfa_challenge_factor', $factor_id, self::RATE_LIMIT_FACTOR_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
