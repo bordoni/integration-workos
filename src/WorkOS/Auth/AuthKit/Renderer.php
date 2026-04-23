@@ -213,8 +213,16 @@ class Renderer {
 	private function branding_style_tag( array $branding ): string {
 		$rules = [];
 
-		if ( ! empty( $branding['primary_color'] ) ) {
-			$rules[] = '--wa-primary: ' . esc_attr( (string) $branding['primary_color'] ) . ';';
+		// Re-validate the primary color as defense-in-depth. Profile::from_array
+		// already regex-matches it against a hex pattern on save, but this
+		// renderer is the last line before raw emission into a CSS context
+		// where `esc_attr` is semantically wrong. Enforcing the same regex
+		// here guarantees that whatever arrives in $branding — now or from
+		// future call sites — cannot introduce a semicolon, closing brace,
+		// or `</style>` sequence.
+		$primary = (string) ( $branding['primary_color'] ?? '' );
+		if ( '' !== $primary && preg_match( '/^#[0-9a-fA-F]{3,8}$/', $primary ) ) {
+			$rules[] = '--wa-primary: ' . $primary . ';';
 		}
 
 		if ( empty( $rules ) ) {
