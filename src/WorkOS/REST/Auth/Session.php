@@ -158,9 +158,22 @@ class Session extends BaseEndpoint {
 	/**
 	 * Decode the `exp` claim from a JWT payload without verifying.
 	 *
+	 * IMPORTANT — this is intentionally signature-unchecked.
+	 *
+	 * The returned timestamp drives ONLY the browser's pre-emptive
+	 * session-refresh timer (the React shell schedules a refresh call
+	 * ~60s before the access token expires). No authorization decision
+	 * is made against this value; if an attacker forges an unsigned JWT
+	 * with a bogus `exp`, the only effect is that the client schedules
+	 * a refresh at the wrong time, and the refresh call itself is
+	 * authenticated via the WP auth cookie + the signed refresh token
+	 * held server-side. WorkOS's JWKS-verified `verify_access_token()`
+	 * is the canonical check everywhere else in the plugin that needs
+	 * authoritative session state.
+	 *
 	 * @param string $token JWT.
 	 *
-	 * @return int|null Unix timestamp, or null when absent.
+	 * @return int|null Unix timestamp, or null when absent / malformed.
 	 */
 	private function extract_exp( string $token ): ?int {
 		$parts = explode( '.', $token );
