@@ -26,13 +26,13 @@ class Profile {
 	public const MODE_CUSTOM           = 'custom';
 	public const MODE_AUTHKIT_REDIRECT = 'authkit_redirect';
 
-	public const METHOD_PASSWORD         = 'password';
-	public const METHOD_MAGIC_CODE       = 'magic_code';
-	public const METHOD_OAUTH_GOOGLE     = 'oauth_google';
-	public const METHOD_OAUTH_MICROSOFT  = 'oauth_microsoft';
-	public const METHOD_OAUTH_GITHUB     = 'oauth_github';
-	public const METHOD_OAUTH_APPLE      = 'oauth_apple';
-	public const METHOD_PASSKEY          = 'passkey';
+	public const METHOD_PASSWORD        = 'password';
+	public const METHOD_MAGIC_CODE      = 'magic_code';
+	public const METHOD_OAUTH_GOOGLE    = 'oauth_google';
+	public const METHOD_OAUTH_MICROSOFT = 'oauth_microsoft';
+	public const METHOD_OAUTH_GITHUB    = 'oauth_github';
+	public const METHOD_OAUTH_APPLE     = 'oauth_apple';
+	public const METHOD_PASSKEY         = 'passkey';
 
 	public const MFA_ENFORCE_NEVER       = 'never';
 	public const MFA_ENFORCE_IF_REQUIRED = 'if_required';
@@ -378,49 +378,81 @@ class Profile {
 		return self::MODE_CUSTOM === $this->mode;
 	}
 
-	// -------------------------------------------------------------------------
-	// Accessors
-	// -------------------------------------------------------------------------
-
+	/**
+	 * Post ID backing this profile, or 0 for unsaved profiles.
+	 *
+	 * @return int
+	 */
 	public function get_id(): int {
 		return $this->id;
 	}
 
+	/**
+	 * Profile slug (URL-safe identifier).
+	 *
+	 * @return string
+	 */
 	public function get_slug(): string {
 		return $this->slug;
 	}
 
+	/**
+	 * Display title.
+	 *
+	 * @return string
+	 */
 	public function get_title(): string {
 		return $this->title;
 	}
 
 	/**
+	 * Enabled first-factor methods.
+	 *
 	 * @return string[]
 	 */
 	public function get_methods(): array {
 		return $this->methods;
 	}
 
+	/**
+	 * Pinned WorkOS organization ID, or empty string when unpinned.
+	 *
+	 * @return string
+	 */
 	public function get_organization_id(): string {
 		return $this->organization_id;
 	}
 
 	/**
+	 * Signup configuration.
+	 *
 	 * @return array{enabled: bool, require_invite: bool}
 	 */
 	public function get_signup(): array {
 		return $this->signup;
 	}
 
+	/**
+	 * Whether the invitation acceptance flow is enabled.
+	 *
+	 * @return bool
+	 */
 	public function is_invite_flow_enabled(): bool {
 		return $this->invite_flow;
 	}
 
+	/**
+	 * Whether the in-app password-reset flow is enabled.
+	 *
+	 * @return bool
+	 */
 	public function is_password_reset_flow_enabled(): bool {
 		return $this->password_reset_flow;
 	}
 
 	/**
+	 * MFA configuration.
+	 *
 	 * @return array{enforce: string, factors: string[]}
 	 */
 	public function get_mfa(): array {
@@ -428,16 +460,28 @@ class Profile {
 	}
 
 	/**
+	 * Branding configuration.
+	 *
 	 * @return array{logo_attachment_id: int, primary_color: string, heading: string, subheading: string}
 	 */
 	public function get_branding(): array {
 		return $this->branding;
 	}
 
+	/**
+	 * Default post-login redirect URL, or empty string for the WP default.
+	 *
+	 * @return string
+	 */
 	public function get_post_login_redirect(): string {
 		return $this->post_login_redirect;
 	}
 
+	/**
+	 * Profile mode (`custom` or `authkit_redirect`).
+	 *
+	 * @return string
+	 */
 	public function get_mode(): string {
 		return $this->mode;
 	}

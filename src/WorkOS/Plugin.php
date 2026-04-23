@@ -175,9 +175,11 @@ class Plugin {
 
 		Database\Schema::activate();
 
-		// Register rewrite rules before flushing so they all get persisted:
-		//   - /workos/callback  (OAuth callback for both AuthKit-redirect and custom modes)
-		//   - /workos/login/{profile}  (dedicated frontend login page)
+		/*
+		 * Register rewrite rules before flushing so they all get persisted:
+		 *  - /workos/callback  (OAuth callback for both AuthKit-redirect and custom modes).
+		 *  - /workos/login/{profile}  (dedicated frontend login page).
+		 */
 		Auth\Login::register_rewrite();
 		Auth\AuthKit\FrontendRoute::register_rewrite();
 		flush_rewrite_rules();

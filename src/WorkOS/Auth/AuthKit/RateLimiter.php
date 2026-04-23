@@ -69,7 +69,7 @@ class RateLimiter {
 			];
 		}
 
-		$state['count']++;
+		++$state['count'];
 
 		// Persist before the limit check so a concurrent caller also sees the increment.
 		// Transient TTL matches the remaining window so stale buckets drop on their own.

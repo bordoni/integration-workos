@@ -148,7 +148,7 @@ abstract class BaseEndpoint {
 	 * body/query param for simple form submissions.
 	 *
 	 * @param WP_REST_Request $request REST request.
-	 * @param Profile          $profile Resolved profile.
+	 * @param Profile         $profile Resolved profile.
 	 *
 	 * @return true|WP_Error
 	 */

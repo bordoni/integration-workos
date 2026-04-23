@@ -228,14 +228,20 @@ class RestApi {
 			return $this->error_with_status( $result, $status );
 		}
 
-		return new WP_REST_Response( [ 'deleted' => true, 'id' => $id ], 200 );
+		return new WP_REST_Response(
+			[
+				'deleted' => true,
+				'id'      => $id,
+			],
+			200
+		);
 	}
 
 	/**
 	 * Attach an HTTP status to a WP_Error returned by the repository.
 	 *
 	 * @param WP_Error $error   Error from the repository.
-	 * @param int       $default_status HTTP status to set when the error has no status data.
+	 * @param int      $default_status HTTP status to set when the error has no status data.
 	 *
 	 * @return WP_Error
 	 */

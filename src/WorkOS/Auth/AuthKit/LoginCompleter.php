@@ -171,8 +171,8 @@ class LoginCompleter {
 	 * enforce where each login page lands users. Falls back through the
 	 * existing Redirect::resolve() to honor role-based rules.
 	 *
-	 * @param Profile  $profile     Active profile.
-	 * @param string   $redirect_to Client-provided redirect URL.
+	 * @param Profile $profile     Active profile.
+	 * @param string  $redirect_to Client-provided redirect URL.
 	 * @param WP_User $wp_user     Authenticated user.
 	 *
 	 * @return string

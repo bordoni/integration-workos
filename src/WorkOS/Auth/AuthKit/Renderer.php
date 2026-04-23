@@ -63,7 +63,10 @@ class Renderer {
 		$asset_file = $this->assets_dir . 'authkit.asset.php';
 		$asset      = file_exists( $asset_file )
 			? require $asset_file
-			: [ 'dependencies' => [ 'wp-element' ], 'version' => WORKOS_VERSION ];
+			: [
+				'dependencies' => [ 'wp-element' ],
+				'version'      => WORKOS_VERSION,
+			];
 
 		wp_enqueue_script(
 			self::SCRIPT_HANDLE,
@@ -110,13 +113,13 @@ class Renderer {
 		$profile_data['branding'] = $this->resolve_branding( $profile );
 
 		$attrs = [
-			'id'                     => 'workos-authkit-root',
-			'data-profile'           => wp_json_encode( $profile_data ),
-			'data-rest-base'         => esc_url_raw( rest_url( 'workos/v1/auth' ) ),
-			'data-redirect-to'       => esc_url_raw( $context['redirect_to'] ?? '' ),
-			'data-invitation-token'  => sanitize_text_field( $context['invitation_token'] ?? '' ),
-			'data-reset-token'       => sanitize_text_field( $context['reset_token'] ?? '' ),
-			'data-initial-step'      => sanitize_key( $context['initial_step'] ?? 'pick' ),
+			'id'                    => 'workos-authkit-root',
+			'data-profile'          => wp_json_encode( $profile_data ),
+			'data-rest-base'        => esc_url_raw( rest_url( 'workos/v1/auth' ) ),
+			'data-redirect-to'      => esc_url_raw( $context['redirect_to'] ?? '' ),
+			'data-invitation-token' => sanitize_text_field( $context['invitation_token'] ?? '' ),
+			'data-reset-token'      => sanitize_text_field( $context['reset_token'] ?? '' ),
+			'data-initial-step'     => sanitize_key( $context['initial_step'] ?? 'pick' ),
 		];
 
 		$style_tag = $this->branding_style_tag( $profile_data['branding'] );
@@ -155,7 +158,7 @@ class Renderer {
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="robots" content="noindex, nofollow" />
 	<title><?php echo esc_html( sprintf( /* translators: %s: site name */ __( 'Sign in — %s', 'integration-workos' ), $site_name ) ); ?></title>
-	<?php wp_print_styles( self::STYLE_HANDLE ); ?>
+		<?php wp_print_styles( self::STYLE_HANDLE ); ?>
 </head>
 <body class="workos-authkit-body" data-site-name="<?php echo esc_attr( $site_name ); ?>" data-lang="<?php echo esc_attr( $language ); ?>">
 	<main class="workos-authkit-main">
@@ -166,7 +169,7 @@ class Renderer {
 		echo $mount; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		?>
 	</main>
-	<?php wp_print_scripts( self::SCRIPT_HANDLE ); ?>
+		<?php wp_print_scripts( self::SCRIPT_HANDLE ); ?>
 </body>
 </html>
 		<?php

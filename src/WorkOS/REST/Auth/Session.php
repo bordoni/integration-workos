@@ -124,7 +124,7 @@ class Session extends BaseEndpoint {
 
 		return new WP_REST_Response(
 			[
-				'ok' => true,
+				'ok'         => true,
 				// Expose the access-token `exp` so the React shell can
 				// schedule its own pre-emptive refresh ~60s before expiry.
 				'expires_at' => $this->extract_exp( $workos_response['access_token'] ?? '' ),
@@ -169,7 +169,9 @@ class Session extends BaseEndpoint {
 		}
 
 		$payload = json_decode(
-			base64_decode( strtr( $parts[1], '-_', '+/' ) ),
+			// JWT payloads are base64url-encoded by RFC 7519; decoding is not
+			// obfuscation. We only read `exp` here, never execute the result.
+			base64_decode( strtr( $parts[1], '-_', '+/' ) ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
 			true
 		);
 

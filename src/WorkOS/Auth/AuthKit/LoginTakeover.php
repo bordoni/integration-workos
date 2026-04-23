@@ -1,6 +1,6 @@
 <?php
 /**
- * wp-login.php takeover for the AuthKit React shell.
+ * Wp-login.php takeover for the AuthKit React shell.
  *
  * @package WorkOS\Auth\AuthKit
  */

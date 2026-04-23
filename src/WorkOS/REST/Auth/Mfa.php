@@ -320,10 +320,10 @@ class Mfa extends BaseEndpoint {
 
 		return new WP_REST_Response(
 			[
-				'factor_id'    => (string) ( $result['id'] ?? '' ),
-				'qr_code'      => (string) ( $totp['qr_code'] ?? '' ),
-				'secret'       => (string) ( $totp['secret'] ?? '' ),
-				'otpauth_uri'  => (string) ( $totp['uri'] ?? '' ),
+				'factor_id'   => (string) ( $result['id'] ?? '' ),
+				'qr_code'     => (string) ( $totp['qr_code'] ?? '' ),
+				'secret'      => (string) ( $totp['secret'] ?? '' ),
+				'otpauth_uri' => (string) ( $totp['uri'] ?? '' ),
 			],
 			201
 		);

@@ -49,12 +49,13 @@ class ProfileRouter {
 	/**
 	 * Resolve a profile for the current request.
 	 *
-	 * @param array{
-	 *     explicit_slug?: string,
-	 *     redirect_to?: string,
-	 *     referrer?: string,
-	 *     user_id?: int,
-	 * } $context Request context.
+	 * The context array accepts:
+	 *   - `explicit_slug` (string) — forces a specific profile by slug.
+	 *   - `redirect_to`   (string) — used by the glob matcher.
+	 *   - `referrer`      (string) — used by the host matcher.
+	 *   - `user_id`       (int)    — used by the role matcher.
+	 *
+	 * @param array $context Request context (see above).
 	 *
 	 * @return Profile The matched profile, or the default profile (creating
 	 *                 it when absent so callers can render something sane).

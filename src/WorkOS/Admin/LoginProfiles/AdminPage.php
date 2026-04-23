@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
  */
 class AdminPage {
 
-	public const MENU_SLUG    = 'workos-login-profiles';
+	public const MENU_SLUG     = 'workos-login-profiles';
 	public const SCRIPT_HANDLE = 'workos-admin-profiles';
 	public const STYLE_HANDLE  = 'workos-admin-profiles';
 
@@ -82,7 +82,10 @@ class AdminPage {
 		$asset_file = $assets_dir . 'admin-profiles.asset.php';
 		$asset      = file_exists( $asset_file )
 			? require $asset_file
-			: [ 'dependencies' => [ 'wp-element' ], 'version' => WORKOS_VERSION ];
+			: [
+				'dependencies' => [ 'wp-element' ],
+				'version'      => WORKOS_VERSION,
+			];
 
 		wp_enqueue_script(
 			self::SCRIPT_HANDLE,
