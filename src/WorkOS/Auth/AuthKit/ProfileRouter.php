@@ -25,6 +25,16 @@ defined( 'ABSPATH' ) || exit;
  *
  * Rules live under the `workos_profile_routing_rules` option as an ordered
  * array. The admin UI (task #17) owns editing + reordering.
+ *
+ * Note on missing profiles: `resolve()` always returns a usable Profile,
+ * never null — a request for an unknown slug (`/workos/login/nonexistent`
+ * or `[workos_login_v2 profile="typo"]`) falls through to the default
+ * profile rather than 404ing. This is deliberate: the default profile's
+ * existence is not a secret, and most mis-typed references are genuine
+ * configuration mistakes that are easier to debug when the UI still
+ * renders. Callers that DO need 404 semantics (e.g. `FrontendRoute`
+ * rejecting a bad URL-path slug before even hitting the router) short-
+ * circuit before calling `resolve()`.
  */
 class ProfileRouter {
 
