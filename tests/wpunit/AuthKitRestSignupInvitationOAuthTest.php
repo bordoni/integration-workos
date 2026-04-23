@@ -107,7 +107,7 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 
 		$radar        = new Radar();
 		$rate_limiter = new RateLimiter();
-		$completer    = new LoginCompleter( false );
+		$completer    = new LoginCompleter();
 
 		$signup     = new Signup( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
 		$invitation = new Invitation( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );

@@ -101,7 +101,7 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 
 		$radar        = new Radar();
 		$rate_limiter = new RateLimiter();
-		$completer    = new LoginCompleter( false );
+		$completer    = new LoginCompleter();
 
 		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
 		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );

@@ -19,7 +19,7 @@ use WP_Error;
 class AuthKitLoginCompleterMfaTest extends WPTestCase {
 
 	/**
-	 * Completer under test. `remember=false` to avoid cookie headers in tests.
+	 * Completer under test.
 	 *
 	 * @var LoginCompleter
 	 */
@@ -27,7 +27,7 @@ class AuthKitLoginCompleterMfaTest extends WPTestCase {
 
 	public function setUp(): void {
 		parent::setUp();
-		$this->completer = new LoginCompleter( false );
+		$this->completer = new LoginCompleter();
 	}
 
 	public function tearDown(): void {

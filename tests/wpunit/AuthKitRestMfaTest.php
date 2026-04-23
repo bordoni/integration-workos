@@ -92,7 +92,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 			$this->nonce,
 			new Radar(),
 			new RateLimiter(),
-			new LoginCompleter( false )
+			new LoginCompleter()
 		);
 		add_action( 'rest_api_init', [ $mfa, 'register_routes' ] );
 

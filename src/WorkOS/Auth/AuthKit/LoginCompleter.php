@@ -36,22 +36,14 @@ defined( 'ABSPATH' ) || exit;
 class LoginCompleter {
 
 	/**
-	 * Whether to remember the session (14-day cookie vs 24h).
-	 *
-	 * Matches the existing headless path which always set remember=true.
-	 *
-	 * @var bool
-	 */
-	private bool $remember;
-
-	/**
 	 * Constructor.
 	 *
-	 * @param bool $remember Default remember-me flag. Tests pass false to
-	 *                      avoid polluting cookies on the test request.
+	 * Takes no arguments — every completed AuthKit login is a "remember
+	 * me" session by design (matches the legacy headless path). If that
+	 * ever needs to be tunable per profile it belongs on the Profile
+	 * value object, not as an opaque parameter here.
 	 */
-	public function __construct( bool $remember = true ) {
-		$this->remember = $remember;
+	public function __construct() {
 	}
 
 	/**
@@ -139,7 +131,7 @@ class LoginCompleter {
 
 		Login::store_tokens( $wp_user->ID, $workos_response );
 
-		wp_set_auth_cookie( $wp_user->ID, $this->remember );
+		wp_set_auth_cookie( $wp_user->ID, true );
 		wp_set_current_user( $wp_user->ID );
 
 		/** This action is documented in Auth/Login.php */
