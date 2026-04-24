@@ -53,37 +53,58 @@ class Renderer {
 	/**
 	 * Enqueue the AuthKit bundle, idempotent.
 	 *
+	 * Fires `workos_authkit_enqueue_assets` after the bundle + style are
+	 * enqueued so extenders can register profile-aware companion assets.
+	 *
+	 * @param Profile|null $profile Active profile (null on the very first
+	 *                              call before render_mount() resolves it
+	 *                              — passed to the action when available).
+	 *
 	 * @return void
 	 */
-	public function enqueue(): void {
-		if ( wp_script_is( self::SCRIPT_HANDLE, 'enqueued' ) ) {
-			return;
+	public function enqueue( ?Profile $profile = null ): void {
+		if ( ! wp_script_is( self::SCRIPT_HANDLE, 'enqueued' ) ) {
+			$asset_file = $this->assets_dir . 'authkit.asset.php';
+			$asset      = file_exists( $asset_file )
+				? require $asset_file
+				: [
+					'dependencies' => [ 'wp-element' ],
+					'version'      => WORKOS_VERSION,
+				];
+
+			wp_enqueue_script(
+				self::SCRIPT_HANDLE,
+				$this->assets_url . 'authkit.js',
+				$asset['dependencies'] ?? [ 'wp-element' ],
+				$asset['version'] ?? WORKOS_VERSION,
+				true
+			);
+
+			wp_set_script_translations( self::SCRIPT_HANDLE, 'integration-workos' );
+
+			wp_enqueue_style(
+				self::STYLE_HANDLE,
+				$this->assets_url . 'authkit.css',
+				[],
+				$asset['version'] ?? WORKOS_VERSION
+			);
 		}
 
-		$asset_file = $this->assets_dir . 'authkit.asset.php';
-		$asset      = file_exists( $asset_file )
-			? require $asset_file
-			: [
-				'dependencies' => [ 'wp-element' ],
-				'version'      => WORKOS_VERSION,
-			];
-
-		wp_enqueue_script(
-			self::SCRIPT_HANDLE,
-			$this->assets_url . 'authkit.js',
-			$asset['dependencies'] ?? [ 'wp-element' ],
-			$asset['version'] ?? WORKOS_VERSION,
-			true
-		);
-
-		wp_set_script_translations( self::SCRIPT_HANDLE, 'integration-workos' );
-
-		wp_enqueue_style(
-			self::STYLE_HANDLE,
-			$this->assets_url . 'authkit.css',
-			[],
-			$asset['version'] ?? WORKOS_VERSION
-		);
+		if ( $profile instanceof Profile ) {
+			/**
+			 * Fires after the AuthKit bundle is enqueued for a profile.
+			 *
+			 * Fires on every render — when multiple AuthKit instances
+			 * appear on one page, extenders see each profile in turn.
+			 * Use `wp_enqueue_style()` / `wp_enqueue_script()` here to
+			 * ship per-profile CSS/JS. Depend on the `workos-authkit`
+			 * handle for ordering, plus `wp-plugins` / `wp-components`
+			 * if registering SlotFill plugins.
+			 *
+			 * @param Profile $profile The active Login Profile.
+			 */
+			do_action( 'workos_authkit_enqueue_assets', $profile );
+		}
 	}
 
 	/**
@@ -102,7 +123,7 @@ class Renderer {
 	 * @return string Safe HTML for direct output.
 	 */
 	public function render_mount( Profile $profile, array $context = [] ): string {
-		$this->enqueue();
+		$this->enqueue( $profile );
 
 		$profile_data = $profile->to_array();
 
@@ -113,6 +134,18 @@ class Renderer {
 		$profile_data['methods']  = array_values( $profile_data['methods'] );
 		$profile_data['mfa']      = $profile_data['mfa'] ?? [];
 		$profile_data['branding'] = $this->resolve_branding( $profile );
+
+		/**
+		 * Filters the profile data sent to the React shell.
+		 *
+		 * Use to inject extra config keys a SlotFill plugin needs at the
+		 * client. The shell will receive whatever is returned here as the
+		 * `data-profile` JSON.
+		 *
+		 * @param array   $profile_data Trimmed profile data.
+		 * @param Profile $profile      The active profile.
+		 */
+		$profile_data = (array) apply_filters( 'workos_authkit_profile_data', $profile_data, $profile );
 
 		$attrs = [
 			'id'                    => 'workos-authkit-root',
@@ -146,6 +179,22 @@ class Renderer {
 		$language  = get_bloginfo( 'language' );
 		$mount     = $this->render_mount( $profile, $context );
 
+		/**
+		 * Filters the CSS classes applied to the AuthKit full-page <body>.
+		 *
+		 * Use to give external stylesheets a per-profile hook (e.g. add
+		 * `workos-profile-{slug}` for slug-scoped rules).
+		 *
+		 * @param string[] $classes Default body classes.
+		 * @param Profile  $profile The active profile.
+		 */
+		$body_classes = (array) apply_filters(
+			'workos_authkit_body_classes',
+			[ 'workos-authkit-body', 'workos-profile-' . $profile->get_slug() ],
+			$profile
+		);
+		$body_class   = trim( implode( ' ', array_map( 'sanitize_html_class', $body_classes ) ) );
+
 		/*
 		 * We intentionally do not call wp_head()/wp_footer(): those pull in
 		 * admin and theme chrome we do not want. Instead we call
@@ -160,9 +209,9 @@ class Renderer {
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="robots" content="noindex, nofollow" />
 	<title><?php echo esc_html( sprintf( /* translators: %s: site name */ __( 'Sign in — %s', 'integration-workos' ), $site_name ) ); ?></title>
-		<?php wp_print_styles( self::STYLE_HANDLE ); ?>
+		<?php wp_print_styles(); ?>
 </head>
-<body class="workos-authkit-body" data-site-name="<?php echo esc_attr( $site_name ); ?>" data-lang="<?php echo esc_attr( $language ); ?>">
+<body class="<?php echo esc_attr( $body_class ); ?>" data-site-name="<?php echo esc_attr( $site_name ); ?>" data-lang="<?php echo esc_attr( $language ); ?>">
 	<main class="workos-authkit-main">
 		<?php
 		// render_mount() has already escaped every dynamic value. It
@@ -171,7 +220,7 @@ class Renderer {
 		echo $mount; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		?>
 	</main>
-		<?php wp_print_scripts( self::SCRIPT_HANDLE ); ?>
+		<?php wp_print_scripts(); ?>
 </body>
 </html>
 		<?php
@@ -180,6 +229,9 @@ class Renderer {
 
 	/**
 	 * Resolve the profile's branding, falling back to sensible defaults.
+	 *
+	 * Logo resolution chain: per-profile attachment → WordPress Site Icon
+	 * (Settings → General) → empty string (no logo rendered).
 	 *
 	 * @param Profile $profile Active profile.
 	 *
@@ -193,12 +245,27 @@ class Renderer {
 			$logo_url = (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] );
 		}
 
-		return [
+		if ( '' === $logo_url ) {
+			$logo_url = (string) get_site_icon_url( 192 );
+		}
+
+		$resolved = [
 			'logo_url'      => $logo_url,
 			'primary_color' => (string) ( $branding['primary_color'] ?? '' ),
 			'heading'       => (string) ( $branding['heading'] ?? '' ),
 			'subheading'    => (string) ( $branding['subheading'] ?? '' ),
 		];
+
+		/**
+		 * Filters the resolved branding for an AuthKit render.
+		 *
+		 * Use to override the logo fallback chain or rewrite any branding
+		 * field at the last mile before it lands in the data-profile JSON.
+		 *
+		 * @param array   $resolved Resolved branding.
+		 * @param Profile $profile  The active profile.
+		 */
+		return (array) apply_filters( 'workos_authkit_branding', $resolved, $profile );
 	}
 
 	/**

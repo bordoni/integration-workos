@@ -76,6 +76,9 @@ class AdminPage {
 			return;
 		}
 
+		// LogoField in admin-profiles uses wp.media() for attachment selection.
+		wp_enqueue_media();
+
 		$assets_url = trailingslashit( WORKOS_URL . 'build' );
 		$assets_dir = trailingslashit( WORKOS_DIR . 'build' );
 

@@ -28,12 +28,35 @@ import {
 	Card,
 	Divider,
 	Field,
+	FlowCard,
 	Heading,
 	Input,
 	LinkButton,
 	Spinner,
 	Subheading,
 } from './ui';
+import {
+	AuthKitSlot,
+	SLOT_AFTER_FORM,
+	SLOT_AFTER_PRIMARY_ACTION,
+	SLOT_BEFORE_FORM,
+	SLOT_PICKER_AFTER_METHODS,
+	SLOT_PICKER_BEFORE_METHODS,
+} from './slots';
+import type { AuthKitSlotFillProps } from './slots';
+
+function fillPropsFor(
+	profile: Profile,
+	step: Step,
+	flow?: string
+): AuthKitSlotFillProps {
+	return {
+		step,
+		profileSlug: profile.slug,
+		methods: profile.methods || [],
+		flow,
+	};
+}
 
 function methodLabel( method: AuthMethod ): string {
 	switch ( method ) {
@@ -93,14 +116,41 @@ export function MethodPicker( { profile, onChoose, onError }: MethodPickerProps 
 		}
 	};
 
+	const fillProps = fillPropsFor( profile, 'pick' );
+	const logoAlt =
+		profile.branding.heading || __( 'Sign in', 'integration-workos' );
+
 	return (
-		<Card>
-			<Heading>
-				{ profile.branding.heading || __( 'Sign in', 'integration-workos' ) }
-			</Heading>
-			{ profile.branding.subheading && (
-				<Subheading>{ profile.branding.subheading }</Subheading>
-			) }
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={ logoAlt }
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ profile.branding.heading ||
+							__( 'Sign in', 'integration-workos' ) }
+					</Heading>
+					{ profile.branding.subheading && (
+						<Subheading>{ profile.branding.subheading }</Subheading>
+					) }
+				</>
+			}
+			footer={
+				profile.signup?.enabled && ! profile.signup?.require_invite ? (
+					<p className="wa-footer">
+						{ __( 'New here?', 'integration-workos' ) }{ ' ' }
+						<LinkButton onClick={ () => onChoose( 'signup' ) }>
+							{ __( 'Create an account', 'integration-workos' ) }
+						</LinkButton>
+					</p>
+				) : null
+			}
+		>
+			<AuthKitSlot
+				name={ SLOT_PICKER_BEFORE_METHODS }
+				fillProps={ fillProps }
+			/>
 
 			{ oauthMethods.map( ( method ) => (
 				<Button
@@ -128,15 +178,11 @@ export function MethodPicker( { profile, onChoose, onError }: MethodPickerProps 
 				</Button>
 			) }
 
-			{ profile.signup?.enabled && ! profile.signup?.require_invite && (
-				<p className="wa-footer">
-					{ __( 'New here?', 'integration-workos' ) }{ ' ' }
-					<LinkButton onClick={ () => onChoose( 'signup' ) }>
-						{ __( 'Create an account', 'integration-workos' ) }
-					</LinkButton>
-				</p>
-			) }
-		</Card>
+			<AuthKitSlot
+				name={ SLOT_PICKER_AFTER_METHODS }
+				fillProps={ fillProps }
+			/>
+		</FlowCard>
 	);
 }
 
@@ -177,11 +223,39 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 		onSuccess( result );
 	};
 
+	const fillProps = fillPropsFor( profile, 'password', 'password' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Sign in', 'integration-workos' ) }</Heading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={ <Heading>{ __( 'Sign in', 'integration-workos' ) }</Heading> }
+			footer={
+				<>
+					{ profile.password_reset_flow && (
+						<p className="wa-footer">
+							<LinkButton onClick={ () => onBack( 'reset' ) }>
+								{ __(
+									'Forgot your password?',
+									'integration-workos'
+								) }
+							</LinkButton>
+						</p>
+					) }
+					<p className="wa-footer">
+						<LinkButton onClick={ () => onBack() }>
+							{ __( '← Back', 'integration-workos' ) }
+						</LinkButton>
+					</p>
+				</>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field label={ __( 'Email', 'integration-workos' ) } htmlFor="wa-email">
 					<Input
 						id="wa-email"
@@ -203,23 +277,16 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 						required={ true }
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Sign in', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-			{ profile.password_reset_flow && (
-				<p className="wa-footer">
-					<LinkButton onClick={ () => onBack( 'reset' ) }>
-						{ __( 'Forgot your password?', 'integration-workos' ) }
-					</LinkButton>
-				</p>
-			) }
-			<p className="wa-footer">
-				<LinkButton onClick={ () => onBack() }>
-					{ __( '← Back', 'integration-workos' ) }
-				</LinkButton>
-			</p>
-		</Card>
+		</FlowCard>
 	);
 }
 
@@ -227,11 +294,12 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 
 interface MagicSendProps {
 	client: AuthKitClient;
+	profile: Profile;
 	onCodeSent: ( email: string ) => void;
 	onBack: () => void;
 }
 
-export function MagicSend( { client, onCodeSent, onBack }: MagicSendProps ) {
+export function MagicSend( { client, profile, onCodeSent, onBack }: MagicSendProps ) {
 	const [ email, setEmail ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
@@ -249,14 +317,39 @@ export function MagicSend( { client, onCodeSent, onBack }: MagicSendProps ) {
 		onCodeSent( email );
 	};
 
+	const fillProps = fillPropsFor( profile, 'magic_send', 'magic_send' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Sign in with a code', 'integration-workos' ) }</Heading>
-			<Subheading>
-				{ __( 'We’ll email you a short code to sign in.', 'integration-workos' ) }
-			</Subheading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Sign in with a code', 'integration-workos' ) }
+					</Heading>
+					<Subheading>
+						{ __(
+							'We’ll email you a short code to sign in.',
+							'integration-workos'
+						) }
+					</Subheading>
+				</>
+			}
+			footer={
+				<p className="wa-footer">
+					<LinkButton onClick={ onBack }>
+						{ __( '← Back', 'integration-workos' ) }
+					</LinkButton>
+				</p>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field label={ __( 'Email', 'integration-workos' ) } htmlFor="wa-email-magic">
 					<Input
 						id="wa-email-magic"
@@ -268,16 +361,16 @@ export function MagicSend( { client, onCodeSent, onBack }: MagicSendProps ) {
 						required={ true }
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Send code', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>
-					{ __( '← Back', 'integration-workos' ) }
-				</LinkButton>
-			</p>
-		</Card>
+		</FlowCard>
 	);
 }
 
@@ -326,18 +419,40 @@ export function MagicVerify( {
 		onSuccess( result );
 	};
 
+	const fillProps = fillPropsFor( profile, 'magic_verify', 'magic_verify' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Enter your code', 'integration-workos' ) }</Heading>
-			<Subheading>
-				{ sprintf(
-					/* translators: %s: email address. */
-					__( 'We sent a code to %s.', 'integration-workos' ),
-					email
-				) }
-			</Subheading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Enter your code', 'integration-workos' ) }
+					</Heading>
+					<Subheading>
+						{ sprintf(
+							/* translators: %s: email address. */
+							__( 'We sent a code to %s.', 'integration-workos' ),
+							email
+						) }
+					</Subheading>
+				</>
+			}
+			footer={
+				<p className="wa-footer">
+					<LinkButton onClick={ onBack }>
+						{ __( '← Back', 'integration-workos' ) }
+					</LinkButton>
+				</p>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field label={ __( 'Code', 'integration-workos' ) } htmlFor="wa-code">
 					<Input
 						id="wa-code"
@@ -350,16 +465,16 @@ export function MagicVerify( {
 						placeholder="123456"
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Sign in', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>
-					{ __( '← Back', 'integration-workos' ) }
-				</LinkButton>
-			</p>
-		</Card>
+		</FlowCard>
 	);
 }
 
@@ -421,22 +536,37 @@ export function MfaChallenge( {
 		onSuccess( data as LoginSuccess );
 	};
 
+	const fillProps = fillPropsFor( profile, 'mfa', 'mfa' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Verify your identity', 'integration-workos' ) }</Heading>
-			<Subheading>
-				{ firstFactor?.type === 'sms'
-					? __(
-							'Enter the code we just sent to your phone.',
-							'integration-workos'
-					  )
-					: __(
-							'Enter the 6-digit code from your authenticator app.',
-							'integration-workos'
-					  ) }
-			</Subheading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Verify your identity', 'integration-workos' ) }
+					</Heading>
+					<Subheading>
+						{ firstFactor?.type === 'sms'
+							? __(
+									'Enter the code we just sent to your phone.',
+									'integration-workos'
+							  )
+							: __(
+									'Enter the 6-digit code from your authenticator app.',
+									'integration-workos'
+							  ) }
+					</Subheading>
+				</>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field label={ __( 'Code', 'integration-workos' ) } htmlFor="wa-mfa-code">
 					<Input
 						id="wa-mfa-code"
@@ -449,11 +579,16 @@ export function MfaChallenge( {
 						placeholder="123456"
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading || ! challengeId }>
 					{ loading ? <Spinner /> : __( 'Verify', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-		</Card>
+		</FlowCard>
 	);
 }
 
@@ -466,11 +601,12 @@ interface SignupContext {
 
 interface SignupProps {
 	client: AuthKitClient;
+	profile: Profile;
 	onVerify: ( ctx: SignupContext ) => void;
 	onBack: () => void;
 }
 
-export function Signup( { client, onVerify, onBack }: SignupProps ) {
+export function Signup( { client, profile, onVerify, onBack }: SignupProps ) {
 	const [ email, setEmail ] = useState( '' );
 	const [ password, setPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
@@ -498,11 +634,34 @@ export function Signup( { client, onVerify, onBack }: SignupProps ) {
 		}
 	};
 
+	const fillProps = fillPropsFor( profile, 'signup', 'signup' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Create your account', 'integration-workos' ) }</Heading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<Heading>
+					{ __( 'Create your account', 'integration-workos' ) }
+				</Heading>
+			}
+			footer={
+				<p className="wa-footer">
+					<LinkButton onClick={ onBack }>
+						{ __(
+							'Already have an account? Sign in',
+							'integration-workos'
+						) }
+					</LinkButton>
+				</p>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field
 					label={ __( 'Email', 'integration-workos' ) }
 					htmlFor="wa-signup-email"
@@ -530,16 +689,16 @@ export function Signup( { client, onVerify, onBack }: SignupProps ) {
 						required={ true }
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Create account', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>
-					{ __( 'Already have an account? Sign in', 'integration-workos' ) }
-				</LinkButton>
-			</p>
-		</Card>
+		</FlowCard>
 	);
 }
 
@@ -547,12 +706,19 @@ export function Signup( { client, onVerify, onBack }: SignupProps ) {
 
 interface SignupVerifyProps {
 	client: AuthKitClient;
+	profile: Profile;
 	userId: string;
 	email: string;
 	onDone: ( data: unknown ) => void;
 }
 
-export function SignupVerify( { client, userId, email, onDone }: SignupVerifyProps ) {
+export function SignupVerify( {
+	client,
+	profile,
+	userId,
+	email,
+	onDone,
+}: SignupVerifyProps ) {
 	const [ code, setCode ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
@@ -573,18 +739,33 @@ export function SignupVerify( { client, userId, email, onDone }: SignupVerifyPro
 		onDone( data );
 	};
 
+	const fillProps = fillPropsFor( profile, 'signup_verify', 'signup_verify' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Verify your email', 'integration-workos' ) }</Heading>
-			<Subheading>
-				{ sprintf(
-					/* translators: %s: email address. */
-					__( 'Enter the code we sent to %s.', 'integration-workos' ),
-					email
-				) }
-			</Subheading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Verify your email', 'integration-workos' ) }
+					</Heading>
+					<Subheading>
+						{ sprintf(
+							/* translators: %s: email address. */
+							__( 'Enter the code we sent to %s.', 'integration-workos' ),
+							email
+						) }
+					</Subheading>
+				</>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field label={ __( 'Code', 'integration-workos' ) } htmlFor="wa-verify">
 					<Input
 						id="wa-verify"
@@ -596,11 +777,16 @@ export function SignupVerify( { client, userId, email, onDone }: SignupVerifyPro
 						placeholder="123456"
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Verify', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-		</Card>
+		</FlowCard>
 	);
 }
 
@@ -608,11 +794,12 @@ export function SignupVerify( { client, userId, email, onDone }: SignupVerifyPro
 
 interface ResetRequestProps {
 	client: AuthKitClient;
+	profile: Profile;
 	onSent: ( email: string ) => void;
 	onBack: () => void;
 }
 
-export function ResetRequest( { client, onSent, onBack }: ResetRequestProps ) {
+export function ResetRequest( { client, profile, onSent, onBack }: ResetRequestProps ) {
 	const [ email, setEmail ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
@@ -632,17 +819,39 @@ export function ResetRequest( { client, onSent, onBack }: ResetRequestProps ) {
 		onSent( email );
 	};
 
+	const fillProps = fillPropsFor( profile, 'reset', 'reset' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Reset your password', 'integration-workos' ) }</Heading>
-			<Subheading>
-				{ __(
-					'Enter your email and we’ll send a reset link.',
-					'integration-workos'
-				) }
-			</Subheading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Reset your password', 'integration-workos' ) }
+					</Heading>
+					<Subheading>
+						{ __(
+							'Enter your email and we’ll send a reset link.',
+							'integration-workos'
+						) }
+					</Subheading>
+				</>
+			}
+			footer={
+				<p className="wa-footer">
+					<LinkButton onClick={ onBack }>
+						{ __( '← Back', 'integration-workos' ) }
+					</LinkButton>
+				</p>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field
 					label={ __( 'Email', 'integration-workos' ) }
 					htmlFor="wa-reset-email"
@@ -657,26 +866,27 @@ export function ResetRequest( { client, onSent, onBack }: ResetRequestProps ) {
 						required={ true }
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Send reset link', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-			<p className="wa-footer">
-				<LinkButton onClick={ onBack }>
-					{ __( '← Back', 'integration-workos' ) }
-				</LinkButton>
-			</p>
-		</Card>
+		</FlowCard>
 	);
 }
 
 interface ResetConfirmProps {
 	client: AuthKitClient;
+	profile: Profile;
 	token: string;
 	onDone: () => void;
 }
 
-export function ResetConfirm( { client, token, onDone }: ResetConfirmProps ) {
+export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmProps ) {
 	const [ password, setPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
@@ -698,28 +908,55 @@ export function ResetConfirm( { client, token, onDone }: ResetConfirmProps ) {
 		setSuccess( true );
 	};
 
+	const fillProps = fillPropsFor( profile, 'reset_confirm', 'reset_confirm' );
+	const logoAlt =
+		profile.branding.heading || __( 'Sign in', 'integration-workos' );
+
 	if ( success ) {
 		return (
-			<Card>
-				<Heading>{ __( 'Password reset', 'integration-workos' ) }</Heading>
-				<Subheading>
-					{ __(
-						'You can now sign in with your new password.',
-						'integration-workos'
-					) }
-				</Subheading>
+			<FlowCard
+				logoUrl={ profile.branding.logo_url }
+				logoAlt={ logoAlt }
+				fillProps={ fillProps }
+				header={
+					<>
+						<Heading>
+							{ __( 'Password reset', 'integration-workos' ) }
+						</Heading>
+						<Subheading>
+							{ __(
+								'You can now sign in with your new password.',
+								'integration-workos'
+							) }
+						</Subheading>
+					</>
+				}
+			>
 				<Button onClick={ onDone }>
 					{ __( 'Continue to sign in', 'integration-workos' ) }
 				</Button>
-			</Card>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
+			</FlowCard>
 		);
 	}
 
 	return (
-		<Card>
-			<Heading>{ __( 'Set a new password', 'integration-workos' ) }</Heading>
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={ logoAlt }
+			fillProps={ fillProps }
+			header={
+				<Heading>
+					{ __( 'Set a new password', 'integration-workos' ) }
+				</Heading>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field
 					label={ __( 'New password', 'integration-workos' ) }
 					htmlFor="wa-new-pw"
@@ -734,11 +971,16 @@ export function ResetConfirm( { client, token, onDone }: ResetConfirmProps ) {
 						required={ true }
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Save new password', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-		</Card>
+		</FlowCard>
 	);
 }
 
@@ -801,20 +1043,35 @@ export function InvitationAccept( {
 		onSuccess( data as LoginSuccess );
 	};
 
+	const fillProps = fillPropsFor( profile, 'invitation', 'invitation' );
+
 	return (
-		<Card>
-			<Heading>{ __( 'Accept your invitation', 'integration-workos' ) }</Heading>
-			{ invitation && (
-				<Subheading>
-					{ sprintf(
-						/* translators: %s: email address. */
-						__( 'Welcome, %s.', 'integration-workos' ),
-						invitation.email
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Accept your invitation', 'integration-workos' ) }
+					</Heading>
+					{ invitation && (
+						<Subheading>
+							{ sprintf(
+								/* translators: %s: email address. */
+								__( 'Welcome, %s.', 'integration-workos' ),
+								invitation.email
+							) }
+						</Subheading>
 					) }
-				</Subheading>
-			) }
+				</>
+			}
+		>
 			{ error && <Alert variant="error">{ error }</Alert> }
 			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
 				<Field
 					label={ __( 'Set a password', 'integration-workos' ) }
 					htmlFor="wa-inv-pw"
@@ -829,11 +1086,16 @@ export function InvitationAccept( {
 						required={ true }
 					/>
 				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
 				<Button type="submit" disabled={ loading }>
 					{ loading ? <Spinner /> : __( 'Accept invitation', 'integration-workos' ) }
 				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
 			</form>
-		</Card>
+		</FlowCard>
 	);
 }
 

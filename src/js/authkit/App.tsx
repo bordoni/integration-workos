@@ -145,6 +145,7 @@ export function App( props: AppProps ) {
 			return (
 				<MagicSend
 					client={ client }
+					profile={ profile }
 					onCodeSent={ ( email ) => {
 						setMagicEmail( email );
 						setStep( 'magic_verify' );
@@ -180,6 +181,7 @@ export function App( props: AppProps ) {
 			return (
 				<Signup
 					client={ client }
+					profile={ profile }
 					onVerify={ ( ctx ) => {
 						setSignupContext( ctx );
 						setStep( 'signup_verify' );
@@ -192,6 +194,7 @@ export function App( props: AppProps ) {
 			return (
 				<SignupVerify
 					client={ client }
+					profile={ profile }
 					userId={ signupContext?.userId ?? '' }
 					email={ signupContext?.email ?? '' }
 					onDone={ () => setStep( 'pick' ) }
@@ -202,6 +205,7 @@ export function App( props: AppProps ) {
 			return (
 				<ResetRequest
 					client={ client }
+					profile={ profile }
 					onSent={ () => setStep( 'reset_sent' ) }
 					onBack={ () => setStep( 'password' ) }
 				/>
@@ -229,6 +233,7 @@ export function App( props: AppProps ) {
 			return (
 				<ResetConfirm
 					client={ client }
+					profile={ profile }
 					token={ resetToken ?? '' }
 					onDone={ () => setStep( 'pick' ) }
 				/>

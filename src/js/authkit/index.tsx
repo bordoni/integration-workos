@@ -6,7 +6,9 @@
  * data-* attributes on that root div; we never fetch config after mount.
  */
 
+import { SlotFillProvider } from '@wordpress/components';
 import { createRoot } from '@wordpress/element';
+import { PluginArea } from '@wordpress/plugins';
 import { App } from './App';
 import type { AppProps } from './App';
 import type { Profile, Step } from './types';
@@ -66,7 +68,20 @@ function mount(): void {
 		return;
 	}
 
-	createRoot( root ).render( <App { ...config } /> );
+	createRoot( root ).render(
+		<SlotFillProvider>
+			<App { ...config } />
+			<PluginArea scope="workos-authkit" />
+		</SlotFillProvider>
+	);
+
+	// Signal to non-React extenders that the shell is mounted and slots are
+	// live. Carries the active profile slug so listeners can gate behavior.
+	document.dispatchEvent(
+		new CustomEvent( 'workos-authkit:mounted', {
+			detail: { profileSlug: config.profile.slug },
+		} )
+	);
 }
 
 if ( document.readyState === 'loading' ) {

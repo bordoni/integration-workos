@@ -74,3 +74,25 @@
 	gap: 10px;
 	margin-top: var(--wpa-gap);
 }
+
+#workos-profiles-admin-root .wpa-logo-field .wpa-logo-preview {
+	max-width: 200px;
+	max-height: 80px;
+	width: auto;
+	height: auto;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	padding: 8px;
+	background: #fff;
+}
+
+#workos-profiles-admin-root .wpa-logo-field .wpa-logo-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+#workos-profiles-admin-root .wpa-logo-field .description {
+	font-style: italic;
+	color: #646970;
+}

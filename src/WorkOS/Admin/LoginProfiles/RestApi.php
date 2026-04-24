@@ -136,9 +136,7 @@ class RestApi {
 	 */
 	public function list_profiles(): WP_REST_Response {
 		$profiles = array_map(
-			static function ( Profile $profile ): array {
-				return $profile->to_array();
-			},
+			[ $this, 'shape_profile' ],
 			$this->repository->all()
 		);
 
@@ -162,7 +160,7 @@ class RestApi {
 			);
 		}
 
-		return new WP_REST_Response( $profile->to_array(), 200 );
+		return new WP_REST_Response( $this->shape_profile( $profile ), 200 );
 	}
 
 	/**
@@ -189,7 +187,7 @@ class RestApi {
 			return $this->error_with_status( $saved, 400 );
 		}
 
-		return new WP_REST_Response( $saved->to_array(), 201 );
+		return new WP_REST_Response( $this->shape_profile( $saved ), 201 );
 	}
 
 	/**
@@ -235,7 +233,32 @@ class RestApi {
 			return $this->error_with_status( $saved, 400 );
 		}
 
-		return new WP_REST_Response( $saved->to_array(), 200 );
+		return new WP_REST_Response( $this->shape_profile( $saved ), 200 );
+	}
+
+	/**
+	 * Shape a Profile for REST output.
+	 *
+	 * Adds `branding.logo_url` (resolved from the attachment ID) so the React
+	 * editor can show a preview without a second round-trip.
+	 *
+	 * @param Profile $profile Profile to shape.
+	 *
+	 * @return array
+	 */
+	private function shape_profile( Profile $profile ): array {
+		$data     = $profile->to_array();
+		$branding = $data['branding'] ?? [];
+
+		$logo_url = '';
+		if ( ! empty( $branding['logo_attachment_id'] ) ) {
+			$logo_url = (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] );
+		}
+
+		$branding['logo_url'] = $logo_url;
+		$data['branding']     = $branding;
+
+		return $data;
 	}
 
 	/**

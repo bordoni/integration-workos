@@ -145,6 +145,130 @@ class AuthKitRendererTest extends WPTestCase {
 	}
 
 	/**
+	 * resolve_branding falls back to the WordPress Site Icon when no
+	 * per-profile logo is set.
+	 */
+	public function test_render_mount_falls_back_to_site_icon_for_logo(): void {
+		$attachment_id = self::factory()->attachment->create_object(
+			'site-icon.png',
+			0,
+			[
+				'post_mime_type' => 'image/png',
+				'post_type'      => 'attachment',
+			]
+		);
+		update_option( 'site_icon', $attachment_id );
+
+		$profile = Profile::from_array(
+			[
+				'slug'  => 'members',
+				'title' => 'Members',
+				// No branding.logo_attachment_id — should fall back.
+			]
+		);
+
+		$html = $this->renderer->render_mount( $profile );
+
+		$site_icon_url = (string) get_site_icon_url( 192 );
+		$this->assertNotEmpty( $site_icon_url, 'Site Icon should resolve to a URL.' );
+
+		// The data-profile JSON has forward slashes escaped as `\/`, and the
+		// attribute is HTML-escaped. Match against the filename, which is
+		// stable across both escapings.
+		$this->assertStringContainsString(
+			'site-icon.png',
+			$html,
+			'Render output should embed the Site Icon URL when no per-profile logo is set.'
+		);
+
+		delete_option( 'site_icon' );
+		wp_delete_attachment( $attachment_id, true );
+	}
+
+	/**
+	 * The workos_authkit_enqueue_assets action fires with the active Profile.
+	 */
+	public function test_render_mount_fires_enqueue_assets_action_with_profile(): void {
+		$received = null;
+		$cb       = static function ( $profile ) use ( &$received ): void {
+			$received = $profile;
+		};
+		add_action( 'workos_authkit_enqueue_assets', $cb );
+
+		$profile = Profile::from_array(
+			[
+				'slug'  => 'members',
+				'title' => 'Members',
+			]
+		);
+		$this->renderer->render_mount( $profile );
+
+		remove_action( 'workos_authkit_enqueue_assets', $cb );
+
+		$this->assertInstanceOf(
+			Profile::class,
+			$received,
+			'enqueue_assets action must receive a Profile instance.'
+		);
+		$this->assertSame( 'members', $received->get_slug() );
+	}
+
+	/**
+	 * workos_authkit_branding filter mutates the resolved branding before it
+	 * lands in the data-profile JSON.
+	 */
+	public function test_workos_authkit_branding_filter_can_override_logo(): void {
+		$cb = static function ( $branding ) {
+			$branding['logo_url'] = 'https://example.test/custom-logo.png';
+			return $branding;
+		};
+		add_filter( 'workos_authkit_branding', $cb );
+
+		$profile = Profile::from_array(
+			[
+				'slug'  => 'members',
+				'title' => 'Members',
+			]
+		);
+		$html = $this->renderer->render_mount( $profile );
+
+		remove_filter( 'workos_authkit_branding', $cb );
+
+		$this->assertStringContainsString(
+			'custom-logo.png',
+			$html,
+			'branding filter should be able to inject a custom logo_url.'
+		);
+	}
+
+	/**
+	 * workos_authkit_profile_data filter mutates the data-profile payload.
+	 */
+	public function test_workos_authkit_profile_data_filter_can_inject_keys(): void {
+		$cb = static function ( $data ) {
+			$data['__test_marker'] = 'present';
+			return $data;
+		};
+		add_filter( 'workos_authkit_profile_data', $cb );
+
+		$profile = Profile::from_array(
+			[
+				'slug'  => 'members',
+				'title' => 'Members',
+			]
+		);
+		$html = $this->renderer->render_mount( $profile );
+
+		remove_filter( 'workos_authkit_profile_data', $cb );
+
+		$this->assertStringContainsString(
+			'__test_marker',
+			$html,
+			'profile_data filter should be able to inject custom keys into the data-profile JSON.'
+		);
+	}
+
+	/**
 	 * LoginTakeover short-circuits `action=login` for a custom profile.
 	 *
 	 * We assert the should_takeover decision via the resolved profile's

@@ -46,6 +46,14 @@
 	box-shadow: 0 2px 8px rgba( 0, 0, 0, 0.04 );
 }
 
+#workos-authkit-root .wa-logo {
+	display: block;
+	max-height: 64px;
+	width: auto;
+	margin: 0 auto 8px;
+	object-fit: contain;
+}
+
 #workos-authkit-root .wa-heading {
 	font-size: 1.5rem;
 	margin: 0 0 4px;

@@ -15,7 +15,9 @@
 		"@types/react-dom": "^18.3.0",
 		"@types/wordpress__element": "^2.14.0",
 		"@types/wordpress__i18n": "^3.11.0",
+		"@wordpress/components": "^32.6.0",
 		"@wordpress/i18n": "^6.17.0",
+		"@wordpress/plugins": "^7.44.0",
 		"@wordpress/scripts": "^30.0",
 		"typescript": "^5.5.0"
 	},

@@ -7,6 +7,14 @@
  */
 
 import type { ReactNode } from 'react';
+import {
+	AuthKitSlot,
+	SLOT_AFTER_FOOTER,
+	SLOT_AFTER_HEADER,
+	SLOT_BEFORE_FOOTER,
+	SLOT_BEFORE_HEADER,
+} from './slots';
+import type { AuthKitSlotFillProps } from './slots';
 
 interface ButtonProps {
 	children?: ReactNode;
@@ -119,6 +127,58 @@ export function Alert( { variant = 'info', children }: AlertProps ) {
 
 export function Card( { children }: { children?: ReactNode } ) {
 	return <div className="wa-card">{ children }</div>;
+}
+
+interface LogoProps {
+	url?: string;
+	alt: string;
+}
+
+export function Logo( { url, alt }: LogoProps ) {
+	if ( ! url ) {
+		return null;
+	}
+	return <img className="wa-logo" src={ url } alt={ alt } />;
+}
+
+interface FlowCardProps {
+	logoUrl?: string;
+	logoAlt: string;
+	fillProps: AuthKitSlotFillProps;
+	header?: ReactNode;
+	footer?: ReactNode;
+	children?: ReactNode;
+}
+
+/**
+ * Standard wrapper for every AuthKit flow card.
+ *
+ * Hosts the per-profile logo plus the four card-level Slots
+ * (beforeHeader, afterHeader, beforeFooter, afterFooter). Flow components
+ * pass their heading/subheading via `header`, the form/buttons as
+ * `children`, and any back-links / secondary actions via `footer` so the
+ * slot ordering stays consistent across every step.
+ */
+export function FlowCard( {
+	logoUrl,
+	logoAlt,
+	fillProps,
+	header,
+	footer,
+	children,
+}: FlowCardProps ) {
+	return (
+		<Card>
+			<AuthKitSlot name={ SLOT_BEFORE_HEADER } fillProps={ fillProps } />
+			<Logo url={ logoUrl } alt={ logoAlt } />
+			{ header }
+			<AuthKitSlot name={ SLOT_AFTER_HEADER } fillProps={ fillProps } />
+			{ children }
+			<AuthKitSlot name={ SLOT_BEFORE_FOOTER } fillProps={ fillProps } />
+			{ footer }
+			<AuthKitSlot name={ SLOT_AFTER_FOOTER } fillProps={ fillProps } />
+		</Card>
+	);
 }
 
 export function Heading( { children }: { children?: ReactNode } ) {

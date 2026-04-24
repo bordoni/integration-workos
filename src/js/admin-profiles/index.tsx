@@ -17,7 +17,39 @@ declare global {
 			restUrl: string;
 			nonce: string;
 		};
+		wp?: {
+			media?: ( config: WpMediaConfig ) => WpMediaFrame;
+		};
 	}
+}
+
+interface WpMediaConfig {
+	title?: string;
+	button?: { text?: string };
+	multiple?: boolean;
+	library?: { type?: string };
+}
+
+interface WpMediaAttachment {
+	id: number;
+	url: string;
+	alt?: string;
+	filename?: string;
+}
+
+interface WpMediaSelection {
+	first(): WpMediaAttachment;
+	toJSON(): WpMediaAttachment[];
+}
+
+interface WpMediaState {
+	get( key: string ): WpMediaSelection;
+}
+
+interface WpMediaFrame {
+	on( event: 'select', cb: () => void ): void;
+	open(): void;
+	state(): WpMediaState;
 }
 
 type AuthMethod =
@@ -45,6 +77,7 @@ interface Profile {
 	mfa: { enforce: MfaEnforce; factors: MfaFactor[] };
 	branding: {
 		logo_attachment_id: number;
+		logo_url?: string;
 		primary_color: string;
 		heading: string;
 		subheading: string;
@@ -328,6 +361,73 @@ function OrganizationField( {
 	);
 }
 
+interface LogoFieldProps {
+	attachmentId: number;
+	url?: string;
+	onChange: ( id: number, url: string ) => void;
+}
+
+/**
+ * Logo picker for the Branding fieldset. Opens the WordPress media modal
+ * (`wp.media`) — available because AdminPage.php calls `wp_enqueue_media()`
+ * on this page. Stores the chosen attachment ID; the preview thumbnail
+ * uses the URL the modal returns (or the URL the REST API resolved on
+ * load for an existing profile).
+ */
+function LogoField( { attachmentId, url, onChange }: LogoFieldProps ) {
+	const open = (): void => {
+		if ( ! window.wp?.media ) {
+			return;
+		}
+		const frame = window.wp.media( {
+			title: __( 'Select login logo', 'integration-workos' ),
+			button: { text: __( 'Use this image', 'integration-workos' ) },
+			multiple: false,
+			library: { type: 'image' },
+		} );
+		frame.on( 'select', () => {
+			const attachment = frame.state().get( 'selection' ).first();
+			onChange( attachment.id, attachment.url );
+		} );
+		frame.open();
+	};
+
+	return (
+		<div className="wpa-field wpa-logo-field">
+			<span>{ __( 'Logo', 'integration-workos' ) }</span>
+			{ attachmentId > 0 && url && (
+				<img
+					className="wpa-logo-preview"
+					src={ url }
+					alt={ __( 'Selected logo', 'integration-workos' ) }
+				/>
+			) }
+			<div className="wpa-logo-actions">
+				<button type="button" className="button" onClick={ open }>
+					{ attachmentId > 0
+						? __( 'Replace logo', 'integration-workos' )
+						: __( 'Choose logo', 'integration-workos' ) }
+				</button>
+				{ attachmentId > 0 && (
+					<button
+						type="button"
+						className="button button-link-delete"
+						onClick={ () => onChange( 0, '' ) }
+					>
+						{ __( 'Remove', 'integration-workos' ) }
+					</button>
+				) }
+			</div>
+			<span className="description">
+				{ __(
+					'Defaults to the WordPress Site Icon when no per-profile logo is set.',
+					'integration-workos'
+				) }
+			</span>
+		</div>
+	);
+}
+
 function emptyProfile(): Profile {
 	return {
 		id: 0,
@@ -341,6 +441,7 @@ function emptyProfile(): Profile {
 		mfa: { enforce: 'if_required', factors: [ 'totp' ] },
 		branding: {
 			logo_attachment_id: 0,
+			logo_url: '',
 			primary_color: '',
 			heading: '',
 			subheading: '',
@@ -505,6 +606,13 @@ function Editor( {
 
 			<fieldset className="wpa-fieldset">
 				<legend>{ __( 'Branding', 'integration-workos' ) }</legend>
+				<LogoField
+					attachmentId={ data.branding.logo_attachment_id }
+					url={ data.branding.logo_url }
+					onChange={ ( id, url ) =>
+						setBranding( { logo_attachment_id: id, logo_url: url } )
+					}
+				/>
 				<TextField
 					label={ __( 'Heading', 'integration-workos' ) }
 					value={ data.branding.heading }

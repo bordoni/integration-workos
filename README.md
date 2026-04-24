@@ -158,6 +158,12 @@ Each profile stores:
 | `post_login_redirect`    | URL the React shell navigates to on success (beats `redirect_to`)|
 | `mode`                   | `custom` (React) or `authkit_redirect` (legacy)                  |
 
+The `branding.logo` field defaults to the WordPress Site Icon when no
+per-profile logo is set. See
+[`docs/extending-the-login-ui.md`](docs/extending-the-login-ui.md) for the
+full developer guide on injecting React elements (SlotFill), enqueuing
+per-profile CSS/JS, and the available PHP filters.
+
 ### Profile routing rules
 
 Rules stored under the `workos_profile_routing_rules` option pick the right

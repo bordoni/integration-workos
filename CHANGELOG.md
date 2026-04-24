@@ -81,6 +81,35 @@ browser only ever talks to `/wp-json/workos/v1/auth/*`.
   `login-button-frontend.js` now ships through webpack so its
   `wp-i18n` dependency is declared in its `.asset.php`.
 
+#### Login UI extensibility
+
+- **WordPress SlotFill** — the AuthKit React shell mounts inside a
+  `SlotFillProvider` + `PluginArea scope="workos-authkit"`. Nine named
+  slots (`workos.authkit.beforeHeader`, `afterHeader`, `beforeForm`,
+  `afterForm`, `afterPrimaryAction`, `beforeFooter`, `afterFooter`,
+  `methodPicker.beforeMethods`, `methodPicker.afterMethods`) let other
+  plugins inject React elements via `registerPlugin()` + `<Fill>`.
+  Each slot's `fillProps` carries the active `step`, `profileSlug`,
+  enabled `methods`, and the current `flow`.
+- **`workos_authkit_enqueue_assets` action** — fires on every render
+  with the active `Profile` so extenders can `wp_enqueue_style()` /
+  `wp_enqueue_script()` per-profile CSS/JS, depending on the
+  `workos-authkit` handle for ordering.
+- **New PHP filters** — `workos_authkit_branding` (override the
+  resolved branding before it lands in the data-profile JSON),
+  `workos_authkit_profile_data` (mutate the JSON payload sent to the
+  React shell), `workos_authkit_body_classes` (extend body CSS classes
+  on the full-page renderer; `workos-profile-{slug}` is added by
+  default).
+- **`workos-authkit:mounted` DOM event** — dispatched on `document`
+  after the React shell mounts, carrying `{ profileSlug }` in
+  `event.detail` so non-React extenders can observe the lifecycle.
+- **Logo control** — Login Profile editor now exposes a logo picker
+  (uses `wp.media`). When no per-profile logo is set, the AuthKit shell
+  falls back to the WordPress Site Icon (Settings → General).
+- **`docs/extending-the-login-ui.md`** — developer guide covering all
+  three extension surfaces with working examples.
+
 #### Public API for third-party integrations
 
 - **`WorkOS\User`** — read-only helper class for querying WorkOS state

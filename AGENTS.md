@@ -101,7 +101,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/AuthKit/LoginTakeover.php` | wp-login.php `action=login` takeover |
 | `src/WorkOS/Auth/AuthKit/FrontendRoute.php` | `/workos/login/{profile}` rewrite + static `register_rewrite()` |
 | `src/WorkOS/Auth/AuthKit/Shortcode.php` | `[workos_login_v2]` shortcode |
-| `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue |
+| `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue. Fires `workos_authkit_enqueue_assets` action and applies `workos_authkit_branding` / `workos_authkit_profile_data` / `workos_authkit_body_classes` filters — see `docs/extending-the-login-ui.md` |
 | `src/WorkOS/Auth/AuthKit/Nonce.php` | Profile-scoped CSRF nonces |
 | `src/WorkOS/Auth/AuthKit/RateLimiter.php` | Per-IP / per-email transient buckets |
 | `src/WorkOS/Auth/AuthKit/Radar.php` | WorkOS Radar site-key + request-header extraction |
