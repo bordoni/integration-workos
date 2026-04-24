@@ -167,17 +167,23 @@ export function FlowCard( {
 	footer,
 	children,
 }: FlowCardProps ) {
+	// Logo sits outside the card so the layout mirrors wp-login.php: a
+	// floating mark above a bordered card. Keeping the beforeHeader slot
+	// adjacent to the logo lets extenders inject site-level chrome there
+	// (badges, banners) without leaking into the card's padded interior.
 	return (
-		<Card>
+		<>
 			<AuthKitSlot name={ SLOT_BEFORE_HEADER } fillProps={ fillProps } />
 			<Logo url={ logoUrl } alt={ logoAlt } />
-			{ header }
-			<AuthKitSlot name={ SLOT_AFTER_HEADER } fillProps={ fillProps } />
-			{ children }
-			<AuthKitSlot name={ SLOT_BEFORE_FOOTER } fillProps={ fillProps } />
-			{ footer }
-			<AuthKitSlot name={ SLOT_AFTER_FOOTER } fillProps={ fillProps } />
-		</Card>
+			<Card>
+				{ header }
+				<AuthKitSlot name={ SLOT_AFTER_HEADER } fillProps={ fillProps } />
+				{ children }
+				<AuthKitSlot name={ SLOT_BEFORE_FOOTER } fillProps={ fillProps } />
+				{ footer }
+				<AuthKitSlot name={ SLOT_AFTER_FOOTER } fillProps={ fillProps } />
+			</Card>
+		</>
 	);
 }
 
