@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"target": "ES2020",
+		"module": "ESNext",
+		"moduleResolution": "node",
+		"jsx": "react-jsx",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"allowSyntheticDefaultImports": true,
+		"isolatedModules": true,
+		"noEmit": true,
+		"resolveJsonModule": true,
+		"lib": ["ES2020", "DOM", "DOM.Iterable"]
+	},
+	"include": ["src/js/authkit/**/*", "src/js/admin-profiles/**/*"],
+	"exclude": ["node_modules", "vendor", "build", "tests"]
+}

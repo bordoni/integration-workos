@@ -22,6 +22,8 @@ class Controller extends BaseController {
 	protected function doRegister(): void {
 		$this->container->singleton( TokenAuth::class );
 		$this->container->get( TokenAuth::class );
+
+		$this->container->register( Auth\Controller::class );
 	}
 
 	/**

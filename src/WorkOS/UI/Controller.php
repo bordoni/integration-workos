@@ -84,12 +84,25 @@ class Controller extends BaseController {
 			WORKOS_VERSION
 		);
 
+		$asset_file = WORKOS_DIR . 'build/login-button-frontend.asset.php';
+		$asset      = file_exists( $asset_file )
+			? include $asset_file
+			: [
+				'dependencies' => [],
+				'version'      => WORKOS_VERSION,
+			];
+
 		wp_enqueue_script(
 			'workos-login-button-frontend',
-			WORKOS_URL . 'src/js/login-button-frontend.js',
-			[],
-			WORKOS_VERSION,
+			WORKOS_URL . 'build/login-button-frontend.js',
+			$asset['dependencies'],
+			$asset['version'],
 			true
+		);
+
+		wp_set_script_translations(
+			'workos-login-button-frontend',
+			'integration-workos'
 		);
 
 		wp_localize_script(
@@ -98,9 +111,6 @@ class Controller extends BaseController {
 			[
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'workos_login_button' ),
-				'i18n'    => [
-					'error' => __( 'An error occurred. Please try again.', 'integration-workos' ),
-				],
 			]
 		);
 	}

@@ -75,7 +75,7 @@ class OptionsTest extends WPTestCase {
 	 */
 	public function test_get_returns_class_default_when_not_stored(): void {
 		$this->assertSame( '', $this->production->get( 'api_key' ) );
-		$this->assertSame( 'redirect', $this->production->get( 'login_mode' ) );
+		$this->assertSame( 'custom', $this->production->get( 'login_mode' ) );
 		$this->assertTrue( $this->production->get( 'allow_password_fallback' ) );
 		$this->assertSame( 'deactivate', $this->production->get( 'deprovision_action' ) );
 		$this->assertSame( 0, $this->production->get( 'reassign_user' ) );
@@ -330,7 +330,7 @@ class OptionsTest extends WPTestCase {
 		}
 
 		// Settings keys now live in per-env options.
-		$this->assertSame( 'redirect', $this->production->get( 'login_mode' ) );
+		$this->assertSame( 'custom', $this->production->get( 'login_mode' ) );
 		$this->assertTrue( $this->production->get( 'allow_password_fallback' ) );
 		$this->assertSame( 'deactivate', $this->production->get( 'deprovision_action' ) );
 		$this->assertSame( 0, $this->production->get( 'reassign_user' ) );
@@ -348,7 +348,7 @@ class OptionsTest extends WPTestCase {
 		}
 
 		// Settings keys now live in per-env options.
-		$this->assertSame( 'redirect', $this->staging->get( 'login_mode' ) );
+		$this->assertSame( 'custom', $this->staging->get( 'login_mode' ) );
 		$this->assertTrue( $this->staging->get( 'allow_password_fallback' ) );
 		$this->assertSame( 'deactivate', $this->staging->get( 'deprovision_action' ) );
 		$this->assertSame( 0, $this->staging->get( 'reassign_user' ) );

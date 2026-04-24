@@ -8,6 +8,7 @@
 namespace WorkOS\REST;
 
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -53,10 +54,18 @@ class TokenAuth {
 			return $user_id;
 		}
 
-		// Verify the token.
+		// Verify the token — signature AND expiration both must hold.
+		//
+		// We intentionally do NOT attempt a "lazy refresh" off a Bearer
+		// token that fails verification. Doing so would mean trusting the
+		// `sub` claim of an unsigned or expired JWT to pick whose stored
+		// refresh token to exchange — an attacker-controlled identity
+		// lookup. Clients that need to renew an expired access token
+		// should hit POST /wp-json/workos/v1/auth/session/refresh, which
+		// is authenticated via the WP auth cookie (independently-verified
+		// session) rather than the Bearer token itself.
 		$payload = workos()->api()->verify_access_token( $token );
 		if ( is_wp_error( $payload ) ) {
-			// Store error for rest_authentication_errors filter.
 			$this->auth_error = $payload;
 			return $user_id;
 		}
@@ -75,9 +84,9 @@ class TokenAuth {
 	/**
 	 * Report authentication errors to the REST API.
 	 *
-	 * @param \WP_Error|null|true $error Current error state.
+	 * @param WP_Error|null|true $error Current error state.
 	 *
-	 * @return \WP_Error|null|true
+	 * @return WP_Error|null|true
 	 */
 	public function check_errors( $error ) {
 		if ( ! empty( $error ) ) {
@@ -137,7 +146,7 @@ class TokenAuth {
 	/**
 	 * Stored auth error from token verification.
 	 *
-	 * @var \WP_Error|null
+	 * @var WP_Error|null
 	 */
-	private ?\WP_Error $auth_error = null;
+	private ?WP_Error $auth_error = null;
 }

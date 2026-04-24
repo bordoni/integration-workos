@@ -260,6 +260,8 @@ class Settings {
 			true
 		);
 
+		wp_set_script_translations( 'workos-role-mapping', 'integration-workos' );
+
 		wp_enqueue_style(
 			'workos-role-mapping',
 			WORKOS_URL . 'build/role-mapping.css',
@@ -300,6 +302,8 @@ class Settings {
 			$asset['version'],
 			true
 		);
+
+		wp_set_script_translations( 'workos-redirect-urls', 'integration-workos' );
 
 		wp_enqueue_style(
 			'workos-redirect-urls',
@@ -343,6 +347,8 @@ class Settings {
 			$asset['version'],
 			true
 		);
+
+		wp_set_script_translations( 'workos-logout-redirect-urls', 'integration-workos' );
 
 		wp_enqueue_style(
 			'workos-logout-redirect-urls',
@@ -555,8 +561,16 @@ class Settings {
 		add_settings_section(
 			'workos_auth',
 			__( 'Authentication', 'integration-workos' ),
-			function () {
+			static function (): void {
+				$profiles_url = admin_url( 'admin.php?page=workos-login-profiles' );
 				echo '<p>' . esc_html__( 'Configure how users authenticate with your site.', 'integration-workos' ) . '</p>';
+				echo '<p class="description">';
+				printf(
+					/* translators: %s: link to Login Profiles admin page */
+					esc_html__( 'Login Mode picks the default experience on wp-login.php. For per-page variants (different auth methods, pinned organizations, branding), manage %s.', 'integration-workos' ),
+					'<a href="' . esc_url( $profiles_url ) . '"><strong>' . esc_html__( 'Login Profiles', 'integration-workos' ) . '</strong></a>'
+				);
+				echo '</p>';
 			},
 			'workos'
 		);
@@ -570,8 +584,9 @@ class Settings {
 			[
 				'name'    => $this->env_option( 'login_mode' ),
 				'options' => [
-					'redirect' => __( 'AuthKit Redirect (Recommended)', 'integration-workos' ),
-					'headless' => __( 'Headless API (Custom Form)', 'integration-workos' ),
+					'custom'   => __( 'Custom — React UI on wp-login.php (Recommended)', 'integration-workos' ),
+					'redirect' => __( 'AuthKit Redirect — WorkOS-hosted login page', 'integration-workos' ),
+					'headless' => __( 'Headless API — keep the native WP form', 'integration-workos' ),
 				],
 			]
 		);
@@ -1899,7 +1914,7 @@ class Settings {
 
 		// Enumerated choice fields.
 		$choices = [
-			'login_mode'         => [ 'redirect', 'headless' ],
+			'login_mode'         => [ 'custom', 'redirect', 'headless' ],
 			'deprovision_action' => [ 'deactivate', 'demote', 'delete' ],
 		];
 		foreach ( $choices as $key => $allowed ) {

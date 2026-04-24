@@ -4,6 +4,7 @@
  * @package WorkOS
  */
 
+import { __, sprintf } from '@wordpress/i18n';
 import '../css/role-mapping.css';
 
 ( function () {
@@ -89,9 +90,12 @@ import '../css/role-mapping.css';
 			warning           = document.createElement( 'div' );
 			warning.id        = 'workos-role-map-duplicate-warning';
 			warning.className = 'workos-role-map-duplicate-warning';
-			warning.innerHTML = '<p>' +
-				'Duplicate WorkOS role detected. Each WorkOS role may only be mapped once.' +
-				'</p>';
+			const para = document.createElement( 'p' );
+			para.textContent = __(
+				'Duplicate WorkOS role detected. Each WorkOS role may only be mapped once.',
+				'integration-workos'
+			);
+			warning.appendChild( para );
 			table.parentNode.insertBefore( warning, table.nextSibling );
 		} else if ( ! hasDuplicates && warning ) {
 			warning.remove();
@@ -111,7 +115,7 @@ import '../css/role-mapping.css';
 
 		const blank       = document.createElement( 'option' );
 		blank.value       = '';
-		blank.textContent = '\u2014 No Role \u2014';
+		blank.textContent = `— ${ __( 'No Role', 'integration-workos' ) } —`;
 		select.appendChild( blank );
 
 		Object.keys( wpRoles ).forEach(
@@ -138,7 +142,7 @@ import '../css/role-mapping.css';
 
 			const blank       = document.createElement( 'option' );
 			blank.value       = '';
-			blank.textContent = '\u2014 No Role \u2014';
+			blank.textContent = `— ${ __( 'No Role', 'integration-workos' ) } —`;
 			select.appendChild( blank );
 
 			Object.keys( workosRoles ).forEach(
@@ -157,7 +161,7 @@ import '../css/role-mapping.css';
 		input.type        = 'text';
 		input.name        = 'workos_' + env + '[role_map][keys][]';
 		input.className   = 'regular-text';
-		input.placeholder = 'New WorkOS role\u2026';
+		input.placeholder = __( 'New WorkOS role', 'integration-workos' ) + '…';
 		return input;
 	}
 
@@ -170,7 +174,7 @@ import '../css/role-mapping.css';
 		const btn     = document.createElement( 'button' );
 		btn.type      = 'button';
 		btn.className = 'workos-role-map-remove';
-		btn.setAttribute( 'aria-label', 'Remove mapping' );
+		btn.setAttribute( 'aria-label', __( 'Remove mapping', 'integration-workos' ) );
 
 		const icon     = document.createElement( 'span' );
 		icon.className = 'dashicons dashicons-minus';
@@ -216,10 +220,23 @@ import '../css/role-mapping.css';
 		const warning     = document.createElement( 'div' );
 		warning.id        = 'workos-role-map-change-warning';
 		warning.className = 'workos-role-map-change-warning';
-		warning.innerHTML = '<p>' +
-			'Changing role mappings may put existing users out of sync. ' +
-			'Save settings and visit the <a href="users.php">Users page</a> to review affected users.' +
-			'</p>';
+
+		const para = document.createElement( 'p' );
+		const link = document.createElement( 'a' );
+		link.href = 'users.php';
+		link.textContent = __( 'Users page', 'integration-workos' );
+		// translators: %s: link to the Users page.
+		const template = __(
+			'Changing role mappings may put existing users out of sync. Save settings and visit the %s to review affected users.',
+			'integration-workos'
+		);
+		const [ before, after ] = template.split( '%s' );
+		para.appendChild( document.createTextNode( before ) );
+		para.appendChild( link );
+		if ( after !== undefined ) {
+			para.appendChild( document.createTextNode( after ) );
+		}
+		warning.appendChild( para );
 
 		table.parentNode.insertBefore( warning, table.nextSibling );
 	}

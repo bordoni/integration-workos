@@ -6,18 +6,19 @@
 
 /* global workosOnboarding */
 
+import { __, _n, sprintf } from '@wordpress/i18n';
+
 ( function () {
 	'use strict';
 
 	const { ajaxUrl, nonce } = workosOnboarding;
 	let currentPage = 1;
-	let allUserIds = [];
 
 	/**
 	 * Make an AJAX request.
 	 *
-	 * @param {string} action   AJAX action name.
-	 * @param {Object} data     Additional POST data.
+	 * @param {string} action AJAX action name.
+	 * @param {Object} data   Additional POST data.
 	 * @return {Promise<Object>} Response data.
 	 */
 	async function ajax( action, data = {} ) {
@@ -49,23 +50,37 @@
 	async function loadUsers( page = 1 ) {
 		currentPage = page;
 		const tbody = document.getElementById( 'workos-users-tbody' );
-		tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+		tbody.innerHTML = `<tr><td colspan="5">${ escHtml(
+			__( 'Loading…', 'integration-workos' )
+		) }</td></tr>`;
 
 		const result = await ajax( 'workos_onboarding_get_users', { page } );
 
 		if ( ! result.success ) {
-			tbody.innerHTML = `<tr><td colspan="5">Error: ${ result.data?.message || 'Unknown error' }</td></tr>`;
+			const message =
+				result.data?.message || __( 'Unknown error', 'integration-workos' );
+			tbody.innerHTML = `<tr><td colspan="5">${ escHtml(
+				sprintf(
+					/* translators: %s: error message. */
+					__( 'Error: %s', 'integration-workos' ),
+					message
+				)
+			) }</td></tr>`;
 			return;
 		}
 
 		const { users, total, total_pages: totalPages } = result.data;
-		allUserIds = users.map( ( u ) => u.id );
 
 		if ( users.length === 0 ) {
-			tbody.innerHTML = '<tr><td colspan="5">All users are already synced to WorkOS!</td></tr>';
+			tbody.innerHTML = `<tr><td colspan="5">${ escHtml(
+				__( 'All users are already synced to WorkOS!', 'integration-workos' )
+			) }</td></tr>`;
 			document.getElementById( 'workos-sync-all-btn' ).disabled = true;
 			return;
 		}
+
+		const pendingLabel = escHtml( __( 'Pending', 'integration-workos' ) );
+		const syncLabel = escHtml( __( 'Sync', 'integration-workos' ) );
 
 		tbody.innerHTML = users
 			.map(
@@ -74,10 +89,10 @@
 				<td>${ escHtml( user.display_name ) }</td>
 				<td>${ escHtml( user.email ) }</td>
 				<td>${ escHtml( user.role ) }</td>
-				<td class="workos-user-status">Pending</td>
+				<td class="workos-user-status">${ pendingLabel }</td>
 				<td>
 					<button type="button" class="button button-small workos-sync-single" data-user-id="${ user.id }">
-						Sync
+						${ syncLabel }
 					</button>
 				</td>
 			</tr>`
@@ -87,16 +102,47 @@
 		// Pagination.
 		const paginationEl = document.getElementById( 'workos-users-pagination' );
 		if ( totalPages > 1 ) {
-			let html = `<span>Page ${ page } of ${ totalPages } (${ total } users)</span> `;
+			const pageLabel = escHtml(
+				sprintf(
+					/* translators: 1: current page, 2: total pages, 3: total users. */
+					__( 'Page %1$d of %2$d (%3$d users)', 'integration-workos' ),
+					page,
+					totalPages,
+					total
+				)
+			);
+			let html = `<span>${ pageLabel }</span> `;
 			if ( page > 1 ) {
-				html += `<button type="button" class="button button-small workos-page-btn" data-page="${ page - 1 }">&laquo; Previous</button> `;
+				html += `<button type="button" class="button button-small workos-page-btn" data-page="${
+					page - 1
+				}">${ escHtml(
+					__( '« Previous', 'integration-workos' )
+				) }</button> `;
 			}
 			if ( page < totalPages ) {
-				html += `<button type="button" class="button button-small workos-page-btn" data-page="${ page + 1 }">Next &raquo;</button>`;
+				html += `<button type="button" class="button button-small workos-page-btn" data-page="${
+					page + 1
+				}">${ escHtml(
+					__( 'Next »', 'integration-workos' )
+				) }</button>`;
 			}
 			paginationEl.innerHTML = html;
 		} else {
-			paginationEl.innerHTML = total > 0 ? `<span>${ total } unlinked user(s)</span>` : '';
+			paginationEl.innerHTML =
+				total > 0
+					? `<span>${ escHtml(
+							sprintf(
+								/* translators: %d: number of unlinked users. */
+								_n(
+									'%d unlinked user',
+									'%d unlinked users',
+									total,
+									'integration-workos'
+								),
+								total
+							)
+					  ) }</span>`
+					: '';
 		}
 	}
 
@@ -113,20 +159,30 @@
 		const statusCell = row.querySelector( '.workos-user-status' );
 		const btn = row.querySelector( '.workos-sync-single' );
 
-		statusCell.textContent = 'Syncing...';
+		statusCell.textContent = __( 'Syncing…', 'integration-workos' );
 		statusCell.style.color = '#996800';
 		if ( btn ) btn.disabled = true;
 
 		const result = await ajax( 'workos_onboarding_sync_user', { user_id: userId } );
 
 		if ( result.success ) {
-			statusCell.textContent = `Synced (${ result.data.action })`;
+			statusCell.textContent = sprintf(
+				/* translators: %s: sync action name (e.g. "create", "update"). */
+				__( 'Synced (%s)', 'integration-workos' ),
+				result.data.action
+			);
 			statusCell.style.color = '#00a32a';
 			if ( btn ) btn.remove();
 			return true;
 		}
 
-		statusCell.textContent = `Failed: ${ result.data?.message || 'Unknown error' }`;
+		const message =
+			result.data?.message || __( 'Unknown error', 'integration-workos' );
+		statusCell.textContent = sprintf(
+			/* translators: %s: error message. */
+			__( 'Failed: %s', 'integration-workos' ),
+			message
+		);
 		statusCell.style.color = '#d63638';
 		if ( btn ) btn.disabled = false;
 		return false;
@@ -181,10 +237,29 @@
 
 			const percent = Math.round( ( ( synced + failed ) / total ) * 100 );
 			progressBar.style.width = `${ percent }%`;
-			progressText.textContent = `${ synced + failed } of ${ total } processed (${ synced } synced, ${ failed } failed)`;
+			progressText.textContent = sprintf(
+				/* translators: 1: processed count, 2: total count, 3: synced count, 4: failed count. */
+				__(
+					'%1$d of %2$d processed (%3$d synced, %4$d failed)',
+					'integration-workos'
+				),
+				synced + failed,
+				total,
+				synced,
+				failed
+			);
 		}
 
-		progressText.textContent = `Complete! ${ synced } synced, ${ failed } failed out of ${ total } users.`;
+		progressText.textContent = sprintf(
+			/* translators: 1: synced count, 2: failed count, 3: total users. */
+			__(
+				'Complete! %1$d synced, %2$d failed out of %3$d users.',
+				'integration-workos'
+			),
+			synced,
+			failed,
+			total
+		);
 		syncAllBtn.disabled = false;
 
 		// Reload the table.

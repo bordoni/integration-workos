@@ -4,6 +4,7 @@
  * @package WorkOS
  */
 
+import { __ } from '@wordpress/i18n';
 import '../css/logout-redirect-urls.css';
 
 ( function () {
@@ -34,7 +35,7 @@ import '../css/logout-redirect-urls.css';
 
 		const blank       = document.createElement( 'option' );
 		blank.value       = '';
-		blank.textContent = '\u2014 Select Role \u2014';
+		blank.textContent = `— ${ __( 'Select Role', 'integration-workos' ) } —`;
 		select.appendChild( blank );
 
 		Object.keys( wpRoles ).forEach(
@@ -58,7 +59,7 @@ import '../css/logout-redirect-urls.css';
 		const btn     = document.createElement( 'button' );
 		btn.type      = 'button';
 		btn.className = 'workos-logout-redirect-url-remove';
-		btn.setAttribute( 'aria-label', 'Remove redirect' );
+		btn.setAttribute( 'aria-label', __( 'Remove redirect', 'integration-workos' ) );
 
 		const icon     = document.createElement( 'span' );
 		icon.className = 'dashicons dashicons-minus';
@@ -122,7 +123,7 @@ import '../css/logout-redirect-urls.css';
 			input.type        = 'text';
 			input.name        = 'workos_' + env + '[logout_redirect_urls][values][' + index + ']';
 			input.className   = 'regular-text';
-			input.placeholder = '/goodbye';
+			input.placeholder = '/' + __( 'goodbye', 'integration-workos' );
 			tdInput.appendChild( input );
 			row.appendChild( tdInput );
 

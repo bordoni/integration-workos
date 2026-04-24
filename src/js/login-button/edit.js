@@ -53,7 +53,7 @@ export default function Edit( { attributes, setAttributes } ) {
 						}
 						help     = { __(
 							'Leave empty to use role-based redirects.',
-							'workos'
+							'integration-workos'
 						) }
 					/ >
 				< / PanelBody >
@@ -74,14 +74,14 @@ export default function Edit( { attributes, setAttributes } ) {
 							{
 								label: __(
 									'Show logout button',
-									'workos'
+									'integration-workos'
 								),
 							value: 'logout',
 							},
 							{
 								label: __(
 									'Show user info + logout',
-									'workos'
+									'integration-workos'
 								),
 							value: 'user_info',
 							},
@@ -105,7 +105,7 @@ export default function Edit( { attributes, setAttributes } ) {
 						}
 						help     = { __(
 							'Default: "Sign in"',
-							'workos'
+							'integration-workos'
 						) }
 					/ >
 					< TextControl
@@ -116,7 +116,7 @@ export default function Edit( { attributes, setAttributes } ) {
 						}
 						help     = { __(
 							'Default: "Sign out"',
-							'workos'
+							'integration-workos'
 						) }
 					/ >
 					< SelectControl
@@ -225,7 +225,7 @@ export default function Edit( { attributes, setAttributes } ) {
 					< ToggleControl
 						label        = { __(
 							'Show registration link',
-							'workos'
+							'integration-workos'
 						) }
 						checked      = { attributes.show_registration }
 						onChange     = { ( show_registration ) =>
@@ -236,7 +236,7 @@ export default function Edit( { attributes, setAttributes } ) {
 						< TextControl
 							label    = { __(
 								'Registration text',
-								'workos'
+								'integration-workos'
 							) }
 							value    = { attributes.registration_text }
 							onChange = { ( registration_text ) =>
@@ -244,14 +244,14 @@ export default function Edit( { attributes, setAttributes } ) {
 							}
 							help     = { __(
 								'Default: "Create account"',
-								'workos'
+								'integration-workos'
 							) }
 						/ >
 					) }
 					< ToggleControl
 						label        = { __(
 							'Show password fallback link',
-							'workos'
+							'integration-workos'
 						) }
 						checked      = { attributes.show_password_fallback }
 						onChange     = { ( show_password_fallback ) =>
@@ -262,7 +262,7 @@ export default function Edit( { attributes, setAttributes } ) {
 						< TextControl
 							label    = { __(
 								'Password fallback text',
-								'workos'
+								'integration-workos'
 							) }
 							value    = {
 								attributes.password_fallback_text
@@ -276,7 +276,7 @@ export default function Edit( { attributes, setAttributes } ) {
 							}
 							help     = { __(
 								'Default: "Sign in with password"',
-								'workos'
+								'integration-workos'
 							) }
 						/ >
 					) }

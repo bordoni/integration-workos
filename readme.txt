@@ -21,10 +21,21 @@ Integration with WorkOS connects your WordPress site with [WorkOS](https://worko
 * PHP 7.4 or higher
 * A [WorkOS](https://workos.com) account with API credentials
 
+= Custom AuthKit =
+
+* **WordPress-hosted React login** — no redirect to WorkOS for password, magic code, signup, invitation, or MFA. Mounts on wp-login.php, a shortcode (`[workos_login_v2]`), a Gutenberg block, and a dedicated `/workos/login/{profile}` route.
+* **Login Profiles** — admin-defined presets (enabled sign-in methods, pinned organization, signup/invite toggles, MFA policy, branding) edited from **WorkOS → Login Profiles**. The organization picker loads live from WorkOS so admins pick an org by name instead of pasting raw IDs.
+* **Sign-in methods** — email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), and passkey. Each profile chooses its own subset.
+* **MFA** — TOTP, SMS, and WebAuthn/passkey with in-app enrollment + challenge. Profile-level `mfa.enforce` (`never`/`if_required`/`always`) and factor allowlist are applied at login time.
+* **Self-serve sign-up + invitation acceptance + in-app password reset** — all handled by the React shell; no third-party pages.
+* **WorkOS Radar** anti-fraud integration optional via `WORKOS_RADAR_SITE_KEY`.
+* **Profile routing rules** — send incoming logins to a specific profile based on `redirect_to`, referrer host, or user role.
+
 = Authentication =
 
-* **Single Sign-On (SSO)** — AuthKit redirect and headless API authentication flows.
-* **Login Button** — Shortcode (`[workos_login]`), Gutenberg block, and classic widget for embedding a login button anywhere.
+* **Single Sign-On (SSO)** — legacy AuthKit redirect mode, per-profile selectable for SAML/OIDC connections.
+* **Headless mode** — intercept WordPress's `authenticate` filter for custom login forms.
+* **Legacy Login Button** — Shortcode (`[workos_login]`), Gutenberg block, and classic widget (AuthKit-redirect flow).
 * **Login Bypass** — Access the native WordPress login form via `?fallback=1` when WorkOS is unavailable.
 * **Password Reset Integration** — Redirect password reset to WorkOS or fall back to WordPress.
 * **Registration Redirect** — Redirect registration to WorkOS AuthKit.
@@ -76,6 +87,14 @@ Yes, if "Password Fallback" is enabled in settings. Users can access the standar
 = How do I add a login button to my site? =
 
 Use the `[workos_login]` shortcode, add the "WorkOS Login" Gutenberg block, or use the "WorkOS Login" classic widget. All three render a styled login button that redirects to WorkOS AuthKit.
+
+= How do I show the new WordPress-hosted login (Custom AuthKit) on a page? =
+
+Use `[workos_login_v2 profile="your-profile-slug"]`, add the "WorkOS Login Form" block, or link to `/workos/login/{profile}`. All three mount the same React shell. The reserved `default` Login Profile automatically takes over wp-login.php.
+
+= Can different login pages offer different sign-in methods? =
+
+Yes. Each Login Profile (WorkOS → Login Profiles) picks its own set of enabled methods (password, magic code, any subset of social providers, passkey), pins an organization, and sets its own MFA policy and branding. Reference a profile by slug in the shortcode or URL.
 
 = What happens if WorkOS is down? =
 
@@ -147,15 +166,30 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
-= 1.0.0 - 2026-04-14 =
-* SSO login via WorkOS AuthKit (redirect and headless modes).
+= 1.0.0 - 2026-04-23 =
+
+Custom AuthKit (WordPress-hosted login):
+* React login shell on wp-login.php, `[workos_login_v2]` shortcode, `workos/login-form` block, and `/workos/login/{profile}` route.
+* Login Profiles — admin-defined presets for enabled methods, pinned organization, signup/invite/reset flows, MFA policy, and branding, managed at WorkOS → Login Profiles.
+* Pinned-organization picker in the Profile editor reads live from WorkOS (with a "Custom ID…" fallback for legacy or unlisted orgs), and the Profiles list renders organization names instead of raw IDs.
+* Sign-in methods: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey.
+* Full MFA support — TOTP, SMS, WebAuthn/passkey with in-app enrollment + challenge.
+* Self-serve sign-up, invitation acceptance, and in-app password reset.
+* Profile routing rules (redirect_to glob / referrer host / user role).
+* WorkOS Radar anti-fraud integration (set `WORKOS_RADAR_SITE_KEY`).
+* Public REST at `/wp-json/workos/v1/auth/*` with profile-scoped nonces, per-IP/per-email rate limits, and signature-verified tokens.
+* Full browser internationalization — every user-facing React/TS/JS string ships through `@wordpress/i18n` with the `integration-workos` text domain and `wp_set_script_translations()` wiring.
+
+Base platform:
+* SSO login via WorkOS AuthKit (legacy redirect mode, per-profile selectable).
+* Headless authentication via WorkOS API.
 * Directory Sync (SCIM) for automatic user provisioning and deprovisioning.
 * Role mapping between WorkOS organization roles and WordPress roles.
 * Organization management with local caching and multisite support.
 * Entitlement gate — require organization membership to log in.
 * Webhook processing for user, organization, directory, membership, and connection events.
 * REST API Bearer token authentication using WorkOS access tokens.
-* Login button shortcode (`[workos_login]`), Gutenberg block, and classic widget.
+* Legacy login button shortcode (`[workos_login]`), Gutenberg block, and classic widget.
 * Login bypass via `?fallback=1` for native WordPress login when WorkOS is unavailable.
 * Activity logging with local database table and admin viewer.
 * Audit logging — forward WordPress events to WorkOS Audit Logs.
@@ -171,4 +205,4 @@ WorkOS is provided by WorkOS, Inc.
 == Upgrade Notice ==
 
 = 1.0.0 =
-Initial stable release with SSO, Directory Sync, role mapping, and full admin tooling.
+Initial stable release: WordPress-hosted Custom AuthKit (React login with Login Profiles, MFA, and passkeys), plus SSO, Directory Sync, role mapping, organization management, and full admin tooling.
