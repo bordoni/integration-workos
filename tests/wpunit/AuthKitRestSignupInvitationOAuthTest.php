@@ -388,7 +388,17 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$this->assertSame( 'workos_authkit_unknown_provider', $response->get_data()['code'] );
 	}
 
-	public function test_oauth_authorize_url_includes_organization_id_when_pinned(): void {
+	/**
+	 * Regression: even when the profile pins an organization, the social
+	 * OAuth authorize URL must not include `organization_id`. WorkOS treats
+	 * `provider=GoogleOAuth` + `organization_id` as a request for an
+	 * org-scoped social connection, which most orgs do not have configured —
+	 * the result is a `missing_code — No Connection associated with
+	 * Organization` error on the callback. Social OAuth providers are
+	 * environment-level apps; WorkOS scopes the user via the verified email
+	 * returned in the OAuth grant.
+	 */
+	public function test_oauth_authorize_url_omits_organization_id_for_social_provider(): void {
 		// Add oauth-google to the invite-only profile which has an org pinned.
 		$invite_only                = $this->repository->find_by_slug( 'invite-only' );
 		$this->assertInstanceOf( Profile::class, $invite_only );
@@ -403,6 +413,8 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$response = rest_get_server()->dispatch( $request );
 
 		$this->assertSame( 200, $response->get_status() );
-		$this->assertStringContainsString( 'organization_id=org_01ABC', $response->get_data()['authorize_url'] );
+		$authorize_url = $response->get_data()['authorize_url'];
+		$this->assertStringContainsString( 'provider=GoogleOAuth', $authorize_url );
+		$this->assertStringNotContainsString( 'organization_id=', $authorize_url );
 	}
 }

@@ -133,10 +133,16 @@ class OAuth extends BaseEndpoint {
 			'provider'     => self::METHOD_TO_PROVIDER[ $method_param ],
 		];
 
-		$organization_id = $profile->get_organization_id();
-		if ( '' !== $organization_id ) {
-			$args['organization_id'] = $organization_id;
-		}
+		/*
+		 * Intentionally no organization_id. This endpoint only handles
+		 * social OAuth providers (Google / Microsoft / GitHub / Apple),
+		 * which are environment-level apps in WorkOS. Passing
+		 * organization_id forces WorkOS to resolve an org-scoped
+		 * connection and returns "missing_code — No Connection associated
+		 * with Organization" when one is not configured. WorkOS scopes
+		 * the user by the OAuth grant's verified email, same as password
+		 * and magic-code flows.
+		 */
 
 		$url = workos()->api()->get_authorization_url( $args );
 
