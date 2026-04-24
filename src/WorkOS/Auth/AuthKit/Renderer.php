@@ -209,7 +209,17 @@ class Renderer {
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="robots" content="noindex, nofollow" />
 	<title><?php echo esc_html( sprintf( /* translators: %s: site name */ __( 'Sign in — %s', 'integration-workos' ), $site_name ) ); ?></title>
-		<?php wp_print_styles(); ?>
+		<?php
+		/*
+		 * Print the explicit handle queue (ours + anything extenders added
+		 * via `workos_authkit_enqueue_assets`) instead of `wp_print_styles()`
+		 * with no args. The no-arg form fires the `wp_print_styles` action,
+		 * which core wires `print_emoji_styles` to — that function was
+		 * deprecated in WP 6.4. Passing explicit handles skips the action
+		 * and the resulting deprecation notice.
+		 */
+		wp_print_styles( wp_styles()->queue );
+		?>
 </head>
 <body class="<?php echo esc_attr( $body_class ); ?>" data-site-name="<?php echo esc_attr( $site_name ); ?>" data-lang="<?php echo esc_attr( $language ); ?>">
 	<main class="workos-authkit-main">
@@ -220,7 +230,7 @@ class Renderer {
 		echo $mount; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		?>
 	</main>
-		<?php wp_print_scripts(); ?>
+		<?php wp_print_scripts( wp_scripts()->queue ); ?>
 </body>
 </html>
 		<?php
