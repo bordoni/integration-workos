@@ -245,8 +245,8 @@ class Renderer {
 	 * - `custom` → resolved attachment URL (empty string if the attachment
 	 *              has been deleted since the profile was saved).
 	 * - `default` (and anything else) → WordPress Site Icon
-	 *              (Settings → General) → bundled WP "W" logo shipped in
-	 *              core (`admin_url('images/w-logo-blue.svg')`) → empty.
+	 *              (Settings → General) → bundled WP logo shipped in
+	 *              core (`admin_url('images/wordpress-logo.svg')`) → empty.
 	 *
 	 * The bundled logo fallback means an unbranded install still looks
 	 * like a WordPress login screen out of the box rather than a blank
@@ -271,7 +271,7 @@ class Renderer {
 		} else {
 			$logo_url = (string) get_site_icon_url( 192 );
 			if ( '' === $logo_url ) {
-				$logo_url = admin_url( 'images/w-logo-blue.svg' );
+				$logo_url = admin_url( 'images/wordpress-logo.svg' );
 			}
 		}
 
