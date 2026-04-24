@@ -37,9 +37,18 @@ interface WpMediaAttachment {
 	filename?: string;
 }
 
+/**
+ * `wp.media` selections return Backbone Models. `.first()` is the Model
+ * itself — accessing `.url` on it gives Backbone's URL **method**, not
+ * the attachment URL. Always call `.toJSON()` to get the plain
+ * attachment data.
+ */
+interface WpMediaModel {
+	toJSON(): WpMediaAttachment;
+}
+
 interface WpMediaSelection {
-	first(): WpMediaAttachment;
-	toJSON(): WpMediaAttachment[];
+	first(): WpMediaModel;
 }
 
 interface WpMediaState {
@@ -386,7 +395,11 @@ function LogoField( { attachmentId, url, onChange }: LogoFieldProps ) {
 			library: { type: 'image' },
 		} );
 		frame.on( 'select', () => {
-			const attachment = frame.state().get( 'selection' ).first();
+			const attachment = frame
+				.state()
+				.get( 'selection' )
+				.first()
+				.toJSON();
 			onChange( attachment.id, attachment.url );
 		} );
 		frame.open();
