@@ -72,6 +72,27 @@
 	gap: 6px;
 }
 
+/*
+ * Inside every flow card the form is one more vertical stack: header
+ * slots live outside it, but fields + in-form slots + the primary
+ * button share the same rhythm as the surrounding card.
+ */
+#workos-authkit-root .wa-card form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--wa-gap);
+	margin: 0;
+}
+
+/*
+ * SlotFill renders a portal-target <div> even when no Fill is
+ * registered. Without this rule those empty divs still take up flex
+ * gap space and visibly push fields/buttons apart.
+ */
+#workos-authkit-root .wa-slot:empty {
+	display: none;
+}
+
 #workos-authkit-root .wa-label {
 	font-size: 0.875rem;
 	font-weight: 500;

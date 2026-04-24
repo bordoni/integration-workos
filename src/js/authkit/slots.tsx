@@ -41,7 +41,20 @@ interface AuthKitSlotProps {
  * the slot — that is the standard WP block-editor pattern. No children
  * accepted: with `bubblesVirtually`, fills render directly into the slot
  * via portal.
+ *
+ * The `wa-slot` className tags the underlying `<div>` the slot renders —
+ * even with no fills registered, `bubblesVirtually` still emits a div to
+ * serve as a portal target, and without the `:empty { display: none }`
+ * rule in styles.css it would show up as invisible extra flex-gap space
+ * inside every card.
  */
 export function AuthKitSlot( { name, fillProps }: AuthKitSlotProps ) {
-	return <Slot name={ name } fillProps={ fillProps } bubblesVirtually />;
+	return (
+		<Slot
+			name={ name }
+			fillProps={ fillProps }
+			bubblesVirtually
+			className="wa-slot"
+		/>
+	);
 }
