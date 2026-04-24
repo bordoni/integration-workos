@@ -240,8 +240,17 @@ class Renderer {
 	/**
 	 * Resolve the profile's branding, falling back to sensible defaults.
 	 *
-	 * Logo resolution chain: per-profile attachment → WordPress Site Icon
-	 * (Settings → General) → empty string (no logo rendered).
+	 * Logo resolution chain is driven by `branding.logo_mode`:
+	 * - `none`   → empty string (no logo rendered; skips all fallbacks).
+	 * - `custom` → resolved attachment URL (empty string if the attachment
+	 *              has been deleted since the profile was saved).
+	 * - `default` (and anything else) → WordPress Site Icon
+	 *              (Settings → General) → bundled WP "W" logo shipped in
+	 *              core (`admin_url('images/w-logo-blue.svg')`) → empty.
+	 *
+	 * The bundled logo fallback means an unbranded install still looks
+	 * like a WordPress login screen out of the box rather than a blank
+	 * card.
 	 *
 	 * @param Profile $profile Active profile.
 	 *
@@ -250,13 +259,20 @@ class Renderer {
 	private function resolve_branding( Profile $profile ): array {
 		$branding = $profile->get_branding();
 
-		$logo_url = '';
-		if ( ! empty( $branding['logo_attachment_id'] ) ) {
-			$logo_url = (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] );
-		}
+		$logo_mode = (string) ( $branding['logo_mode'] ?? Profile::LOGO_MODE_DEFAULT );
+		$logo_url  = '';
 
-		if ( '' === $logo_url ) {
+		if ( Profile::LOGO_MODE_NONE === $logo_mode ) {
+			$logo_url = '';
+		} elseif ( Profile::LOGO_MODE_CUSTOM === $logo_mode ) {
+			if ( ! empty( $branding['logo_attachment_id'] ) ) {
+				$logo_url = (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] );
+			}
+		} else {
 			$logo_url = (string) get_site_icon_url( 192 );
+			if ( '' === $logo_url ) {
+				$logo_url = admin_url( 'images/w-logo-blue.svg' );
+			}
 		}
 
 		$resolved = [

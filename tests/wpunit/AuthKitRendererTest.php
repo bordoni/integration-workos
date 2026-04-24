@@ -186,6 +186,62 @@ class AuthKitRendererTest extends WPTestCase {
 	}
 
 	/**
+	 * `logo_mode: none` wins over every fallback — no <img> URL lands in
+	 * the data-profile JSON even when a Site Icon and a saved attachment
+	 * both exist.
+	 */
+	public function test_render_mount_logo_mode_none_emits_empty_logo(): void {
+		$site_icon = self::factory()->attachment->create_object(
+			'site-icon.png',
+			0,
+			[
+				'post_mime_type' => 'image/png',
+				'post_type'      => 'attachment',
+			]
+		);
+		update_option( 'site_icon', $site_icon );
+
+		$profile = Profile::from_array(
+			[
+				'slug'     => 'members',
+				'title'    => 'Members',
+				'branding' => [
+					'logo_mode'          => Profile::LOGO_MODE_NONE,
+					'logo_attachment_id' => $site_icon,
+				],
+			]
+		);
+
+		$html = $this->renderer->render_mount( $profile );
+
+		$this->assertStringNotContainsString( 'site-icon.png', $html );
+		$this->assertStringContainsString( '"logo_url":""', $html );
+
+		delete_option( 'site_icon' );
+		wp_delete_attachment( $site_icon, true );
+	}
+
+	/**
+	 * With no Site Icon set, `default` mode falls through to the bundled
+	 * WordPress "W" logo shipped in core. This is the "looks like WP out
+	 * of the box" path.
+	 */
+	public function test_render_mount_falls_back_to_bundled_wp_logo(): void {
+		delete_option( 'site_icon' );
+
+		$profile = Profile::from_array(
+			[
+				'slug'  => 'members',
+				'title' => 'Members',
+			]
+		);
+
+		$html = $this->renderer->render_mount( $profile );
+
+		$this->assertStringContainsString( 'w-logo-blue.svg', $html );
+	}
+
+	/**
 	 * The workos_authkit_enqueue_assets action fires with the active Profile.
 	 */
 	public function test_render_mount_fires_enqueue_assets_action_with_profile(): void {
