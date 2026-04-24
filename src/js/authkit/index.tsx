@@ -30,6 +30,7 @@ function parseConfig( root: HTMLElement ): AppProps {
 		password_reset_flow: rawProfile.password_reset_flow ?? true,
 		mfa: rawProfile.mfa ?? { enforce: 'if_required', factors: [ 'totp' ] },
 		branding: rawProfile.branding ?? {
+			logo_mode: 'default',
 			logo_attachment_id: 0,
 			primary_color: '',
 			heading: '',

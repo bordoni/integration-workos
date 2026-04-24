@@ -216,7 +216,9 @@ class AuthKitRendererTest extends WPTestCase {
 		$html = $this->renderer->render_mount( $profile );
 
 		$this->assertStringNotContainsString( 'site-icon.png', $html );
-		$this->assertStringContainsString( '"logo_url":""', $html );
+		// The data-profile JSON is HTML-escaped inside an attribute, so
+		// match the entity-encoded form of `"logo_url":""`.
+		$this->assertStringContainsString( '&quot;logo_url&quot;:&quot;&quot;', $html );
 
 		delete_option( 'site_icon' );
 		wp_delete_attachment( $site_icon, true );

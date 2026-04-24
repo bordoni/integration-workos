@@ -383,9 +383,14 @@ class RestApi {
 		$attachment_id = isset( $branding['logo_attachment_id'] )
 			? (int) $branding['logo_attachment_id']
 			: 0;
-		$logo_mode     = isset( $branding['logo_mode'] )
+		// Mirror Profile::from_array()'s legacy backfill: a request without
+		// an explicit logo_mode but with a non-zero attachment reads as
+		// `custom`, so the image must still pass the MIME check. This
+		// keeps pre-logo_mode clients (and the tests that pin the old
+		// contract) validating the same way they always did.
+		$logo_mode = isset( $branding['logo_mode'] )
 			? (string) $branding['logo_mode']
-			: Profile::LOGO_MODE_DEFAULT;
+			: ( $attachment_id > 0 ? Profile::LOGO_MODE_CUSTOM : Profile::LOGO_MODE_DEFAULT );
 
 		// `default` and `none` never use an attachment — skip the expensive
 		// post lookup. `custom` requires one, so validate it below.
