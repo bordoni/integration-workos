@@ -317,7 +317,12 @@ class Renderer {
 		// or `</style>` sequence.
 		$primary = (string) ( $branding['primary_color'] ?? '' );
 		if ( '' !== $primary && preg_match( '/^#[0-9a-fA-F]{3,8}$/', $primary ) ) {
+			// A custom primary drops the matching WP-blue hover, so override
+			// hover to the same color. Deriving a darker shade would require
+			// a color-math utility and is not worth the added surface area;
+			// a flat hover reads cleanly enough for a branded palette.
 			$rules[] = '--wa-primary: ' . $primary . ';';
+			$rules[] = '--wa-primary-hover: ' . $primary . ';';
 		}
 
 		if ( empty( $rules ) ) {

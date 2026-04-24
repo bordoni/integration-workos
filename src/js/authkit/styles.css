@@ -10,12 +10,19 @@
  */
 
 #workos-authkit-root {
-	--wa-primary: #0057ff;
+	/*
+	 * Default palette mirrors WordPress core (wp-login.php + admin
+	 * Modern color scheme) so an unbranded install reads as "WordPress"
+	 * instead of a generic React card. Per-profile overrides land via
+	 * the inline <style> tag emitted by Renderer::branding_style_tag().
+	 */
+	--wa-primary: #2271b1;
+	--wa-primary-hover: #135e96;
 	--wa-primary-fg: #ffffff;
-	--wa-border: #d8dde6;
+	--wa-border: #8c8f94;
 	--wa-surface: #ffffff;
-	--wa-text: #111827;
-	--wa-muted: #6b7280;
+	--wa-text: #1d2327;
+	--wa-muted: #646970;
 	--wa-danger: #b91c1c;
 	--wa-danger-bg: #fee2e2;
 	--wa-gap: 12px;
@@ -139,7 +146,7 @@
 }
 
 #workos-authkit-root .wa-btn-primary:hover {
-	filter: brightness( 1.05 );
+	background: var(--wa-primary-hover);
 }
 
 #workos-authkit-root .wa-btn-secondary {

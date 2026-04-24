@@ -95,7 +95,8 @@ class AuthKitRendererTest extends WPTestCase {
 
 		$html = $this->renderer->render_mount( $profile );
 
-		$this->assertStringContainsString( '#workos-authkit-root{--wa-primary: #ff3366', $html );
+		$this->assertStringContainsString( '--wa-primary: #ff3366', $html );
+		$this->assertStringContainsString( '--wa-primary-hover: #ff3366', $html );
 	}
 
 	/**
