@@ -383,9 +383,21 @@ class RestApi {
 		$attachment_id = isset( $branding['logo_attachment_id'] )
 			? (int) $branding['logo_attachment_id']
 			: 0;
+		$logo_mode     = isset( $branding['logo_mode'] )
+			? (string) $branding['logo_mode']
+			: Profile::LOGO_MODE_DEFAULT;
+
+		// `default` and `none` never use an attachment — skip the expensive
+		// post lookup. `custom` requires one, so validate it below.
+		if ( Profile::LOGO_MODE_CUSTOM !== $logo_mode ) {
+			return null;
+		}
 
 		if ( $attachment_id <= 0 ) {
-			return null;
+			return new WP_Error(
+				'workos_profile_logo_required',
+				__( 'Select an image to use as the logo, or switch the logo mode to default or none.', 'integration-workos' )
+			);
 		}
 
 		$post = get_post( $attachment_id );
