@@ -354,6 +354,29 @@ class Profile {
 	}
 
 	/**
+	 * Serialize for the React profile editor.
+	 *
+	 * Same shape as `to_array()` plus `branding.logo_url` resolved from
+	 * the attachment ID — used both by the REST API responses and by the
+	 * server-side preload that hydrates the editor on page load (saves a
+	 * round-trip).
+	 *
+	 * @return array
+	 */
+	public function to_editor_array(): array {
+		$data     = $this->to_array();
+		$branding = $data['branding'];
+
+		$branding['logo_url'] = ! empty( $branding['logo_attachment_id'] )
+			? (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] )
+			: '';
+
+		$data['branding'] = $branding;
+
+		return $data;
+	}
+
+	/**
 	 * Check whether a given first-factor method is enabled.
 	 *
 	 * @param string $method One of the METHOD_* constants.

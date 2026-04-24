@@ -7,19 +7,40 @@
 
 namespace WorkOS\Admin\LoginProfiles;
 
+use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Auth\AuthKit\ProfileRepository;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
  * Registers the WP-admin submenu that hosts the React Profile editor.
  *
- * The page itself is a shell: a wrapper div + enqueued JS/CSS. All CRUD
- * happens against /wp-json/workos/v1/admin/profiles from the React app.
+ * Pre-renders the profile list as JSON via wp_localize_script so the
+ * editor hydrates without a REST round-trip on first paint, and parses
+ * `?profile=<slug>` from the request URL to deep-link into a profile.
+ * All CRUD still happens against /wp-json/workos/v1/admin/profiles.
  */
 class AdminPage {
 
 	public const MENU_SLUG     = 'workos-login-profiles';
 	public const SCRIPT_HANDLE = 'workos-admin-profiles';
 	public const STYLE_HANDLE  = 'workos-admin-profiles';
+
+	/**
+	 * Profile repository used to preload the editor.
+	 *
+	 * @var ProfileRepository
+	 */
+	private ProfileRepository $repository;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param ProfileRepository $repository Repository for the SSR preload.
+	 */
+	public function __construct( ProfileRepository $repository ) {
+		$this->repository = $repository;
+	}
 
 	/**
 	 * Register hooks.
@@ -111,9 +132,43 @@ class AdminPage {
 			self::SCRIPT_HANDLE,
 			'workosProfileAdmin',
 			[
-				'restUrl' => esc_url_raw( rest_url( 'workos/v1/admin/profiles' ) ),
-				'nonce'   => wp_create_nonce( 'wp_rest' ),
+				'restUrl'           => esc_url_raw( rest_url( 'workos/v1/admin/profiles' ) ),
+				'nonce'             => wp_create_nonce( 'wp_rest' ),
+				'pageUrl'           => esc_url_raw( admin_url( 'admin.php?page=' . self::MENU_SLUG ) ),
+				'profiles'          => $this->preloaded_profiles(),
+				'activeProfileSlug' => $this->active_profile_slug(),
 			]
 		);
+	}
+
+	/**
+	 * SSR preload — every profile shaped exactly like the REST list endpoint.
+	 *
+	 * @return array
+	 */
+	private function preloaded_profiles(): array {
+		$profiles = [];
+		foreach ( $this->repository->all() as $profile ) {
+			$profiles[] = $profile->to_editor_array();
+		}
+		return $profiles;
+	}
+
+	/**
+	 * Resolve the deep-link profile slug from the current request.
+	 *
+	 * Special value `'new'` opens an empty editor. Anything else is treated
+	 * as a profile slug; the React app validates membership against the
+	 * preloaded list and falls back to the index view if unknown.
+	 *
+	 * @return string Slug or empty string when not present.
+	 */
+	private function active_profile_slug(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! isset( $_GET['profile'] ) ) {
+			return '';
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		return sanitize_title( wp_unslash( (string) $_GET['profile'] ) );
 	}
 }

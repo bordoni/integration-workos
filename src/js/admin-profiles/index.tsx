@@ -8,7 +8,7 @@
 
 import { createRoot, useEffect, useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
-import type { ChangeEvent, ReactNode } from 'react';
+import type { ChangeEvent, MouseEvent, ReactNode } from 'react';
 import './styles.css';
 
 declare global {
@@ -16,12 +16,17 @@ declare global {
 		workosProfileAdmin?: {
 			restUrl: string;
 			nonce: string;
+			pageUrl: string;
+			profiles: Profile[];
+			activeProfileSlug: string;
 		};
 		wp?: {
 			media?: ( config: WpMediaConfig ) => WpMediaFrame;
 		};
 	}
 }
+
+const NEW_PROFILE_SENTINEL = 'new';
 
 interface WpMediaConfig {
 	title?: string;
@@ -686,6 +691,13 @@ interface ListProps {
 	onCreate: () => void;
 }
 
+function profileUrl( slug: string ): string {
+	const base = window.workosProfileAdmin?.pageUrl || '';
+	return '' === base
+		? '#'
+		: `${ base }&profile=${ encodeURIComponent( slug ) }`;
+}
+
 function List( { profiles, organizations, onSelect, onCreate }: ListProps ) {
 	const orgName = ( id: string ): string => {
 		if ( '' === id ) {
@@ -694,6 +706,25 @@ function List( { profiles, organizations, onSelect, onCreate }: ListProps ) {
 		const match = organizations.find( ( o ) => o.id === id );
 		return match ? match.name : id;
 	};
+
+	// Real anchors so middle-click + copy-link work; left-click is
+	// intercepted by `onSelect` to keep navigation client-side.
+	const handleClick = (
+		event: MouseEvent< HTMLAnchorElement >,
+		profile: Profile
+	): void => {
+		// Honor modifier keys / non-left-click so the browser opens the link
+		// in a new tab/window when the user asks for it.
+		if ( event.defaultPrevented || event.button !== 0 ) {
+			return;
+		}
+		if ( event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ) {
+			return;
+		}
+		event.preventDefault();
+		onSelect( profile );
+	};
+
 	return (
 		<div className="wpa-list">
 			<div className="wpa-list-header">
@@ -713,14 +744,15 @@ function List( { profiles, organizations, onSelect, onCreate }: ListProps ) {
 				</thead>
 				<tbody>
 					{ profiles.map( ( p ) => (
-						<tr
-							key={ p.id }
-							className="wpa-row"
-							onClick={ () => onSelect( p ) }
-						>
+						<tr key={ p.id } className="wpa-row">
 							<td>
 								<strong>
-									<a href="#">{ p.title }</a>
+									<a
+										href={ profileUrl( p.slug ) }
+										onClick={ ( e ) => handleClick( e, p ) }
+									>
+										{ p.title }
+									</a>
 								</strong>
 							</td>
 							<td>
@@ -742,27 +774,71 @@ interface ListResponse {
 	message?: string;
 }
 
+/**
+ * Read the current `?profile=…` slug from the URL. Empty string means
+ * the index view; `'new'` means the empty-profile editor; anything else
+ * is treated as a slug and resolved against the in-memory list.
+ */
+function readProfileSlugFromUrl(): string {
+	const params = new URLSearchParams( window.location.search );
+	return ( params.get( 'profile' ) || '' ).trim();
+}
+
+/**
+ * Resolve a slug against the loaded list and return the matching record,
+ * an empty editor for `'new'`, or `null` for the index view / unknown
+ * slugs.
+ */
+function resolveSelected(
+	slug: string,
+	profiles: Profile[]
+): Profile | null {
+	if ( '' === slug ) {
+		return null;
+	}
+	if ( NEW_PROFILE_SENTINEL === slug ) {
+		return emptyProfile();
+	}
+	return profiles.find( ( p ) => p.slug === slug ) ?? null;
+}
+
+/**
+ * Push or replace the URL so the current view is bookmarkable. We use
+ * the page URL provided by PHP (escaped via esc_url_raw) as the base so
+ * we never rely on string-stitching `?page=` ourselves.
+ */
+function navigateTo( slug: string, replace = false ): void {
+	const base   = window.workosProfileAdmin?.pageUrl || window.location.pathname + window.location.search.replace( /([?&])profile=[^&]*/g, '' );
+	const target = '' === slug ? base : `${ base }&profile=${ encodeURIComponent( slug ) }`;
+	const method = replace ? 'replaceState' : 'pushState';
+	window.history[ method ]( {}, '', target );
+}
+
 function App(): ReactNode {
-	const [ profiles, setProfiles ] = useState< Profile[] >( [] );
-	const [ selected, setSelected ] = useState< Profile | null >( null );
+	const initialProfiles  = window.workosProfileAdmin?.profiles ?? [];
+	const initialSlug      = window.workosProfileAdmin?.activeProfileSlug ?? '';
+
+	const [ profiles, setProfiles ] = useState< Profile[] >( initialProfiles );
+	const [ selected, setSelected ] = useState< Profile | null >( () =>
+		resolveSelected( initialSlug, initialProfiles )
+	);
 	const [ error, setError ] = useState( '' );
 	const [ saving, setSaving ] = useState( false );
-	const [ loading, setLoading ] = useState( true );
 	const [ organizations, setOrganizations ] = useState< Organization[] >( [] );
 	const [ organizationsLoading, setOrganizationsLoading ] = useState( true );
 	const [ organizationsError, setOrganizationsError ] = useState( '' );
 
-	const load = async (): Promise< void > => {
-		setLoading( true );
+	const refreshProfiles = async (): Promise< Profile[] > => {
 		const { ok, data } = await apiCall< ListResponse >( 'GET', '' );
-		setLoading( false );
 		if ( ok ) {
-			setProfiles( data.profiles || [] );
-		} else {
-			setError(
-				data.message || __( 'Failed to load profiles.', 'integration-workos' )
-			);
+			const next = data.profiles || [];
+			setProfiles( next );
+			return next;
 		}
+		setError(
+			data.message || __( 'Failed to load profiles.', 'integration-workos' )
+		);
+		return profiles;
 	};
 
 	const loadOrganizations = async (): Promise< void > => {
@@ -785,9 +861,32 @@ function App(): ReactNode {
 	};
 
 	useEffect( () => {
-		load();
 		loadOrganizations();
 	}, [] );
+
+	// Browser back/forward — re-derive the selection from the current URL.
+	useEffect( () => {
+		const onPop = (): void => {
+			setSelected( resolveSelected( readProfileSlugFromUrl(), profiles ) );
+		};
+		window.addEventListener( 'popstate', onPop );
+		return () => window.removeEventListener( 'popstate', onPop );
+	}, [ profiles ] );
+
+	const openProfile = ( profile: Profile ): void => {
+		setSelected( profile );
+		navigateTo( profile.slug );
+	};
+
+	const openNewProfile = (): void => {
+		setSelected( emptyProfile() );
+		navigateTo( NEW_PROFILE_SENTINEL );
+	};
+
+	const closeEditor = (): void => {
+		setSelected( null );
+		navigateTo( '' );
+	};
 
 	const handleSave = async ( profile: Profile ): Promise< void > => {
 		setSaving( true );
@@ -805,8 +904,10 @@ function App(): ReactNode {
 			);
 			return;
 		}
-		await load();
+		await refreshProfiles();
 		setSelected( data );
+		// Slug normalization on the server may rename — keep the URL in sync.
+		navigateTo( data.slug, true );
 	};
 
 	const handleDelete = async ( profile: Profile ): Promise< void > => {
@@ -821,12 +922,9 @@ function App(): ReactNode {
 			return;
 		}
 		setSelected( null );
-		await load();
+		navigateTo( '' );
+		await refreshProfiles();
 	};
-
-	if ( loading ) {
-		return <p>{ __( 'Loading profiles…', 'integration-workos' ) }</p>;
-	}
 
 	return (
 		<>
@@ -842,7 +940,7 @@ function App(): ReactNode {
 					organizationsLoading={ organizationsLoading }
 					organizationsError={ organizationsError }
 					onSave={ handleSave }
-					onCancel={ () => setSelected( null ) }
+					onCancel={ closeEditor }
 					onDelete={ handleDelete }
 					saving={ saving }
 				/>
@@ -850,8 +948,8 @@ function App(): ReactNode {
 				<List
 					profiles={ profiles }
 					organizations={ organizations }
-					onSelect={ ( p ) => setSelected( p ) }
-					onCreate={ () => setSelected( emptyProfile() ) }
+					onSelect={ openProfile }
+					onCreate={ openNewProfile }
 				/>
 			) }
 		</>

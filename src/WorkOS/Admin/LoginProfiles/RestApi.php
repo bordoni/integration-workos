@@ -239,26 +239,16 @@ class RestApi {
 	/**
 	 * Shape a Profile for REST output.
 	 *
-	 * Adds `branding.logo_url` (resolved from the attachment ID) so the React
-	 * editor can show a preview without a second round-trip.
+	 * Thin wrapper around `Profile::to_editor_array()` so REST responses
+	 * stay consistent with the SSR preload that hydrates the editor on
+	 * page load.
 	 *
 	 * @param Profile $profile Profile to shape.
 	 *
 	 * @return array
 	 */
 	private function shape_profile( Profile $profile ): array {
-		$data     = $profile->to_array();
-		$branding = $data['branding'] ?? [];
-
-		$logo_url = '';
-		if ( ! empty( $branding['logo_attachment_id'] ) ) {
-			$logo_url = (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] );
-		}
-
-		$branding['logo_url'] = $logo_url;
-		$data['branding']     = $branding;
-
-		return $data;
+		return $profile->to_editor_array();
 	}
 
 	/**
