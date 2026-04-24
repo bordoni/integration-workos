@@ -28,7 +28,10 @@ export interface ProfileMfa {
 	factors: MfaFactor[];
 }
 
+export type LogoMode = 'default' | 'custom' | 'none';
+
 export interface ProfileBranding {
+	logo_mode: LogoMode;
 	logo_attachment_id: number;
 	logo_url?: string;
 	primary_color: string;

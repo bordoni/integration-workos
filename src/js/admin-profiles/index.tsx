@@ -78,6 +78,7 @@ type AuthMethod =
 type MfaFactor = 'totp' | 'sms' | 'webauthn';
 type MfaEnforce = 'never' | 'if_required' | 'always';
 type ProfileMode = 'custom' | 'authkit_redirect';
+type LogoMode = 'default' | 'custom' | 'none';
 
 interface Profile {
 	id: number;
@@ -90,6 +91,7 @@ interface Profile {
 	password_reset_flow: boolean;
 	mfa: { enforce: MfaEnforce; factors: MfaFactor[] };
 	branding: {
+		logo_mode: LogoMode;
 		logo_attachment_id: number;
 		logo_url?: string;
 		primary_color: string;
@@ -376,19 +378,32 @@ function OrganizationField( {
 }
 
 interface LogoFieldProps {
+	mode: LogoMode;
 	attachmentId: number;
 	url?: string;
-	onChange: ( id: number, url: string ) => void;
+	onChange: ( patch: {
+		logo_mode: LogoMode;
+		logo_attachment_id: number;
+		logo_url: string;
+	} ) => void;
 }
 
 /**
- * Logo picker for the Branding fieldset. Opens the WordPress media modal
- * (`wp.media`) — available because AdminPage.php calls `wp_enqueue_media()`
- * on this page. Stores the chosen attachment ID; the preview thumbnail
- * uses the URL the modal returns (or the URL the REST API resolved on
- * load for an existing profile).
+ * Logo picker for the Branding fieldset.
+ *
+ * Three exclusive states, driven by `branding.logo_mode`:
+ * - `default`: defer to the runtime fallback chain (Site Icon → bundled
+ *   WP logo).
+ * - `custom`: use the admin's uploaded attachment.
+ * - `none`: render no image at all.
+ *
+ * Mode and attachment id travel together in a single atomic patch so the
+ * state can never land in an inconsistent shape (e.g. `mode: custom` with
+ * no attachment, or a lingering attachment id when the admin picks
+ * "hide"). Opens the WordPress media modal (`wp.media`) — available
+ * because AdminPage.php calls `wp_enqueue_media()` on this page.
  */
-function LogoField( { attachmentId, url, onChange }: LogoFieldProps ) {
+function LogoField( { mode, attachmentId, url, onChange }: LogoFieldProps ) {
 	const open = (): void => {
 		if ( ! window.wp?.media ) {
 			return;
@@ -405,40 +420,81 @@ function LogoField( { attachmentId, url, onChange }: LogoFieldProps ) {
 				.get( 'selection' )
 				.first()
 				.toJSON();
-			onChange( attachment.id, attachment.url );
+			onChange( {
+				logo_mode: 'custom',
+				logo_attachment_id: attachment.id,
+				logo_url: attachment.url,
+			} );
 		} );
 		frame.open();
 	};
 
+	const chooseDefault = (): void =>
+		onChange( { logo_mode: 'default', logo_attachment_id: 0, logo_url: '' } );
+
+	const chooseNone = (): void =>
+		onChange( { logo_mode: 'none', logo_attachment_id: 0, logo_url: '' } );
+
 	return (
 		<div className="wpa-field wpa-logo-field">
 			<span>{ __( 'Logo', 'integration-workos' ) }</span>
-			{ attachmentId > 0 && url && (
+			{ mode === 'custom' && attachmentId > 0 && url && (
 				<img
 					className="wpa-logo-preview"
 					src={ url }
 					alt={ __( 'Selected logo', 'integration-workos' ) }
 				/>
 			) }
+			{ mode === 'none' && (
+				<span className="wpa-logo-placeholder">
+					{ __( 'No logo — the login card shows no image.', 'integration-workos' ) }
+				</span>
+			) }
+			{ mode === 'default' && (
+				<span className="wpa-logo-placeholder">
+					{ __(
+						'Using the default WordPress fallback (Site Icon or bundled WordPress logo).',
+						'integration-workos'
+					) }
+				</span>
+			) }
 			<div className="wpa-logo-actions">
 				<button type="button" className="button" onClick={ open }>
-					{ attachmentId > 0
+					{ mode === 'custom'
 						? __( 'Replace logo', 'integration-workos' )
 						: __( 'Choose logo', 'integration-workos' ) }
 				</button>
-				{ attachmentId > 0 && (
+				{ mode === 'custom' && (
+					<button
+						type="button"
+						className="button"
+						onClick={ chooseDefault }
+					>
+						{ __( 'Use default', 'integration-workos' ) }
+					</button>
+				) }
+				{ mode !== 'none' && (
 					<button
 						type="button"
 						className="button button-link-delete"
-						onClick={ () => onChange( 0, '' ) }
+						onClick={ chooseNone }
 					>
-						{ __( 'Remove', 'integration-workos' ) }
+						{ __( 'Hide logo', 'integration-workos' ) }
+					</button>
+				) }
+				{ mode === 'none' && (
+					<button
+						type="button"
+						className="button"
+						onClick={ chooseDefault }
+					>
+						{ __( 'Use default', 'integration-workos' ) }
 					</button>
 				) }
 			</div>
 			<span className="description">
 				{ __(
-					'Defaults to the WordPress Site Icon when no per-profile logo is set.',
+					'Defaults to the Site Icon, then the bundled WordPress logo. Choose "Hide logo" to render no image.',
 					'integration-workos'
 				) }
 			</span>
@@ -458,6 +514,7 @@ function emptyProfile(): Profile {
 		password_reset_flow: true,
 		mfa: { enforce: 'if_required', factors: [ 'totp' ] },
 		branding: {
+			logo_mode: 'default',
 			logo_attachment_id: 0,
 			logo_url: '',
 			primary_color: '',
@@ -625,11 +682,10 @@ function Editor( {
 			<fieldset className="wpa-fieldset">
 				<legend>{ __( 'Branding', 'integration-workos' ) }</legend>
 				<LogoField
+					mode={ data.branding.logo_mode }
 					attachmentId={ data.branding.logo_attachment_id }
 					url={ data.branding.logo_url }
-					onChange={ ( id, url ) =>
-						setBranding( { logo_attachment_id: id, logo_url: url } )
-					}
+					onChange={ ( patch ) => setBranding( patch ) }
 				/>
 				<TextField
 					label={ __( 'Heading', 'integration-workos' ) }
@@ -645,7 +701,7 @@ function Editor( {
 					label={ __( 'Primary color', 'integration-workos' ) }
 					value={ data.branding.primary_color }
 					onChange={ ( v ) => setBranding( { primary_color: v } ) }
-					placeholder={ __( '#0057ff', 'integration-workos' ) }
+					placeholder={ __( '#2271b1', 'integration-workos' ) }
 				/>
 			</fieldset>
 
