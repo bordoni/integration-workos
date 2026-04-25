@@ -192,7 +192,7 @@ class Renderer {
 		// set this and the link stays hidden (users are already on the site).
 		$context['show_chrome'] = true;
 
-		$mount     = $this->render_mount( $profile, $context );
+		$mount = $this->render_mount( $profile, $context );
 
 		/**
 		 * Filters the CSS classes applied to the AuthKit full-page <body>.
