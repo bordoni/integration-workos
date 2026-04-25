@@ -198,6 +198,7 @@ class AuthKitProfileTest extends WPTestCase {
 				'factors' => [ Profile::FACTOR_TOTP, Profile::FACTOR_SMS ],
 			],
 			'branding'            => [
+				'logo_mode'          => Profile::LOGO_MODE_CUSTOM,
 				'logo_attachment_id' => 99,
 				'primary_color'      => '#ff0066',
 				'heading'            => 'Welcome',
@@ -232,5 +233,108 @@ class AuthKitProfileTest extends WPTestCase {
 
 		$this->assertSame( 0, $profile->get_id() );
 		$this->assertSame( 7, $clone->get_id() );
+	}
+
+	/**
+	 * Fresh defaults carry the `default` logo mode.
+	 */
+	public function test_defaults_seed_logo_mode_default(): void {
+		$profile = Profile::defaults();
+
+		$this->assertSame(
+			Profile::LOGO_MODE_DEFAULT,
+			$profile->get_branding()['logo_mode']
+		);
+	}
+
+	/**
+	 * Legacy rows (pre-logo_mode) with a non-zero attachment ID are
+	 * auto-upgraded to `custom` on read — the admin's uploaded image
+	 * keeps rendering after the schema change.
+	 */
+	public function test_from_array_upgrades_legacy_attachment_to_custom_mode(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'     => 'legacy',
+				'branding' => [ 'logo_attachment_id' => 123 ],
+			]
+		);
+
+		$this->assertSame( Profile::LOGO_MODE_CUSTOM, $profile->get_branding()['logo_mode'] );
+		$this->assertSame( 123, $profile->get_branding()['logo_attachment_id'] );
+	}
+
+	/**
+	 * Legacy rows with no attachment stay on the default chain.
+	 */
+	public function test_from_array_legacy_no_attachment_stays_default_mode(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'     => 'legacy',
+				'branding' => [],
+			]
+		);
+
+		$this->assertSame( Profile::LOGO_MODE_DEFAULT, $profile->get_branding()['logo_mode'] );
+		$this->assertSame( 0, $profile->get_branding()['logo_attachment_id'] );
+	}
+
+	/**
+	 * logo_mode `none` round-trips through from_array / to_array intact.
+	 */
+	public function test_from_array_accepts_none_logo_mode(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'     => 'partner',
+				'branding' => [
+					'logo_mode'          => Profile::LOGO_MODE_NONE,
+					'logo_attachment_id' => 0,
+				],
+			]
+		);
+
+		$this->assertSame( Profile::LOGO_MODE_NONE, $profile->get_branding()['logo_mode'] );
+		$this->assertSame(
+			Profile::LOGO_MODE_NONE,
+			$profile->to_array()['branding']['logo_mode']
+		);
+	}
+
+	/**
+	 * Unknown logo_mode strings collapse to `default` rather than erroring.
+	 */
+	public function test_from_array_rejects_unknown_logo_mode(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'     => 'partner',
+				'branding' => [ 'logo_mode' => 'sparkly' ],
+			]
+		);
+
+		$this->assertSame( Profile::LOGO_MODE_DEFAULT, $profile->get_branding()['logo_mode'] );
+	}
+
+	/**
+	 * to_editor_array only exposes the resolved `logo_url` for `custom`
+	 * mode — `default` and `none` leave it empty so the admin preview
+	 * reflects only what was explicitly uploaded.
+	 */
+	public function test_to_editor_array_omits_logo_url_when_not_custom(): void {
+		$default_profile = Profile::from_array(
+			[
+				'slug'     => 'partner',
+				'branding' => [ 'logo_mode' => Profile::LOGO_MODE_DEFAULT ],
+			]
+		);
+
+		$none_profile = Profile::from_array(
+			[
+				'slug'     => 'partner',
+				'branding' => [ 'logo_mode' => Profile::LOGO_MODE_NONE ],
+			]
+		);
+
+		$this->assertSame( '', $default_profile->to_editor_array()['branding']['logo_url'] );
+		$this->assertSame( '', $none_profile->to_editor_array()['branding']['logo_url'] );
 	}
 }

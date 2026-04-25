@@ -44,6 +44,10 @@ class Profile {
 
 	public const DEFAULT_SLUG = 'default';
 
+	public const LOGO_MODE_DEFAULT = 'default';
+	public const LOGO_MODE_CUSTOM  = 'custom';
+	public const LOGO_MODE_NONE    = 'none';
+
 	/**
 	 * Post ID backing this profile, or 0 for unsaved.
 	 *
@@ -110,7 +114,7 @@ class Profile {
 	/**
 	 * Branding config.
 	 *
-	 * @var array{logo_attachment_id: int, primary_color: string, heading: string, subheading: string}
+	 * @var array{logo_mode: string, logo_attachment_id: int, primary_color: string, heading: string, subheading: string}
 	 */
 	private array $branding;
 
@@ -152,6 +156,7 @@ class Profile {
 			'factors' => array_values( array_filter( (array) ( $data['mfa']['factors'] ?? [] ), 'is_string' ) ),
 		];
 		$this->branding            = [
+			'logo_mode'          => (string) ( $data['branding']['logo_mode'] ?? self::LOGO_MODE_DEFAULT ),
 			'logo_attachment_id' => (int) ( $data['branding']['logo_attachment_id'] ?? 0 ),
 			'primary_color'      => (string) ( $data['branding']['primary_color'] ?? '' ),
 			'heading'            => (string) ( $data['branding']['heading'] ?? '' ),
@@ -249,6 +254,26 @@ class Profile {
 			$primary_color = '';
 		}
 
+		$logo_attachment_id = (int) ( $data['branding']['logo_attachment_id'] ?? 0 );
+
+		$allowed_logo_modes = [
+			self::LOGO_MODE_DEFAULT,
+			self::LOGO_MODE_CUSTOM,
+			self::LOGO_MODE_NONE,
+		];
+
+		// Lazy backfill: legacy rows (pre-logo_mode) stored only
+		// logo_attachment_id. A non-zero id with no explicit mode means the
+		// admin had picked an image, so upgrade to `custom`. Everything else
+		// falls through to `default`, which preserves the previous behavior.
+		$logo_mode = isset( $data['branding']['logo_mode'] )
+			? (string) $data['branding']['logo_mode']
+			: ( $logo_attachment_id > 0 ? self::LOGO_MODE_CUSTOM : self::LOGO_MODE_DEFAULT );
+
+		if ( ! in_array( $logo_mode, $allowed_logo_modes, true ) ) {
+			$logo_mode = self::LOGO_MODE_DEFAULT;
+		}
+
 		return new self(
 			[
 				'id'                  => (int) ( $data['id'] ?? 0 ),
@@ -267,7 +292,8 @@ class Profile {
 					'factors' => $mfa_factors,
 				],
 				'branding'            => [
-					'logo_attachment_id' => (int) ( $data['branding']['logo_attachment_id'] ?? 0 ),
+					'logo_mode'          => $logo_mode,
+					'logo_attachment_id' => $logo_attachment_id,
 					'primary_color'      => $primary_color,
 					'heading'            => sanitize_text_field( (string) ( $data['branding']['heading'] ?? '' ) ),
 					'subheading'         => sanitize_text_field( (string) ( $data['branding']['subheading'] ?? '' ) ),
@@ -305,6 +331,7 @@ class Profile {
 					'factors' => [ self::FACTOR_TOTP ],
 				],
 				'branding'            => [
+					'logo_mode'          => self::LOGO_MODE_DEFAULT,
 					'logo_attachment_id' => 0,
 					'primary_color'      => '',
 					'heading'            => __( 'Sign in', 'integration-workos' ),
@@ -367,7 +394,12 @@ class Profile {
 		$data     = $this->to_array();
 		$branding = $data['branding'];
 
-		$branding['logo_url'] = ! empty( $branding['logo_attachment_id'] )
+		// The editor preview only shows the admin's explicit upload. For
+		// `default` and `none` modes we leave this empty so the preview
+		// stays neutral; the runtime renderer resolves the real fallback
+		// chain (Site Icon → bundled WP logo) at display time.
+		$branding['logo_url'] = self::LOGO_MODE_CUSTOM === ( $branding['logo_mode'] ?? self::LOGO_MODE_DEFAULT )
+			&& ! empty( $branding['logo_attachment_id'] )
 			? (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] )
 			: '';
 

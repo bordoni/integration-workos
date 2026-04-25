@@ -5,27 +5,64 @@
  * safely ship on the frontend, wp-login.php, and inside shortcode/block
  * contexts without leaking into theme or admin styles.
  *
- * Custom properties are overridable per profile — the Renderer emits a
- * <style> tag setting --wa-* values from profile.branding.
+ * The look mirrors wp-login.php: floating logo above a bordered card,
+ * gray page background (only when we take over login, scoped under
+ * body.workos-authkit-body). Per-profile overrides land via the inline
+ * <style> tag emitted by Renderer::branding_style_tag().
  */
 
+/*
+ * Takeover page chrome.
+ *
+ * Padding instead of margins on the root prevents margin-collapse from
+ * leaking out of `<body>`, which was producing a ~100px-taller layout
+ * than the viewport and a phantom vertical scrollbar on short content.
+ * box-sizing: border-box keeps the padding inside the 100vh budget.
+ */
+html:has( > body.workos-authkit-body ),
+body.workos-authkit-body {
+	margin: 0;
+	padding: 0;
+}
+
+body.workos-authkit-body {
+	background: #f0f0f1;
+	min-height: 100vh;
+	padding: 64px 16px;
+	box-sizing: border-box;
+}
+
+body.workos-authkit-body #workos-authkit-root {
+	margin: 0 auto;
+}
+
 #workos-authkit-root {
-	--wa-primary: #0057ff;
+	/*
+	 * Default palette mirrors WordPress core (wp-login.php + admin
+	 * Modern color scheme) so an unbranded install reads as "WordPress"
+	 * instead of a generic React card.
+	 */
+	--wa-primary: #2271b1;
+	--wa-primary-hover: #135e96;
 	--wa-primary-fg: #ffffff;
-	--wa-border: #d8dde6;
+	--wa-border: #8c8f94;
+	--wa-card-border: #c3c4c7;
 	--wa-surface: #ffffff;
-	--wa-text: #111827;
-	--wa-muted: #6b7280;
+	--wa-text: #1d2327;
+	--wa-muted: #50575e;
 	--wa-danger: #b91c1c;
 	--wa-danger-bg: #fee2e2;
-	--wa-gap: 12px;
-	--wa-radius: 6px;
+	--wa-gap: 16px;
+	--wa-radius: 3px;
 
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+	font-size: 15px;
+	line-height: 1.5;
 	color: var(--wa-text);
-	max-width: 420px;
+	width: 360px;
+	max-width: calc( 100% - 32px );
 	margin: 48px auto;
-	padding: 16px;
+	padding: 0;
 	box-sizing: border-box;
 }
 
@@ -35,35 +72,37 @@
 	box-sizing: border-box;
 }
 
-#workos-authkit-root .wa-card {
-	background: var(--wa-surface);
-	border: 1px solid var(--wa-border);
-	border-radius: var(--wa-radius);
-	padding: 24px;
-	display: flex;
-	flex-direction: column;
-	gap: var(--wa-gap);
-	box-shadow: 0 2px 8px rgba( 0, 0, 0, 0.04 );
-}
-
 #workos-authkit-root .wa-logo {
 	display: block;
-	max-height: 64px;
-	width: auto;
-	margin: 0 auto 8px;
+	width: 84px;
+	height: 84px;
+	margin: 0 auto 25px;
 	object-fit: contain;
 }
 
+#workos-authkit-root .wa-card {
+	background: var(--wa-surface);
+	border: 1px solid var(--wa-card-border);
+	border-radius: var(--wa-radius);
+	padding: 26px 24px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--wa-gap);
+	box-shadow: 0 1px 3px rgba( 0, 0, 0, 0.04 );
+}
+
 #workos-authkit-root .wa-heading {
-	font-size: 1.5rem;
-	margin: 0 0 4px;
+	font-size: 1.15rem;
+	line-height: 1.3;
+	margin: 0;
 	font-weight: 600;
+	color: var(--wa-text);
 }
 
 #workos-authkit-root .wa-subheading {
-	margin: 0 0 8px;
+	margin: 0;
 	color: var(--wa-muted);
-	font-size: 0.95rem;
+	font-size: 0.9375rem;
 }
 
 #workos-authkit-root .wa-field {
@@ -94,23 +133,30 @@
 }
 
 #workos-authkit-root .wa-label {
-	font-size: 0.875rem;
-	font-weight: 500;
+	font-size: 0.9375rem;
+	font-weight: 400;
+	color: var(--wa-text);
 }
 
 #workos-authkit-root .wa-input {
 	width: 100%;
-	padding: 10px 12px;
-	font-size: 1rem;
+	height: 44px;
+	padding: 0 10px;
+	font-size: 1.0625rem;
+	line-height: 1.33;
 	border: 1px solid var(--wa-border);
 	border-radius: var(--wa-radius);
 	background: var(--wa-surface);
 	color: var(--wa-text);
+	box-shadow: 0 0 0 transparent;
+	transition: box-shadow 0.1s ease, border-color 0.1s ease;
 }
 
+#workos-authkit-root .wa-input:focus,
 #workos-authkit-root .wa-input:focus-visible {
-	outline: 2px solid var(--wa-primary);
-	outline-offset: 1px;
+	border-color: var(--wa-primary);
+	box-shadow: 0 0 0 1px var(--wa-primary);
+	outline: 2px solid transparent;
 }
 
 #workos-authkit-root .wa-field-error {
@@ -124,32 +170,49 @@
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
-	padding: 10px 16px;
-	font-size: 1rem;
-	font-weight: 500;
+	height: 40px;
+	padding: 0 16px;
+	font-size: 0.9375rem;
+	font-weight: 400;
+	line-height: 2;
 	border: 1px solid transparent;
 	border-radius: var(--wa-radius);
 	cursor: pointer;
-	transition: background-color 0.15s ease, border-color 0.15s ease;
+	white-space: nowrap;
+	transition: background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease;
 }
 
 #workos-authkit-root .wa-btn-primary {
 	background: var(--wa-primary);
 	color: var(--wa-primary-fg);
+	border-color: var(--wa-primary);
+	box-shadow: 0 0 0 transparent;
+	text-shadow: none;
 }
 
-#workos-authkit-root .wa-btn-primary:hover {
-	filter: brightness( 1.05 );
+#workos-authkit-root .wa-btn-primary:hover,
+#workos-authkit-root .wa-btn-primary:focus {
+	background: var(--wa-primary-hover);
+	border-color: var(--wa-primary-hover);
+	color: var(--wa-primary-fg);
+}
+
+#workos-authkit-root .wa-btn-primary:focus-visible {
+	box-shadow: 0 0 0 1px var(--wa-surface), 0 0 0 3px var(--wa-primary);
+	outline: 2px solid transparent;
 }
 
 #workos-authkit-root .wa-btn-secondary {
 	background: var(--wa-surface);
-	color: var(--wa-text);
-	border-color: var(--wa-border);
+	color: var(--wa-primary);
+	border-color: var(--wa-primary);
 }
 
-#workos-authkit-root .wa-btn-secondary:hover {
-	background: #f9fafb;
+#workos-authkit-root .wa-btn-secondary:hover,
+#workos-authkit-root .wa-btn-secondary:focus {
+	background: #f6f7f7;
+	color: var(--wa-primary-hover);
+	border-color: var(--wa-primary-hover);
 }
 
 #workos-authkit-root .wa-btn:disabled {
@@ -160,7 +223,7 @@
 #workos-authkit-root .wa-alert {
 	padding: 10px 12px;
 	border-radius: var(--wa-radius);
-	font-size: 0.9rem;
+	font-size: 0.9375rem;
 }
 
 #workos-authkit-root .wa-alert-error {
@@ -174,7 +237,7 @@
 	align-items: center;
 	gap: 12px;
 	color: var(--wa-muted);
-	font-size: 0.85rem;
+	font-size: 0.8125rem;
 }
 
 #workos-authkit-root .wa-divider::before,
@@ -182,7 +245,7 @@
 	content: "";
 	flex: 1;
 	height: 1px;
-	background: var(--wa-border);
+	background: var(--wa-card-border);
 }
 
 #workos-authkit-root .wa-divider-label {
@@ -191,9 +254,51 @@
 
 #workos-authkit-root .wa-footer {
 	text-align: center;
-	margin: 8px 0 0;
+	margin: 0;
 	color: var(--wa-muted);
-	font-size: 0.875rem;
+	font-size: 0.9375rem;
+}
+
+/*
+ * Area rendered below the card (wp-login-style chrome). Intentionally
+ * outside .wa-card so the links sit on the gray page background, not
+ * on the white card. The SLOT_BELOW_CARD fill point lives here — it
+ * gets the whole zone before the built-in links so extenders can
+ * inject terms-of-service, support, or other site-level chrome.
+ */
+#workos-authkit-root .wa-below-card {
+	margin-top: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+#workos-authkit-root .wa-below-card-link {
+	margin: 0;
+	font-size: 0.9375rem;
+	color: var(--wa-muted);
+}
+
+#workos-authkit-root .wa-below-card-back {
+	color: var(--wa-muted);
+	text-decoration: none;
+}
+
+#workos-authkit-root .wa-below-card-back:hover,
+#workos-authkit-root .wa-below-card-back:focus {
+	color: var(--wa-primary);
+	text-decoration: underline;
+}
+
+#workos-authkit-root .wa-below-card .wa-linkbtn {
+	color: var(--wa-muted);
+	text-decoration: none;
+}
+
+#workos-authkit-root .wa-below-card .wa-linkbtn:hover,
+#workos-authkit-root .wa-below-card .wa-linkbtn:focus {
+	color: var(--wa-primary);
+	text-decoration: underline;
 }
 
 #workos-authkit-root .wa-linkbtn {
@@ -204,6 +309,11 @@
 	cursor: pointer;
 	font: inherit;
 	text-decoration: underline;
+}
+
+#workos-authkit-root .wa-linkbtn:hover,
+#workos-authkit-root .wa-linkbtn:focus {
+	color: var(--wa-primary-hover);
 }
 
 #workos-authkit-root .wa-spinner {

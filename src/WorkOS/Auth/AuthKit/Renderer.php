@@ -155,6 +155,15 @@ class Renderer {
 			'data-invitation-token' => sanitize_text_field( $context['invitation_token'] ?? '' ),
 			'data-reset-token'      => sanitize_text_field( $context['reset_token'] ?? '' ),
 			'data-initial-step'     => sanitize_key( $context['initial_step'] ?? 'pick' ),
+			// Site-level chrome the below-card area uses to render a "back to
+			// site" link. Always emit the values (they're cheap and extender
+			// fills might want them), but the default "Go to {site}" link
+			// only renders when show-chrome=1, set by full_page renders so
+			// shortcode / block usage does not sprout a redundant link back
+			// to the page the user is already on.
+			'data-site-name'        => sanitize_text_field( (string) get_bloginfo( 'name' ) ),
+			'data-site-url'         => esc_url_raw( (string) home_url( '/' ) ),
+			'data-show-chrome'      => ! empty( $context['show_chrome'] ) ? '1' : '0',
 		];
 
 		$style_tag = $this->branding_style_tag( $profile_data['branding'] );
@@ -177,7 +186,13 @@ class Renderer {
 
 		$site_name = wp_strip_all_tags( (string) get_bloginfo( 'name' ) );
 		$language  = get_bloginfo( 'language' );
-		$mount     = $this->render_mount( $profile, $context );
+
+		// Mark this as a full-page render so the client emits the default
+		// "Go to {site}" below-card link. Shortcode / block renders do not
+		// set this and the link stays hidden (users are already on the site).
+		$context['show_chrome'] = true;
+
+		$mount = $this->render_mount( $profile, $context );
 
 		/**
 		 * Filters the CSS classes applied to the AuthKit full-page <body>.
@@ -240,8 +255,17 @@ class Renderer {
 	/**
 	 * Resolve the profile's branding, falling back to sensible defaults.
 	 *
-	 * Logo resolution chain: per-profile attachment → WordPress Site Icon
-	 * (Settings → General) → empty string (no logo rendered).
+	 * Logo resolution chain is driven by `branding.logo_mode`:
+	 * - `none`   → empty string (no logo rendered; skips all fallbacks).
+	 * - `custom` → resolved attachment URL (empty string if the attachment
+	 *              has been deleted since the profile was saved).
+	 * - `default` (and anything else) → WordPress Site Icon
+	 *              (Settings → General) → bundled WP logo shipped in
+	 *              core (`admin_url('images/wordpress-logo.svg')`) → empty.
+	 *
+	 * The bundled logo fallback means an unbranded install still looks
+	 * like a WordPress login screen out of the box rather than a blank
+	 * card.
 	 *
 	 * @param Profile $profile Active profile.
 	 *
@@ -250,13 +274,20 @@ class Renderer {
 	private function resolve_branding( Profile $profile ): array {
 		$branding = $profile->get_branding();
 
-		$logo_url = '';
-		if ( ! empty( $branding['logo_attachment_id'] ) ) {
-			$logo_url = (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] );
-		}
+		$logo_mode = (string) ( $branding['logo_mode'] ?? Profile::LOGO_MODE_DEFAULT );
+		$logo_url  = '';
 
-		if ( '' === $logo_url ) {
+		if ( Profile::LOGO_MODE_NONE === $logo_mode ) {
+			$logo_url = '';
+		} elseif ( Profile::LOGO_MODE_CUSTOM === $logo_mode ) {
+			if ( ! empty( $branding['logo_attachment_id'] ) ) {
+				$logo_url = (string) wp_get_attachment_url( (int) $branding['logo_attachment_id'] );
+			}
+		} else {
 			$logo_url = (string) get_site_icon_url( 192 );
+			if ( '' === $logo_url ) {
+				$logo_url = admin_url( 'images/wordpress-logo.svg' );
+			}
 		}
 
 		$resolved = [
@@ -301,7 +332,12 @@ class Renderer {
 		// or `</style>` sequence.
 		$primary = (string) ( $branding['primary_color'] ?? '' );
 		if ( '' !== $primary && preg_match( '/^#[0-9a-fA-F]{3,8}$/', $primary ) ) {
+			// A custom primary drops the matching WP-blue hover, so override
+			// hover to the same color. Deriving a darker shade would require
+			// a color-math utility and is not worth the added surface area;
+			// a flat hover reads cleanly enough for a branded palette.
 			$rules[] = '--wa-primary: ' . $primary . ';';
+			$rules[] = '--wa-primary-hover: ' . $primary . ';';
 		}
 
 		if ( empty( $rules ) ) {

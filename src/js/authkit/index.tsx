@@ -30,6 +30,7 @@ function parseConfig( root: HTMLElement ): AppProps {
 		password_reset_flow: rawProfile.password_reset_flow ?? true,
 		mfa: rawProfile.mfa ?? { enforce: 'if_required', factors: [ 'totp' ] },
 		branding: rawProfile.branding ?? {
+			logo_mode: 'default',
 			logo_attachment_id: 0,
 			primary_color: '',
 			heading: '',
@@ -40,6 +41,9 @@ function parseConfig( root: HTMLElement ): AppProps {
 		restBaseUrl:
 			root.getAttribute( 'data-rest-base' ) || '/wp-json/workos/v1/auth',
 		redirectTo: root.getAttribute( 'data-redirect-to' ) || '',
+		siteName: root.getAttribute( 'data-site-name' ) || '',
+		siteUrl: root.getAttribute( 'data-site-url' ) || '',
+		showChrome: root.getAttribute( 'data-show-chrome' ) === '1',
 	};
 
 	const initialStep = ( root.getAttribute( 'data-initial-step' ) ||

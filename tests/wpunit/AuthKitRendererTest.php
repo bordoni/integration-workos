@@ -95,7 +95,8 @@ class AuthKitRendererTest extends WPTestCase {
 
 		$html = $this->renderer->render_mount( $profile );
 
-		$this->assertStringContainsString( '#workos-authkit-root{--wa-primary: #ff3366', $html );
+		$this->assertStringContainsString( '--wa-primary: #ff3366', $html );
+		$this->assertStringContainsString( '--wa-primary-hover: #ff3366', $html );
 	}
 
 	/**
@@ -183,6 +184,64 @@ class AuthKitRendererTest extends WPTestCase {
 
 		delete_option( 'site_icon' );
 		wp_delete_attachment( $attachment_id, true );
+	}
+
+	/**
+	 * `logo_mode: none` wins over every fallback — no <img> URL lands in
+	 * the data-profile JSON even when a Site Icon and a saved attachment
+	 * both exist.
+	 */
+	public function test_render_mount_logo_mode_none_emits_empty_logo(): void {
+		$site_icon = self::factory()->attachment->create_object(
+			'site-icon.png',
+			0,
+			[
+				'post_mime_type' => 'image/png',
+				'post_type'      => 'attachment',
+			]
+		);
+		update_option( 'site_icon', $site_icon );
+
+		$profile = Profile::from_array(
+			[
+				'slug'     => 'members',
+				'title'    => 'Members',
+				'branding' => [
+					'logo_mode'          => Profile::LOGO_MODE_NONE,
+					'logo_attachment_id' => $site_icon,
+				],
+			]
+		);
+
+		$html = $this->renderer->render_mount( $profile );
+
+		$this->assertStringNotContainsString( 'site-icon.png', $html );
+		// The data-profile JSON is HTML-escaped inside an attribute, so
+		// match the entity-encoded form of `"logo_url":""`.
+		$this->assertStringContainsString( '&quot;logo_url&quot;:&quot;&quot;', $html );
+
+		delete_option( 'site_icon' );
+		wp_delete_attachment( $site_icon, true );
+	}
+
+	/**
+	 * With no Site Icon set, `default` mode falls through to the bundled
+	 * WordPress "W" logo shipped in core. This is the "looks like WP out
+	 * of the box" path.
+	 */
+	public function test_render_mount_falls_back_to_bundled_wp_logo(): void {
+		delete_option( 'site_icon' );
+
+		$profile = Profile::from_array(
+			[
+				'slug'  => 'members',
+				'title' => 'Members',
+			]
+		);
+
+		$html = $this->renderer->render_mount( $profile );
+
+		$this->assertStringContainsString( 'wordpress-logo.svg', $html );
 	}
 
 	/**
