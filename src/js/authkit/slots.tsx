@@ -19,6 +19,7 @@ export const SLOT_AFTER_FORM            = 'workos.authkit.afterForm';
 export const SLOT_AFTER_PRIMARY_ACTION  = 'workos.authkit.afterPrimaryAction';
 export const SLOT_BEFORE_FOOTER         = 'workos.authkit.beforeFooter';
 export const SLOT_AFTER_FOOTER          = 'workos.authkit.afterFooter';
+export const SLOT_BELOW_CARD            = 'workos.authkit.belowCard';
 export const SLOT_PICKER_BEFORE_METHODS = 'workos.authkit.methodPicker.beforeMethods';
 export const SLOT_PICKER_AFTER_METHODS  = 'workos.authkit.methodPicker.afterMethods';
 

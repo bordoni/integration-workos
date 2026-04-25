@@ -30,6 +30,7 @@ import {
 	Signup,
 	SignupVerify,
 } from './flows';
+import { BelowCard } from './ui';
 
 export interface AppProps {
 	profile: Profile;
@@ -120,6 +121,24 @@ export function App( props: AppProps ) {
 		setStep( 'mfa' );
 	};
 
+	const flowEl = renderFlow();
+	return (
+		<>
+			{ flowEl }
+			<BelowCard
+				profile={ profile }
+				step={ step }
+				fillProps={ {
+					step,
+					profileSlug: profile.slug,
+					methods: profile.methods || [],
+				} }
+				onNavigate={ ( next ) => setStep( next ) }
+			/>
+		</>
+	);
+
+	function renderFlow() {
 	switch ( step ) {
 		case 'pick':
 			return (
@@ -260,5 +279,6 @@ export function App( props: AppProps ) {
 					onError={ () => {} }
 				/>
 			);
+	}
 	}
 }

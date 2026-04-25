@@ -6,6 +6,7 @@
  * `wa-` prefixed class so stylesheet authors can reskin.
  */
 
+import { __, sprintf } from '@wordpress/i18n';
 import type { ReactNode } from 'react';
 import {
 	AuthKitSlot,
@@ -13,8 +14,10 @@ import {
 	SLOT_AFTER_HEADER,
 	SLOT_BEFORE_FOOTER,
 	SLOT_BEFORE_HEADER,
+	SLOT_BELOW_CARD,
 } from './slots';
 import type { AuthKitSlotFillProps } from './slots';
+import type { Profile, Step } from './types';
 
 interface ButtonProps {
 	children?: ReactNode;
@@ -217,5 +220,71 @@ export function LinkButton( { onClick, children }: LinkButtonProps ) {
 		<button type="button" className="wa-linkbtn" onClick={ onClick }>
 			{ children }
 		</button>
+	);
+}
+
+interface BelowCardProps {
+	profile: Profile;
+	step: Step;
+	fillProps: AuthKitSlotFillProps;
+	onNavigate: ( step: Step ) => void;
+}
+
+/**
+ * Site-level links rendered below the card, mirroring wp-login.php.
+ *
+ * Renders a `SLOT_BELOW_CARD` fill point so extenders can inject or
+ * override links (e.g. terms-of-service, support, privacy). Defaults
+ * show:
+ *
+ * - "Lost your password?" when the profile enables password_reset_flow
+ *   and the active step is not already one of the reset screens.
+ *   Routing to the reset step deliberately keeps the same code path
+ *   the in-card "Forgot password?" link used, so behavior is
+ *   unchanged.
+ * - "← Go to {site name}" when `showChrome` is true (set by the
+ *   server for full-page renders — takeover and the frontend route).
+ *   Shortcode and block renders skip this link because the user is
+ *   already on the site.
+ */
+export function BelowCard( {
+	profile,
+	step,
+	fillProps,
+	onNavigate,
+}: BelowCardProps ) {
+	const onResetScreen =
+		step === 'reset' || step === 'reset_sent' || step === 'reset_confirm';
+
+	const showLostPassword =
+		profile.password_reset_flow &&
+		profile.methods.includes( 'password' ) &&
+		! onResetScreen;
+
+	const showBackToSite =
+		profile.showChrome && profile.siteUrl && profile.siteName;
+
+	return (
+		<div className="wa-below-card">
+			<AuthKitSlot name={ SLOT_BELOW_CARD } fillProps={ fillProps } />
+			{ showLostPassword && (
+				<p className="wa-below-card-link">
+					<LinkButton onClick={ () => onNavigate( 'reset' ) }>
+						{ __( 'Lost your password?', 'integration-workos' ) }
+					</LinkButton>
+				</p>
+			) }
+			{ showBackToSite && (
+				<p className="wa-below-card-link">
+					<a className="wa-below-card-back" href={ profile.siteUrl }>
+						{ sprintf(
+							/* translators: %s: site name. */
+							__( '← Go to %s', 'integration-workos' ),
+							profile.siteName
+						) }
+					</a>
+				</p>
+			) }
+		</div>
 	);
 }

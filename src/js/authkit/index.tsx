@@ -41,6 +41,9 @@ function parseConfig( root: HTMLElement ): AppProps {
 		restBaseUrl:
 			root.getAttribute( 'data-rest-base' ) || '/wp-json/workos/v1/auth',
 		redirectTo: root.getAttribute( 'data-redirect-to' ) || '',
+		siteName: root.getAttribute( 'data-site-name' ) || '',
+		siteUrl: root.getAttribute( 'data-site-url' ) || '',
+		showChrome: root.getAttribute( 'data-show-chrome' ) === '1',
 	};
 
 	const initialStep = ( root.getAttribute( 'data-initial-step' ) ||

@@ -234,23 +234,11 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 			fillProps={ fillProps }
 			header={ <Heading>{ __( 'Sign in', 'integration-workos' ) }</Heading> }
 			footer={
-				<>
-					{ profile.password_reset_flow && (
-						<p className="wa-footer">
-							<LinkButton onClick={ () => onBack( 'reset' ) }>
-								{ __(
-									'Forgot your password?',
-									'integration-workos'
-								) }
-							</LinkButton>
-						</p>
-					) }
-					<p className="wa-footer">
-						<LinkButton onClick={ () => onBack() }>
-							{ __( '← Back', 'integration-workos' ) }
-						</LinkButton>
-					</p>
-				</>
+				<p className="wa-footer">
+					<LinkButton onClick={ () => onBack() }>
+						{ __( '← Back', 'integration-workos' ) }
+					</LinkButton>
+				</p>
 			}
 		>
 			{ error && <Alert variant="error">{ error }</Alert> }

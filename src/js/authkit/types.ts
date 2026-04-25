@@ -59,6 +59,9 @@ export interface Profile {
 	// Client-side derived fields — not part of the server payload.
 	restBaseUrl: string;
 	redirectTo: string;
+	siteName: string;
+	siteUrl: string;
+	showChrome: boolean;
 }
 
 export interface AuthUser {

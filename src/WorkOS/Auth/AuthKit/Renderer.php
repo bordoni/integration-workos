@@ -155,6 +155,15 @@ class Renderer {
 			'data-invitation-token' => sanitize_text_field( $context['invitation_token'] ?? '' ),
 			'data-reset-token'      => sanitize_text_field( $context['reset_token'] ?? '' ),
 			'data-initial-step'     => sanitize_key( $context['initial_step'] ?? 'pick' ),
+			// Site-level chrome the below-card area uses to render a "back to
+			// site" link. Always emit the values (they're cheap and extender
+			// fills might want them), but the default "Go to {site}" link
+			// only renders when show-chrome=1, set by full_page renders so
+			// shortcode / block usage does not sprout a redundant link back
+			// to the page the user is already on.
+			'data-site-name'        => sanitize_text_field( (string) get_bloginfo( 'name' ) ),
+			'data-site-url'         => esc_url_raw( (string) home_url( '/' ) ),
+			'data-show-chrome'      => ! empty( $context['show_chrome'] ) ? '1' : '0',
 		];
 
 		$style_tag = $this->branding_style_tag( $profile_data['branding'] );
@@ -177,6 +186,12 @@ class Renderer {
 
 		$site_name = wp_strip_all_tags( (string) get_bloginfo( 'name' ) );
 		$language  = get_bloginfo( 'language' );
+
+		// Mark this as a full-page render so the client emits the default
+		// "Go to {site}" below-card link. Shortcode / block renders do not
+		// set this and the link stays hidden (users are already on the site).
+		$context['show_chrome'] = true;
+
 		$mount     = $this->render_mount( $profile, $context );
 
 		/**
