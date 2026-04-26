@@ -329,10 +329,12 @@
 }
 
 #workos-profiles-admin-root .wpa-logo-field .wpa-logo-preview {
+	align-self: flex-start;
 	max-width: 200px;
 	max-height: 80px;
 	width: auto;
 	height: auto;
+	object-fit: contain;
 	border: 1px solid #dcdcde;
 	border-radius: 4px;
 	padding: 8px;
