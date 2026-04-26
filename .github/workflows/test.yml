@@ -48,13 +48,31 @@ jobs:
           tools: composer
           coverage: none
 
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
       # Composer install MUST run scripts here (unlike the PHPCS job above)
       # so Strauss generates the prefixed `WorkOS\Vendor\…` classes that
       # PHPStan needs to resolve types.
-      - name: Install dependencies (with Strauss)
+      - name: Install PHP dependencies (with Strauss)
         run: composer install --no-interaction --prefer-dist
         env:
           COMPOSER_NO_AUDIT: 1
+
+      # Build the JS bundles so the `build/*.asset.php` files exist —
+      # PHPStan statically resolves the `include $asset_file` paths in
+      # Admin/Settings.php, UI/Controller.php, etc. and would otherwise
+      # fail with `path.notExists` even though every callsite is guarded
+      # by `file_exists()`.
+      - name: Install JS dependencies + build
+        run: |
+          bun install --frozen-lockfile
+          bun run build
 
       - name: Run PHPStan
         run: composer phpstan -- --no-progress --error-format=github
