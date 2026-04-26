@@ -41,23 +41,14 @@ class LoginTakeover {
 	private Renderer $renderer;
 
 	/**
-	 * Profile repository.
-	 *
-	 * @var ProfileRepository
-	 */
-	private ProfileRepository $profiles;
-
-	/**
 	 * Constructor.
 	 *
-	 * @param ProfileRouter     $router   Profile router.
-	 * @param Renderer          $renderer Renderer.
-	 * @param ProfileRepository $profiles Profile repository (for direct lookups).
+	 * @param ProfileRouter $router   Profile router.
+	 * @param Renderer      $renderer Renderer.
 	 */
-	public function __construct( ProfileRouter $router, Renderer $renderer, ProfileRepository $profiles ) {
+	public function __construct( ProfileRouter $router, Renderer $renderer ) {
 		$this->router   = $router;
 		$this->renderer = $renderer;
-		$this->profiles = $profiles;
 	}
 
 	/**

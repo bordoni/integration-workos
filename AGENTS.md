@@ -180,6 +180,8 @@ Per-environment constants (take priority over generic):
 | `bun.lock` | Locked dependency graph (committed) |
 | `tsconfig.json` | TypeScript config (strict, `jsx: react-jsx`, `noEmit: true`) |
 | `webpack.config.js` | Extends `@wordpress/scripts` default config with authkit + admin-profiles entries |
+| `phpstan.neon.dist` | PHPStan config (level 5, scans `src/` + `integration-workos.php` + `uninstall.php`, `phpVersion: 70400`, Strauss vendor resolved via `vendor/autoload.php` in `scanFiles`) |
+| `phpstan/stubs.php` | Symbol stubs for `WORKOS_*` runtime-defined constants so PHPStan can resolve them statically — never executed |
 
 ## Build System
 
@@ -197,6 +199,7 @@ bun run start         # Development with watch
 bun run lint:ts       # Type-check TypeScript (tsc --noEmit)
 bun run lint:php      # Lint PHP via PHPCS
 bun run lint:php:fix  # Auto-fix PHP lint issues
+composer phpstan      # Static analysis (PHPStan level 5, --memory-limit=1G)
 ```
 
 `@wordpress/scripts` v30 transpiles `.ts` / `.tsx` natively via its default
@@ -297,3 +300,47 @@ Use the global `/slic` skill for comprehensive guidance on test structure, envir
 
 - PHP follows WordPress Coding Standards via PHPCS/WPCS
 - Run `composer lint` / `composer lint:fix` for PHP linting
+
+## Static Analysis (PHPStan)
+
+PHPStan analyses the plugin source at **level 5** and is gated in CI as
+a required check on PRs to `main`. Config: `phpstan.neon.dist`.
+
+### Stack
+
+- `phpstan/phpstan` ^2 — analyzer, in `composer require-dev`
+- `szepeviktor/phpstan-wordpress` — WordPress core stubs + WP-aware
+  inference for `apply_filters`, `wp_remote_request`, hook signatures
+- `php-stubs/wp-cli-stubs` — `WP_CLI`, `WP_CLI_Command`,
+  `WP_CLI\Formatter` for `src/WorkOS/CLI/*`
+- `phpstan/extension-installer` — auto-registers neon files from
+  installed extensions (no manual `includes:` wiring)
+
+### Scope
+
+- Scanned: `src/`, `integration-workos.php`, `uninstall.php`
+- `phpVersion: 70400` so PHP 7.4 syntax mistakes can't slip past on
+  PHP 8.x runners
+- `treatPhpDocTypesAsCertain: false` — narrowing is required when a
+  hook caller may pass something other than the documented type
+- Strauss-prefixed `WorkOS\Vendor\…` resolved via `vendor/autoload.php`
+  in `scanFiles`. The PHPStan CI job therefore must run
+  `composer install` WITH scripts (so Strauss runs and prefixed
+  classes exist on disk) — that's the key difference from the PHPCS
+  CI job, which uses `--no-scripts` + a stub `vendor/prefixed/autoload.php`.
+- WP-CLI stubs (`vendor/php-stubs/wp-cli-stubs/wp-cli-*.php`) and
+  `phpstan/stubs.php` (project-local `WORKOS_*` constants) are loaded
+  via `scanFiles`. Not bootstrap files — just symbol discovery.
+
+### Policy
+
+- **No baseline.** Findings get fixed in the PR that introduces them.
+  `composer phpstan:baseline` exists as a safety hatch for
+  exceptional cases but the resulting `phpstan-baseline.neon` should
+  not be committed without discussion.
+- **Tests are not analyzed yet.** Codeception's wp-browser stubs are
+  partial; revisit once `phpstan/phpstan-phpunit` integration is
+  worth the noise.
+- **Strict-rules extension is intentionally not enabled.** Level 5 is
+  the floor we're committing to first; reconsider strict-rules as a
+  follow-up when this is stable.

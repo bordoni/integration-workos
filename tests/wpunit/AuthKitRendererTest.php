@@ -336,7 +336,7 @@ class AuthKitRendererTest extends WPTestCase {
 	public function test_login_takeover_resolves_custom_default_profile(): void {
 		$this->repository->ensure_default(); // Default is custom mode by default.
 		$router   = new ProfileRouter( $this->repository );
-		$takeover = new LoginTakeover( $router, $this->renderer, $this->repository );
+		$takeover = new LoginTakeover( $router, $this->renderer );
 		$takeover->register();
 
 		$this->assertSame(
@@ -476,7 +476,7 @@ class AuthKitRendererTest extends WPTestCase {
 				$this->rendered = true;
 			}
 		};
-		$takeover = new LoginTakeover( $router, $fake_renderer, $this->repository );
+		$takeover = new LoginTakeover( $router, $fake_renderer );
 
 		$captured = null;
 		$listener = static function ( $location ) use ( &$captured ): string {

@@ -14,6 +14,11 @@ use WorkOS\Vendor\lucatume\DI52\ServiceProvider as Di52ServiceProvider;
  *
  * Note: Prefer using Controller instead of ServiceProvider.
  * Controllers provide better lifecycle management and registration tracking.
+ *
+ * @property Container $container The plugin's typed container subclass — the
+ *                                parent declares `$container` as the bare di52
+ *                                Container, but `Plugin::initializeContainer()`
+ *                                always constructs the contract subclass.
  */
 abstract class ServiceProvider extends Di52ServiceProvider {
 
