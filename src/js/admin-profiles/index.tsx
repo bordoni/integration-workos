@@ -1234,8 +1234,9 @@ function List( {
 					const isDefault   = p.slug === 'default';
 					const color       = ( p.branding?.primary_color || '' ).trim();
 					const logoUrl     = p.branding?.logo_url || '';
-					const customPath  = ( p.custom_path || '' ).trim();
-					const loginUrl    = resolveLoginUrl( p );
+					const customUrl   = resolveCustomUrl( p );
+					const hasCustom   = '' !== customUrl;
+					const displayUrl  = hasCustom ? customUrl : resolveLoginUrl( p );
 					const shortcode   = profileShortcode( p.slug );
 					const mediaStyle  = color
 						? { backgroundColor: color }
@@ -1279,15 +1280,6 @@ function List( {
 									>
 										{ modes[ p.mode ] || p.mode }
 									</span>
-									{ '' !== customPath && (
-										<span className="wpa-pill wpa-pill-path">
-											{ sprintf(
-												/* translators: %s: custom URL path. */
-												__( 'Path: /%s', 'integration-workos' ),
-												customPath
-											) }
-										</span>
-									) }
 									{ color && (
 										<span className="wpa-color">
 											<span
@@ -1373,18 +1365,32 @@ function List( {
 
 								<div className="wpa-card-embed">
 									<EmbedRow
-										label={ __(
-											'URL',
-											'integration-workos'
-										) }
-										value={ loginUrl }
+										label={
+											hasCustom
+												? __(
+													'Custom URL',
+													'integration-workos'
+												)
+												: __(
+													'URL',
+													'integration-workos'
+												)
+										}
+										value={ displayUrl }
 										copyKey={ `card:${ p.id }:url` }
 										copiedKey={ copiedKey }
 										onCopy={ copy }
-										ariaLabel={ __(
-											'Copy login URL',
-											'integration-workos'
-										) }
+										ariaLabel={
+											hasCustom
+												? __(
+													'Copy custom URL',
+													'integration-workos'
+												)
+												: __(
+													'Copy login URL',
+													'integration-workos'
+												)
+										}
 									/>
 									<EmbedRow
 										label={ __(
