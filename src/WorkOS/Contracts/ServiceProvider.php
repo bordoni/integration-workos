@@ -27,10 +27,15 @@ abstract class ServiceProvider extends Di52ServiceProvider {
 	/**
 	 * Get the container instance.
 	 *
+	 * Instance method (not static) because the parent
+	 * `Di52ServiceProvider` stores the container as a non-static
+	 * `$container` property — `static::$container` would fatal at
+	 * runtime if anyone called the previous static signature.
+	 *
 	 * @return Container
 	 */
-	protected static function getContainer(): Container {
-		return static::$container;
+	protected function getContainer(): Container {
+		return $this->container;
 	}
 
 	/**
