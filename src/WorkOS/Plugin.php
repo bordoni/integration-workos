@@ -182,6 +182,9 @@ class Plugin {
 		 */
 		Auth\Login::register_rewrite();
 		Auth\AuthKit\FrontendRoute::register_rewrite();
+		// Clear the cached custom-paths signature so the post-activation
+		// `init` re-derives the rules and flushes once more if needed.
+		delete_option( Auth\AuthKit\FrontendRoute::SIGNATURE_OPTION );
 		flush_rewrite_rules();
 
 		// Seed the reserved default Login Profile so wp-login.php takeover

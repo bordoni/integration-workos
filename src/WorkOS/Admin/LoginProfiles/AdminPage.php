@@ -9,6 +9,7 @@ namespace WorkOS\Admin\LoginProfiles;
 
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WorkOS\Auth\AuthKit\Shortcode;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -76,7 +77,9 @@ class AdminPage {
 	public function render(): void {
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Login Profiles', 'integration-workos' ); ?></h1>
+			<h1 class="wp-heading-inline"><?php esc_html_e( 'Login Profiles', 'integration-workos' ); ?></h1>
+			<span id="workos-profiles-admin-title-actions"></span>
+			<hr class="wp-header-end">
 			<p class="description">
 				<?php esc_html_e( 'Configure which sign-in methods each Login Profile offers. Each profile can scope to a specific organization and tune branding, signup, and MFA policy.', 'integration-workos' ); ?>
 			</p>
@@ -135,6 +138,9 @@ class AdminPage {
 				'restUrl'           => esc_url_raw( rest_url( 'workos/v1/admin/profiles' ) ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
 				'pageUrl'           => esc_url_raw( admin_url( 'admin.php?page=' . self::MENU_SLUG ) ),
+				'loginUrlBase'      => esc_url_raw( home_url( '/workos/login/' ) ),
+				'siteUrl'           => esc_url_raw( home_url( '/' ) ),
+				'shortcodeTag'      => Shortcode::TAG,
 				'profiles'          => $this->preloaded_profiles(),
 				'activeProfileSlug' => $this->active_profile_slug(),
 			]

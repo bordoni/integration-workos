@@ -180,6 +180,11 @@ class RestApi {
 			return $this->error_with_status( $logo_error, 400 );
 		}
 
+		$path_error = $this->validate_custom_path( $params );
+		if ( is_wp_error( $path_error ) ) {
+			return $this->error_with_status( $path_error, 400 );
+		}
+
 		$profile = Profile::from_array( $params );
 
 		$saved = $this->repository->save( $profile );
@@ -215,15 +220,31 @@ class RestApi {
 			return $this->error_with_status( $logo_error, 400 );
 		}
 
+		$path_error = $this->validate_custom_path( $params );
+		if ( is_wp_error( $path_error ) ) {
+			return $this->error_with_status( $path_error, 400 );
+		}
+
 		// Merge into the existing payload so partial updates are safe — the
 		// React editor only sends fields the user touched.
 		$merged       = array_replace_recursive( $existing->to_array(), $params );
 		$merged['id'] = $id;
 
 		// Protect the reserved default slug from being renamed out from under
-		// the wp-login.php takeover.
+		// the wp-login.php takeover. Same logic for custom_path: the default
+		// profile is the wp-login takeover and must not own a custom URL.
 		if ( Profile::DEFAULT_SLUG === $existing->get_slug() ) {
-			$merged['slug'] = Profile::DEFAULT_SLUG;
+			$merged['slug']        = Profile::DEFAULT_SLUG;
+			$merged['custom_path'] = '';
+			if ( isset( $params['custom_path'] ) && '' !== Profile::normalize_custom_path( (string) $params['custom_path'] ) ) {
+				return $this->error_with_status(
+					new WP_Error(
+						'workos_profile_path_default_locked',
+						__( 'The default Login Profile cannot use a custom path.', 'integration-workos' )
+					),
+					400
+				);
+			}
 		}
 
 		$profile = Profile::from_array( $merged );
@@ -420,6 +441,35 @@ class RestApi {
 			);
 		}
 
+		return null;
+	}
+
+	/**
+	 * Confirm a supplied `custom_path` survives shape sanitization.
+	 *
+	 * Only catches the "user typed garbage that becomes empty" case
+	 * (e.g. `///?///`) — reserved-list and uniqueness checks live in
+	 * {@see ProfileRepository::save()} so they have full cross-profile
+	 * visibility.
+	 *
+	 * @param array $params Incoming JSON body.
+	 *
+	 * @return WP_Error|null
+	 */
+	private function validate_custom_path( array $params ): ?WP_Error {
+		if ( ! array_key_exists( 'custom_path', $params ) ) {
+			return null;
+		}
+		$raw = (string) $params['custom_path'];
+		if ( '' === trim( $raw ) ) {
+			return null;
+		}
+		if ( '' === Profile::normalize_custom_path( $raw ) ) {
+			return new WP_Error(
+				'workos_profile_path_invalid',
+				__( 'That path contains characters that cannot be used in a URL.', 'integration-workos' )
+			);
+		}
 		return null;
 	}
 

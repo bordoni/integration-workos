@@ -170,6 +170,49 @@ class ProfileRepository {
 			);
 		}
 
+		$custom_path = $profile->get_custom_path();
+		if ( '' !== $custom_path ) {
+			// The default profile is the wp-login.php takeover — never give
+			// it a custom path of its own.
+			if ( Profile::DEFAULT_SLUG === $slug ) {
+				return new WP_Error(
+					'workos_profile_path_default_locked',
+					__( 'The default Login Profile cannot use a custom path.', 'integration-workos' )
+				);
+			}
+
+			$reserved = in_array( $custom_path, Profile::RESERVED_PATHS, true )
+				|| Profile::DEFAULT_SLUG === $custom_path
+				|| 0 === strpos( $custom_path, 'wp-admin' )
+				|| 0 === strpos( $custom_path, 'workos/' );
+			if ( $reserved ) {
+				return new WP_Error(
+					'workos_profile_path_reserved',
+					sprintf(
+						/* translators: %s: requested custom path. */
+						__( '"%s" is a reserved path and cannot be used as a custom login path.', 'integration-workos' ),
+						$custom_path
+					)
+				);
+			}
+
+			foreach ( $this->all() as $other ) {
+				if ( $other->get_id() === $profile->get_id() ) {
+					continue;
+				}
+				if ( $other->get_custom_path() === $custom_path ) {
+					return new WP_Error(
+						'workos_profile_path_taken',
+						sprintf(
+							/* translators: %s: requested custom path. */
+							__( 'The path "%s" is already used by another Login Profile.', 'integration-workos' ),
+							$custom_path
+						)
+					);
+				}
+			}
+		}
+
 		$post_args = [
 			'post_type'   => self::POST_TYPE,
 			'post_status' => 'publish',
@@ -237,6 +280,16 @@ class ProfileRepository {
 				__( 'Failed to delete the Login Profile.', 'integration-workos' )
 			);
 		}
+
+		/**
+		 * Fires after a Login Profile is deleted.
+		 *
+		 * Lets subsystems react to removal — used by the FrontendRoute to
+		 * invalidate its cached custom-path rewrite signature.
+		 *
+		 * @param Profile $profile The profile that was deleted.
+		 */
+		do_action( 'workos_login_profile_deleted', $profile );
 
 		return true;
 	}
