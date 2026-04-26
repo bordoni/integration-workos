@@ -44,21 +44,10 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 
 ## Screenshots
 
-![Branded Custom AuthKit login](.wordpress-org/screenshot-1.png)
-
-*Branded Custom AuthKit login shown to site visitors — driven by a Login Profile, with logo, heading, brand color, and the sign-in methods (SSO, magic code, passkey, password) you enable.*
-
-![Login Profiles editor](.wordpress-org/screenshot-2.png)
-
-*Login Profiles editor — pick sign-in methods, pin an organization, set the MFA policy, customize the URL path, and brand the card with a logo and color, all without code.*
-
-![WorkOS settings](.wordpress-org/screenshot-3.png)
-
-*WorkOS settings — switch between Production and Staging, manage API credentials and the webhook secret, and choose between Custom AuthKit and AuthKit Redirect login modes.*
-
-![Role mapping and redirects](.wordpress-org/screenshot-4.png)
-
-*Role mapping and redirects — map WorkOS organization roles to WordPress roles, route users to role-specific URLs after login and logout, and choose what happens to deprovisioned users.*
+| Custom AuthKit login | Login Profiles | WorkOS settings | Role mapping &amp; redirects |
+| :---: | :---: | :---: | :---: |
+| <a href=".wordpress-org/screenshot-1.png"><img src=".wordpress-org/screenshot-1.png" width="320" alt="Branded Custom AuthKit login"></a> | <a href=".wordpress-org/screenshot-2.png"><img src=".wordpress-org/screenshot-2.png" width="320" alt="Login Profiles list"></a> | <a href=".wordpress-org/screenshot-3.png"><img src=".wordpress-org/screenshot-3.png" width="320" alt="WorkOS settings"></a> | <a href=".wordpress-org/screenshot-4.png"><img src=".wordpress-org/screenshot-4.png" width="320" alt="Role mapping and redirects"></a> |
+| Branded login your site visitors see — logo, brand color, and the sign-in methods you enable. | Pick sign-in methods, pin an organization, set MFA policy, brand each card without code. | Switch Production / Staging, manage API credentials, and pick the login mode. | Map WorkOS roles to WP roles and send users to role-specific URLs. |
 
 ## Installation
 
