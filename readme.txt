@@ -23,7 +23,7 @@ Integration with WorkOS connects your WordPress site with [WorkOS](https://worko
 
 = Custom AuthKit =
 
-* **WordPress-hosted React login** — no redirect to WorkOS for password, magic code, signup, invitation, or MFA. Mounts on wp-login.php, a shortcode (`[workos_login_v2]`), a Gutenberg block, and a dedicated `/workos/login/{profile}` route.
+* **WordPress-hosted React login** — no redirect to WorkOS for password, magic code, signup, invitation, or MFA. Mounts on wp-login.php, a shortcode (`[workos:login]`), and a dedicated `/workos/login/{profile}` route.
 * **Login Profiles** — admin-defined presets (enabled sign-in methods, pinned organization, signup/invite toggles, MFA policy, branding) edited from **WorkOS → Login Profiles**. The organization picker loads live from WorkOS so admins pick an org by name instead of pasting raw IDs.
 * **Sign-in methods** — email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), and passkey. Each profile chooses its own subset.
 * **MFA** — TOTP, SMS, and WebAuthn/passkey with in-app enrollment + challenge. Profile-level `mfa.enforce` (`never`/`if_required`/`always`) and factor allowlist are applied at login time.
@@ -35,7 +35,7 @@ Integration with WorkOS connects your WordPress site with [WorkOS](https://worko
 
 * **Single Sign-On (SSO)** — legacy AuthKit redirect mode, per-profile selectable for SAML/OIDC connections.
 * **Headless mode** — intercept WordPress's `authenticate` filter for custom login forms.
-* **Legacy Login Button** — Shortcode (`[workos_login]`), Gutenberg block, and classic widget (AuthKit-redirect flow).
+* **Legacy Login Button** — Gutenberg block and classic widget (AuthKit-redirect flow).
 * **Login Bypass** — Access the native WordPress login form via `?fallback=1` when WorkOS is unavailable.
 * **Password Reset Integration** — Redirect password reset to WorkOS or fall back to WordPress.
 * **Registration Redirect** — Redirect registration to WorkOS AuthKit.
@@ -86,11 +86,11 @@ Yes, if "Password Fallback" is enabled in settings. Users can access the standar
 
 = How do I add a login button to my site? =
 
-Use the `[workos_login]` shortcode, add the "WorkOS Login" Gutenberg block, or use the "WorkOS Login" classic widget. All three render a styled login button that redirects to WorkOS AuthKit.
+Add the "WorkOS Login" Gutenberg block or use the "WorkOS Login" classic widget. Both render a styled login button that redirects to WorkOS AuthKit.
 
 = How do I show the new WordPress-hosted login (Custom AuthKit) on a page? =
 
-Use `[workos_login_v2 profile="your-profile-slug"]`, add the "WorkOS Login Form" block, or link to `/workos/login/{profile}`. All three mount the same React shell. The reserved `default` Login Profile automatically takes over wp-login.php.
+Use `[workos:login profile="your-profile-slug"]` or link to `/workos/login/{profile}`. Both mount the same React shell. The reserved `default` Login Profile automatically takes over wp-login.php.
 
 = Can different login pages offer different sign-in methods? =
 
@@ -169,7 +169,7 @@ WorkOS is provided by WorkOS, Inc.
 = 1.0.0 - 2026-04-23 =
 
 Custom AuthKit (WordPress-hosted login):
-* React login shell on wp-login.php, `[workos_login_v2]` shortcode, `workos/login-form` block, and `/workos/login/{profile}` route.
+* React login shell on wp-login.php, `[workos:login]` shortcode, and `/workos/login/{profile}` route.
 * Login Profiles — admin-defined presets for enabled methods, pinned organization, signup/invite/reset flows, MFA policy, and branding, managed at WorkOS → Login Profiles.
 * Pinned-organization picker in the Profile editor reads live from WorkOS (with a "Custom ID…" fallback for legacy or unlisted orgs), and the Profiles list renders organization names instead of raw IDs.
 * Sign-in methods: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey.
@@ -189,7 +189,7 @@ Base platform:
 * Entitlement gate — require organization membership to log in.
 * Webhook processing for user, organization, directory, membership, and connection events.
 * REST API Bearer token authentication using WorkOS access tokens.
-* Legacy login button shortcode (`[workos_login]`), Gutenberg block, and classic widget.
+* Legacy login button Gutenberg block and classic widget (AuthKit-redirect flow).
 * Login bypass via `?fallback=1` for native WordPress login when WorkOS is unavailable.
 * Activity logging with local database table and admin viewer.
 * Audit logging — forward WordPress events to WorkOS Audit Logs.

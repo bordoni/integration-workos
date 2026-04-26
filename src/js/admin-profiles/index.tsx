@@ -983,7 +983,7 @@ function resolveCustomUrl( profile: Profile ): string {
 }
 
 function profileShortcode( slug: string ): string {
-	const tag = window.workosProfileAdmin?.shortcodeTag || 'workos_login_v2';
+	const tag = window.workosProfileAdmin?.shortcodeTag || 'workos:login';
 	return `[${ tag } profile="${ slug }"]`;
 }
 

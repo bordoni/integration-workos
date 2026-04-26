@@ -10,7 +10,7 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 
 ### Custom AuthKit (WordPress-hosted login)
 
-- **React login shell** on wp-login.php, `[workos_login_v2]` shortcode, `workos/login-form` block, and a dedicated `/workos/login/{profile}` route — all driven by the same TypeScript bundle
+- **React login shell** on wp-login.php, `[workos:login]` shortcode, and a dedicated `/workos/login/{profile}` route — all driven by the same TypeScript bundle
 - **Login Profiles** — admin-defined presets (enabled methods, pinned organization, signup/invite/reset toggles, MFA policy, branding) managed through a React admin editor at **WorkOS → Login Profiles**
 - **Sign-in methods**: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey
 - **In-app flows**: self-serve sign-up with email verification, invitation acceptance, password reset
@@ -28,7 +28,7 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **Entitlement Gate** — require organization membership to log in
 - **Webhook Processing** — real-time sync of user, organization, and directory events
 - **REST API Authentication** — Bearer token auth for headless/decoupled WordPress
-- **Legacy Login Button** — shortcode (`[workos_login]`), Gutenberg block, and classic widget (AuthKit-redirect flow)
+- **Legacy Login Button** — Gutenberg block and classic widget (AuthKit-redirect flow)
 - **Login Bypass** — access the native WordPress login form via `?fallback=1` when WorkOS is unavailable
 - **Activity Logging** — local database table with admin viewer for tracking authentication and sync events
 - **Audit Logging** — forward WordPress events (login, logout, post changes, user changes) to WorkOS Audit Logs
@@ -105,11 +105,11 @@ renders in its place. All other actions — `logout`, `register`,
 `?workos=0` — pass through to core WP so WooCommerce, WP-CLI password
 resets, and email confirmation links keep working.
 
-The shell also mounts on `[workos_login_v2 profile="slug"]`, a `workos/login-form`
-Gutenberg block, and the `/workos/login/{profile}` rewrite. Every mount
-reads configuration from `data-*` attributes emitted by `Auth\AuthKit\Renderer`
-and talks to `/wp-json/workos/v1/auth/*` for everything — no WorkOS calls
-are proxied through the browser.
+The shell also mounts on `[workos:login profile="slug"]` and the
+`/workos/login/{profile}` rewrite. Every mount reads configuration from
+`data-*` attributes emitted by `Auth\AuthKit\Renderer` and talks to
+`/wp-json/workos/v1/auth/*` for everything — no WorkOS calls are proxied
+through the browser.
 
 ### AuthKit-Redirect Mode (legacy)
 
@@ -761,7 +761,7 @@ src/WorkOS/
       LoginCompleter.php          # Shared post-auth finalizer (entitlement + MFA)
       LoginTakeover.php           # wp-login.php takeover (action=login only)
       FrontendRoute.php           # /workos/login/{profile} rewrite
-      Shortcode.php               # [workos_login_v2] shortcode
+      Shortcode.php               # [workos:login] shortcode
       Renderer.php                # HTML shell + bundle enqueue
       Nonce.php                   # Profile-scoped CSRF nonces
       RateLimiter.php             # Per-IP / per-email transient buckets

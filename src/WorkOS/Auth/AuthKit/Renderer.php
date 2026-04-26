@@ -15,7 +15,7 @@ defined( 'ABSPATH' ) || exit;
  * Shared across every entry point that surfaces the AuthKit UI:
  *
  *  - wp-login.php takeover (full-page chrome we control ourselves)
- *  - `[workos_login]` shortcode / Gutenberg block (inline card)
+ *  - `[workos:login]` shortcode (inline card)
  *  - `/workos/login/{profile}` rewrite (full-bleed template)
  *  - Admin Profile Editor (via a different React bundle in Phase 5)
  *
