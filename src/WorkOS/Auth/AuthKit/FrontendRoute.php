@@ -129,6 +129,14 @@ class FrontendRoute {
 			exit;
 		}
 
+		// Already-signed-in users don't need a login screen — bounce them
+		// to where they would have ended up after signing in.
+		if ( is_user_logged_in() ) {
+			nocache_headers();
+			wp_safe_redirect( LoginRedirector::for_visitor( $profile ), 302 );
+			exit;
+		}
+
 		$context = [
 			'redirect_to'      => (string) ( SuperGlobals::get_get_var( 'redirect_to' ) ?? '' ),
 			'invitation_token' => (string) ( SuperGlobals::get_get_var( 'invitation_token' ) ?? '' ),
@@ -154,9 +162,6 @@ class FrontendRoute {
 	public function register_custom_paths(): void {
 		$entries = [];
 		foreach ( $this->profiles->all() as $profile ) {
-			if ( Profile::DEFAULT_SLUG === $profile->get_slug() ) {
-				continue;
-			}
 			$path = $profile->get_custom_path();
 			if ( '' === $path ) {
 				continue;

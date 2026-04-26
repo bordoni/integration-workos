@@ -37,6 +37,7 @@ function parseConfig( root: HTMLElement ): AppProps {
 			subheading: '',
 		},
 		post_login_redirect: rawProfile.post_login_redirect ?? '',
+		forward_query_args: rawProfile.forward_query_args ?? false,
 		mode: rawProfile.mode ?? 'custom',
 		restBaseUrl:
 			root.getAttribute( 'data-rest-base' ) || '/wp-json/workos/v1/auth',
@@ -44,6 +45,7 @@ function parseConfig( root: HTMLElement ): AppProps {
 		siteName: root.getAttribute( 'data-site-name' ) || '',
 		siteUrl: root.getAttribute( 'data-site-url' ) || '',
 		showChrome: root.getAttribute( 'data-show-chrome' ) === '1',
+		originalQuery: window.location.search || '',
 	};
 
 	const initialStep = ( root.getAttribute( 'data-initial-step' ) ||

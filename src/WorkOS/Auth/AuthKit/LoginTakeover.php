@@ -96,9 +96,64 @@ class LoginTakeover {
 			return;
 		}
 
+		// Already-signed-in users don't need a login screen. Send them to
+		// where they would have gone after logging in.
+		if ( is_user_logged_in() ) {
+			$this->redirect_logged_in_visitor( $profile );
+			// redirect_logged_in_visitor() exits.
+		}
+
+		// When the default profile owns a custom_path, send users to it
+		// instead of rendering inline at /wp-login.php. Forward every
+		// incoming GET arg so redirect_to / interim-login / reauth /
+		// instance / wp_lang / wp_lang etc. survive the bounce.
+		if (
+			Profile::DEFAULT_SLUG === $profile->get_slug()
+			&& '' !== $profile->get_custom_path()
+		) {
+			$this->redirect_to_custom_path( $profile );
+			// redirect_to_custom_path() exits — unreachable below.
+		}
+
 		$context = $this->build_context();
 
 		$this->renderer->render_full_page( $profile, $context );
+	}
+
+	/**
+	 * 302 to the visitor's resolved post-login destination and exit.
+	 *
+	 * @param Profile $profile Active profile.
+	 *
+	 * @return void
+	 */
+	private function redirect_logged_in_visitor( Profile $profile ): void {
+		$dest = LoginRedirector::for_visitor( $profile );
+
+		nocache_headers();
+		wp_safe_redirect( $dest, 302 );
+		exit;
+	}
+
+	/**
+	 * 302 to the profile's custom path, preserving every GET arg.
+	 *
+	 * @param Profile $profile Default profile with a non-empty custom_path.
+	 *
+	 * @return void
+	 */
+	private function redirect_to_custom_path( Profile $profile ): void {
+		$target = home_url( '/' . $profile->get_custom_path() . '/' );
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$query = (array) wp_unslash( $_GET );
+		if ( ! empty( $query ) ) {
+			$target = add_query_arg( $query, $target );
+		}
+
+		nocache_headers();
+		wp_safe_redirect( $target, 302 );
+		exit;
 	}
 
 	/**

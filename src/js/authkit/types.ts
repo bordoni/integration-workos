@@ -55,6 +55,7 @@ export interface Profile {
 	mfa: ProfileMfa;
 	branding: ProfileBranding;
 	post_login_redirect: string;
+	forward_query_args: boolean;
 	mode: ProfileMode;
 	// Client-side derived fields — not part of the server payload.
 	restBaseUrl: string;
@@ -62,6 +63,10 @@ export interface Profile {
 	siteName: string;
 	siteUrl: string;
 	showChrome: boolean;
+	// Original window.location.search captured at mount, used to forward
+	// utm_*/ref/etc. onto the post-login redirect when the profile's
+	// `forward_query_args` toggle is on.
+	originalQuery: string;
 }
 
 export interface AuthUser {

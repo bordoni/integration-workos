@@ -84,9 +84,42 @@ class Shortcode {
 			return '';
 		}
 
+		// Already-signed-in visitors don't need a login form on this page.
+		// Render a friendly "you're signed in, continue here" message
+		// instead — we can't redirect from inside the_content (headers
+		// are already sent), so an inline message is the best we can do.
+		if ( is_user_logged_in() ) {
+			return $this->render_already_signed_in( $profile );
+		}
+
 		return $this->renderer->render_mount(
 			$profile,
 			[ 'redirect_to' => (string) $atts['redirect_to'] ]
+		);
+	}
+
+	/**
+	 * Render the inline "you're already signed in" callout.
+	 *
+	 * @param Profile $profile Active profile.
+	 *
+	 * @return string Safe HTML.
+	 */
+	private function render_already_signed_in( Profile $profile ): string {
+		$dest = LoginRedirector::for_visitor( $profile );
+		$user = wp_get_current_user();
+
+		return sprintf(
+			'<div class="workos-authkit-signed-in-notice"><p>%s</p><p><a class="button button-primary" href="%s">%s</a></p></div>',
+			esc_html(
+				sprintf(
+					/* translators: %s: display name. */
+					__( 'You\'re already signed in as %s.', 'integration-workos' ),
+					$user->display_name
+				)
+			),
+			esc_url( $dest ),
+			esc_html__( 'Continue', 'integration-workos' )
 		);
 	}
 }

@@ -83,9 +83,9 @@ class EntitlementGate {
 		/**
 		 * Filter whether the user passes the entitlement check.
 		 *
-		 * @param bool  $allowed     Whether the user is allowed.
-		 * @param int   $user_id     WP user ID.
-		 * @param array $workos_data WorkOS auth response.
+		 * @param bool|null $allowed     Whether the user is allowed, or null to use the default check.
+		 * @param int       $user_id     WP user ID.
+		 * @param array     $workos_data WorkOS auth response.
 		 */
 		$allowed = apply_filters( 'workos_entitlement_check', null, $user_id, $workos_data );
 
