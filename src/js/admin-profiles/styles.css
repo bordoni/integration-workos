@@ -203,9 +203,19 @@
 
 #workos-profiles-admin-root .wpa-card-embed {
 	display: flex;
+	flex-direction: column;
 	gap: 6px;
-	align-items: center;
 	margin-top: 4px;
+}
+
+#workos-profiles-admin-root .wpa-card-embed .wpa-embed-label {
+	min-width: 80px;
+	font-size: 12px;
+}
+
+#workos-profiles-admin-root .wpa-card-embed input.wpa-embed-value {
+	font-size: 12px;
+	padding: 4px 6px;
 }
 
 #workos-profiles-admin-root .wpa-pill-path {

@@ -1331,7 +1331,11 @@ function List( {
 								</div>
 
 								<div className="wpa-card-embed">
-									<CopyButton
+									<EmbedRow
+										label={ __(
+											'URL',
+											'integration-workos'
+										) }
 										value={ loginUrl }
 										copyKey={ `card:${ p.id }:url` }
 										copiedKey={ copiedKey }
@@ -1341,7 +1345,11 @@ function List( {
 											'integration-workos'
 										) }
 									/>
-									<CopyButton
+									<EmbedRow
+										label={ __(
+											'Shortcode',
+											'integration-workos'
+										) }
 										value={ shortcode }
 										copyKey={ `card:${ p.id }:shortcode` }
 										copiedKey={ copiedKey }
