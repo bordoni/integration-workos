@@ -36,8 +36,11 @@ Every slot's `fillProps` carries the active step and profile context so a Fill c
 | `workos.authkit.afterPrimaryAction` | Inside the form, below the primary submit button |
 | `workos.authkit.beforeFooter` | Above secondary links (back, forgot password, etc.) |
 | `workos.authkit.afterFooter` | At the very bottom of every flow card |
+| `workos.authkit.belowCard` | Outside the card, full-width below the form. Default fill renders the standard wp-login.php links ("Lost your password?" and "← Go to {Site}"); registering any Fill in this slot replaces the default. |
 | `workos.authkit.methodPicker.beforeMethods` | MethodPicker only — above the method buttons |
 | `workos.authkit.methodPicker.afterMethods` | MethodPicker only — below the method buttons |
+
+The slot name constants are exported from `src/js/authkit/slots.tsx`.
 
 ### Example
 
@@ -162,19 +165,41 @@ body.workos-profile-members-area #workos-authkit-root .wa-card {
 | --- | --- | --- |
 | `workos_authkit_enqueue_assets` | `( Profile $profile )` | Enqueue per-profile CSS/JS (see §2). |
 | `workos_login_profile_saved` | `( Profile $profile )` | Fires after a profile is created or updated through the admin REST API. |
+| `workos_login_profile_deleted` | `( Profile $profile )` | Fires after a profile is deleted through the admin REST API. The plugin's own `FrontendRoute` listens to this (and `_saved`) to invalidate its custom-path rewrite signature. |
 | `workos_user_authenticated` | `( int $user_id, array $workos_response )` | Fires after a successful AuthKit sign-in completes a WordPress login. |
 
 ---
 
-## Logo fallback chain
+## Logo modes & fallback chain
 
-The AuthKit shell renders a logo at the top of every flow card. The URL is resolved at render time in this order:
+Each Login Profile carries a `branding.logo_mode` field with three valid
+values that decide *whether* and *which* logo the AuthKit shell renders.
+Admins pick the mode under **WP Admin → WorkOS → Login Profiles →
+(profile) → Branding → Logo**.
 
-1. **Per-profile logo** — set under WP Admin → WorkOS → Login Profiles → (profile) → Branding → Logo. Stored as a WordPress media attachment ID.
-2. **WordPress Site Icon** — set under WP Admin → Settings → General → Site Icon. Used when no per-profile logo is set.
-3. **No logo** — if neither is set, the logo `<img>` is omitted entirely.
+| `logo_mode` | Renderer behavior |
+| --- | --- |
+| `custom` | Uses the per-profile `branding.logo_attachment_id`. If the attachment is missing or invalid, falls through to `default`. |
+| `default` *(default for new profiles)* | Resolves through the fallback chain below — no per-profile asset needed. |
+| `none` | The logo `<img>` is omitted entirely. The login card has no header image. |
 
-To override the chain, hook `workos_authkit_branding`:
+### Fallback chain (only consulted when `logo_mode = default`)
+
+1. **WordPress Site Icon** — set under WP Admin → Settings → General → Site Icon.
+2. **Bundled WordPress logo** — `admin_url( 'images/wordpress-logo.svg' )`, the same SVG core ships with WP itself. Guarantees an unbranded install still looks reasonable instead of showing a missing-image icon.
+
+`logo_mode = custom` skips both fallback steps; if the attachment is
+missing, the renderer drops back to the `default` chain rather than
+omitting the logo silently.
+
+Legacy rows that pre-date `logo_mode` (only `logo_attachment_id` was
+stored) lazy-upgrade on first read: a non-zero attachment id implies
+`custom`, anything else implies `default`. The previous behavior is
+preserved without a migration.
+
+### Overriding the chain from PHP
+
+To force a specific URL regardless of mode, hook `workos_authkit_branding`:
 
 ```php
 add_filter( 'workos_authkit_branding', function ( $branding, $profile ) {
@@ -184,3 +209,82 @@ add_filter( 'workos_authkit_branding', function ( $branding, $profile ) {
     return $branding;
 }, 10, 2 );
 ```
+
+Returning an empty string for `logo_url` from this filter has the same
+effect as `logo_mode = none`: the renderer omits the `<img>` element.
+
+---
+
+## Custom URLs per profile
+
+Every Login Profile has three entry points pointing at the same React
+shell, so an extension can link to whichever fits its UX best:
+
+1. **Canonical URL** — `https://yoursite.com/workos/login/{slug}/`. Always
+   registered for every profile.
+2. **Custom path** — tick **Use a custom URL path** in the editor and
+   fill in e.g. `members` or `team/login`; `https://yoursite.com/members/`
+   then mounts the same shell. `FrontendRoute` registers one rewrite
+   rule per non-empty `custom_path` and triggers a single soft
+   `flush_rewrite_rules( false )` only when the set actually changes
+   (signature stored in `workos_custom_paths_signature`). Reserved core
+   paths (`wp-admin`, `wp-includes`, `wp-content`, `wp-json`, `workos`,
+   `feed`, `comments`, `trackback`) are rejected at save time;
+   `login`, `admin`, and `signin` are intentionally allowed so the
+   default profile can claim them.
+3. **Shortcode** — `[workos:login profile="members"]` mounts the same
+   shell anywhere a shortcode renders (post body, widget, page builder).
+   Without the `profile` attribute it falls back to the reserved
+   `default` profile.
+
+The Login Profile editor's **Embed & URLs** section exposes copyable
+input fields for all three so admins don't have to assemble URLs by
+hand.
+
+### Default-profile redirect from wp-login.php
+
+When the reserved `default` profile owns a non-empty `custom_path`,
+`/wp-login.php?action=login` 302s to `home_url('/' . $custom_path . '/')`
+with every inbound `$_GET` preserved (so `redirect_to`, `interim-login`,
+`reauth`, `instance`, `wp_lang`, etc. survive). The standard escape
+hatches still short-circuit the redirect: `?loggedout`, `?fallback=1`
+(when `allow_password_fallback` is on), `LoginBypass`, and any action
+other than `login`.
+
+### Already-signed-in visitors
+
+Visitors who hit any AuthKit surface while logged in are routed by
+`Auth\AuthKit\LoginRedirector::for_visitor( Profile $profile )` with
+this precedence:
+
+1. `profile.post_login_redirect` (admin's stored intent).
+2. Validated `?redirect_to` query arg (passes `wp_validate_redirect()`).
+3. `admin_url()` (WP convention).
+
+`LoginTakeover` and `FrontendRoute` 302 the response. The
+`[workos:login]` shortcode can't redirect mid-content, so it renders an
+inline "You're already signed in as {name}. [Continue]" notice that
+links to the same destination.
+
+### Forwarding query args (`forward_query_args`)
+
+Every Login Profile carries a `forward_query_args` boolean (default
+`false`, surfaced as a checkbox under "Redirect after login"). When on,
+inbound query args (e.g. `utm_source`, `ref`, custom params) get
+appended to the post-login destination URL on both the already-signed-in
+redirect (PHP, via `LoginRedirector::with_forwarded_args()`) and the
+React-shell `handleSuccess` navigation (TS, via
+`src/js/authkit/redirect.ts` `forwardQueryArgs()`).
+
+The internal-arg allowlist is mirrored on both sides. These keys are
+**always** stripped — never forwarded:
+
+```
+redirect_to, _wpnonce, interim-login, loggedout,
+reauth, instance, wp_lang, action, fallback,
+anything starting with "workos_"
+```
+
+Toggle this on for marketing flows that need attribution to survive
+through login; leave it off (the default) when you want the destination
+URL to stay clean.

@@ -25,9 +25,14 @@ Integration with WorkOS connects your WordPress site with [WorkOS](https://worko
 
 * **WordPress-hosted React login** — no redirect to WorkOS for password, magic code, signup, invitation, or MFA. Mounts on wp-login.php, a shortcode (`[workos:login]`), and a dedicated `/workos/login/{profile}` route.
 * **Login Profiles** — admin-defined presets (enabled sign-in methods, pinned organization, signup/invite toggles, MFA policy, branding) edited from **WorkOS → Login Profiles**. The organization picker loads live from WorkOS so admins pick an org by name instead of pasting raw IDs.
+* **Per-profile custom URL paths** — assign any profile its own URL (e.g. `/members`, `/team/login`) on top of the canonical `/workos/login/{profile}` rewrite. When the default profile owns a custom path, `/wp-login.php` 302s to it (preserving every inbound query arg). Reserved core paths can't be claimed.
+* **Already-signed-in handling** — visitors who hit any AuthKit surface while logged in are 302'd to their post-login destination (or, in the shortcode, see an inline "You're already signed in" notice with a Continue link).
+* **`forward_query_args` per-profile toggle** — opt-in passing of marketing/analytics query args (`utm_*`, `ref`, etc.) onto the post-login destination. WP and plugin internals are always stripped.
 * **Sign-in methods** — email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), and passkey. Each profile chooses its own subset.
 * **MFA** — TOTP, SMS, and WebAuthn/passkey with in-app enrollment + challenge. Profile-level `mfa.enforce` (`never`/`if_required`/`always`) and factor allowlist are applied at login time.
 * **Self-serve sign-up + invitation acceptance + in-app password reset** — all handled by the React shell; no third-party pages.
+* **Branding controls** — per-profile heading, subheading, primary color (with WordPress admin-color presets), and logo with a three-mode toggle (`default` falls back to the Site Icon then a bundled WP logo, `custom` uses the chosen image, `none` hides the logo).
+* **Embed & URLs in the editor** — every Login Profile shows copyable input fields for its canonical URL, optional custom-path URL, and shortcode so admins can paste them into pages or share them with users.
 * **WorkOS Radar** anti-fraud integration optional via `WORKOS_RADAR_SITE_KEY`.
 * **Profile routing rules** — send incoming logins to a specific profile based on `redirect_to`, referrer host, or user role.
 
@@ -95,6 +100,10 @@ Use `[workos:login profile="your-profile-slug"]` or link to `/workos/login/{prof
 = Can different login pages offer different sign-in methods? =
 
 Yes. Each Login Profile (WorkOS → Login Profiles) picks its own set of enabled methods (password, magic code, any subset of social providers, passkey), pins an organization, and sets its own MFA policy and branding. Reference a profile by slug in the shortcode or URL.
+
+= Can I host a Login Profile at a custom URL like `/members`? =
+
+Yes. Edit any profile and tick **Use a custom URL path**, then fill in the path (e.g. `members` or `team/login`). The plugin registers an extra rewrite rule that mounts the same React shell at `https://yoursite.com/members/`. The canonical `/workos/login/{slug}` URL keeps working too. Reserved core paths (`wp-admin`, `wp-includes`, `wp-content`, `wp-json`, `workos`, `feed`, etc.) are blocked at save time. If you set a custom path on the **default** profile, `/wp-login.php?action=login` 302s to it for everyone (with all `redirect_to` / `interim-login` / language / nonce args preserved).
 
 = What happens if WorkOS is down? =
 
@@ -171,10 +180,16 @@ WorkOS is provided by WorkOS, Inc.
 Custom AuthKit (WordPress-hosted login):
 * React login shell on wp-login.php, `[workos:login]` shortcode, and `/workos/login/{profile}` route.
 * Login Profiles — admin-defined presets for enabled methods, pinned organization, signup/invite/reset flows, MFA policy, and branding, managed at WorkOS → Login Profiles.
+* Per-profile custom URL paths (e.g. `/members`, `/team/login`) on top of the canonical `/workos/login/{slug}` rewrite. The default profile can claim a custom path so `/wp-login.php` bounces to it. Reserved core paths are blocked.
+* Already-signed-in visitors are 302'd to their post-login destination on every AuthKit surface (or shown an inline "You're already signed in" notice in the shortcode).
+* Per-profile `forward_query_args` toggle to pass marketing/analytics args onto the post-login destination (internals always stripped).
 * Pinned-organization picker in the Profile editor reads live from WorkOS (with a "Custom ID…" fallback for legacy or unlisted orgs), and the Profiles list renders organization names instead of raw IDs.
+* Embed & URLs section in the editor exposes copyable input fields for the canonical URL, the optional custom-path URL, and the `[workos:login profile="…"]` shortcode.
 * Sign-in methods: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey.
 * Full MFA support — TOTP, SMS, WebAuthn/passkey with in-app enrollment + challenge.
 * Self-serve sign-up, invitation acceptance, and in-app password reset.
+* Branding — heading, subheading, primary color (defaults to WordPress admin-color palette), and three-mode logo control (`default` falls back to Site Icon → bundled WP logo, `custom` uses the chosen attachment, `none` hides the logo).
+* SlotFill extensibility — ten named slots (including `workos.authkit.belowCard`, which renders standard wp-login.php links by default) for plugins to inject React elements into the login UI.
 * Profile routing rules (redirect_to glob / referrer host / user role).
 * WorkOS Radar anti-fraud integration (set `WORKOS_RADAR_SITE_KEY`).
 * Public REST at `/wp-json/workos/v1/auth/*` with profile-scoped nonces, per-IP/per-email rate limits, and signature-verified tokens.

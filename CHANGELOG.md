@@ -67,6 +67,74 @@ browser only ever talks to `/wp-json/workos/v1/auth/*`.
   records keep working). Falls back to a plain text input if WorkOS
   is unconfigured or the API is unreachable. The Login Profiles list
   now shows organization names instead of raw IDs.
+- **Per-profile custom paths** — non-default profiles can declare an
+  arbitrary URL path (`/members`, `/team/login`, …) on top of the
+  canonical `/workos/login/{slug}` rewrite. `FrontendRoute` registers
+  one `add_rewrite_rule` per non-empty `custom_path` and triggers a
+  single soft `flush_rewrite_rules( false )` only when the set
+  changes (signature stored in the `workos_custom_paths_signature`
+  option). Reserved segments (`wp-admin`, `wp-includes`, `workos`,
+  `login`, …) and shape-unsafe input are rejected at save time.
+- **Logo modes** — `branding.logo_mode` accepts `default`, `custom`,
+  or `none`. The render-time fallback chain is per-profile attachment
+  (`custom`) → WordPress Site Icon → bundled core
+  `admin_url('images/wordpress-logo.svg')` (`default`) → no logo
+  rendered (`none`). Legacy rows that stored only an attachment id
+  lazy-upgrade to `custom` on first read; the editor exposes a
+  three-way toggle so admins can hide the logo, opt back into the
+  fallback chain, or pick a custom image.
+- **WP-admin color palette presets** — the primary-color picker in
+  the Login Profile editor defaults its swatches to the WordPress
+  admin color scheme so new profiles match standard WP look out of
+  the box without hand-picking hex values.
+- **Embed & URLs section in the Login Profile editor** — copyable
+  `<input>` fields for the canonical `/workos/login/{slug}` URL, the
+  optional custom-path URL, and the `[workos:login profile="…"]`
+  shortcode. `Profile::to_editor_array()` exposes `login_url` and
+  `custom_url` server-side so subdir installs render the correct
+  values without client-side stitching.
+- **`workos.authkit.belowCard` SlotFill slot** — tenth slot, renders
+  outside the login card (full-width, below the form). The default
+  fill emits the standard wp-login.php "Lost your password?" /
+  "← Go to {Site}" links so the takeover matches core out of the
+  box; a registered Fill replaces the default when present. See
+  `docs/extending-the-login-ui.md` for the full slot inventory.
+- **`workos_login_profile_deleted` action** — fires from
+  `ProfileRepository::delete()` after a profile is removed via the
+  admin REST API. Mirrors `workos_login_profile_saved` and is what
+  `FrontendRoute` listens to in order to invalidate its custom-path
+  signature.
+- **Default-profile wp-login.php redirect** — when the reserved
+  `default` profile owns a non-empty `custom_path`, hitting
+  `/wp-login.php?action=login` now 302s to `home_url('/' . $custom_path . '/')`
+  with every inbound `$_GET` arg preserved (so `redirect_to`,
+  `interim-login`, `reauth`, `instance`, `wp_lang`, etc. survive the
+  bounce). Existing escape hatches (`?loggedout`, `?fallback=1`,
+  `LoginBypass`, non-`login` actions) short-circuit before the
+  redirect. `RESERVED_PATHS` dropped `login` and `admin` so the
+  obvious clean-URL choices are usable.
+- **Custom-path toggle UX** — the editor hides the Custom Path text
+  field behind a "Use a custom URL path" checkbox; flipping it off
+  clears the stored value. Available on every profile, default
+  included.
+- **Already-signed-in guard** — visitors who hit
+  `/wp-login.php?action=login`, `/workos/login/{slug}`, or any custom
+  path while logged in are 302'd straight to their post-login
+  destination through the new `Auth\AuthKit\LoginRedirector` helper
+  (precedence: profile `post_login_redirect` → validated
+  `redirect_to` → `admin_url()`). The `[workos:login]` shortcode
+  can't redirect mid-content, so it renders an inline
+  "You're already signed in as {name}. [Continue]" notice pointing
+  at the same destination.
+- **`forward_query_args` per-profile toggle** (default `false`) —
+  appends inbound query args (`utm_*`, `ref`, custom params) to the
+  post-login destination URL. WP / plugin internals (`redirect_to`,
+  `_wpnonce`, `interim-login`, `loggedout`, `reauth`, `instance`,
+  `wp_lang`, `action`, `fallback`, anything starting with `workos_`)
+  are always stripped. Server-side via `LoginRedirector`, client-side
+  via `src/js/authkit/redirect.ts` `forwardQueryArgs()` (same
+  allowlist mirrored on both ends). Surfaces in the editor as a
+  checkbox under "Redirect after login".
 
 #### Browser internationalization
 

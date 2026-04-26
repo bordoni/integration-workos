@@ -147,6 +147,7 @@ Each profile stores:
 | Field                    | Purpose                                                          |
 |--------------------------|------------------------------------------------------------------|
 | `slug`                   | URL-friendly id; reserved `default` drives wp-login.php takeover |
+| `custom_path`            | Optional arbitrary URL path (e.g. `members`, `team/login`, `login`) that mounts the same React shell — see "Custom paths" below. Empty means only `/workos/login/{slug}` is registered. Available on every profile, including the reserved `default` (when set, `/wp-login.php?action=login` 302s to it) |
 | `title`                  | Admin-facing label                                               |
 | `methods[]`              | Enabled sign-in methods (any subset of `password`, `magic_code`, `oauth_google`, `oauth_microsoft`, `oauth_github`, `oauth_apple`, `passkey`) |
 | `organization_id`        | Server-side pinned WorkOS org; passed on auth calls              |
@@ -154,8 +155,9 @@ Each profile stores:
 | `invite_flow`            | Allow invitation acceptance                                      |
 | `password_reset_flow`    | Allow in-app password reset                                      |
 | `mfa`                    | `{enforce: never|if_required|always, factors: [totp,sms,webauthn]}` |
-| `branding`               | `{logo_attachment_id, primary_color, heading, subheading}`       |
+| `branding`               | `{logo_mode, logo_attachment_id, primary_color, heading, subheading}` — `logo_mode` is `default` / `custom` / `none` (see "Logo modes" in [`docs/extending-the-login-ui.md`](docs/extending-the-login-ui.md)) |
 | `post_login_redirect`    | URL the React shell navigates to on success (beats `redirect_to`)|
+| `forward_query_args`     | When `true`, appends safe inbound query args (`utm_*`, `ref`, custom params — never `redirect_to`, `_wpnonce`, `loggedout`, `wp_lang`, `workos_*`, etc.) to the post-login destination |
 | `mode`                   | `custom` (React) or `authkit_redirect` (legacy)                  |
 
 The `branding.logo` field defaults to the WordPress Site Icon when no
@@ -163,6 +165,41 @@ per-profile logo is set. See
 [`docs/extending-the-login-ui.md`](docs/extending-the-login-ui.md) for the
 full developer guide on injecting React elements (SlotFill), enqueuing
 per-profile CSS/JS, and the available PHP filters.
+
+### Custom paths
+
+Any profile (including the reserved `default`) can claim an arbitrary
+URL path on top of the canonical `/workos/login/{slug}` rewrite. Set
+the **Custom path** field in the editor to e.g. `members` and
+`https://yoursite.com/members/` mounts the same React shell. The
+shortcode `[workos:login profile="members"]` keeps working too.
+
+- Both URLs are always live — adding a custom path never disables the
+  canonical `/workos/login/{slug}` rewrite.
+- When the **default** profile owns a non-empty `custom_path`,
+  `/wp-login.php?action=login` 302s to it with every inbound `$_GET`
+  preserved (so `redirect_to`, `interim-login`, `reauth`, `instance`,
+  `wp_lang`, etc. survive the bounce). `?loggedout`, `?fallback=1`,
+  `LoginBypass`, and non-`login` actions short-circuit the redirect.
+- Reserved segments (`wp-admin`, `wp-includes`, `wp-content`, `wp-json`,
+  `workos`, `feed`, `comments`, `trackback`) are rejected at save time
+  so you can't shadow core URLs. `login`, `admin`, and `signin` are
+  intentionally allowed so the default profile can bounce
+  `/wp-login.php` to a clean URL.
+- Saving a profile triggers exactly one soft `flush_rewrite_rules( false )`
+  on the next request when the custom-path set actually changes
+  (signature stored in the `workos_custom_paths_signature` option).
+
+### Already signed-in visitors
+
+A visitor that hits any AuthKit surface (wp-login.php takeover,
+`/workos/login/{slug}`, a custom path) while logged in is 302'd
+straight to their post-login destination. The precedence is centralized
+in `Auth\AuthKit\LoginRedirector::for_visitor( Profile $profile )`:
+profile `post_login_redirect` → validated `redirect_to` → `admin_url()`.
+The `[workos:login]` shortcode can't redirect from inside `the_content`
+(headers are already sent), so it renders an inline "You're already
+signed in as {name}. [Continue]" notice that links to the same URL.
 
 ### Profile routing rules
 
@@ -504,6 +541,26 @@ Fires when a role-based logout redirect is skipped.
 - `WP_User $user` — The authenticated user.
 - `string $reason` — Reason the logout redirect was skipped. One of: `filtered_out`, `no_matching_role_url`.
 
+#### `workos_login_profile_saved`
+
+Fires after a Login Profile is created or updated through the admin REST
+API (`/wp-json/workos/v1/admin/profiles`).
+
+**Parameters:**
+
+- `WorkOS\Auth\AuthKit\Profile $profile` — The saved profile (post-validation, with assigned ID).
+
+#### `workos_login_profile_deleted`
+
+Fires after a Login Profile is deleted through the admin REST API. Useful
+for invalidating caches or rewrite-rule signatures keyed on profile data
+(this is exactly how `Auth\AuthKit\FrontendRoute` knows to rebuild its
+custom-path rewrites).
+
+**Parameters:**
+
+- `WorkOS\Auth\AuthKit\Profile $profile` — The profile that was deleted.
+
 ## Database Tables
 
 The plugin creates four custom tables on activation:
@@ -759,13 +816,15 @@ src/WorkOS/
       ProfileRepository.php       # CPT-backed CRUD
       ProfileRouter.php           # Rule-based profile resolution
       LoginCompleter.php          # Shared post-auth finalizer (entitlement + MFA)
-      LoginTakeover.php           # wp-login.php takeover (action=login only)
-      FrontendRoute.php           # /workos/login/{profile} rewrite
+      LoginTakeover.php           # wp-login.php takeover (action=login only) + default-profile custom-path bounce
+      LoginRedirector.php         # Already-signed-in visitor redirect + forward_query_args helper
+      FrontendRoute.php           # /workos/login/{profile} + per-profile custom_path rewrites
       Shortcode.php               # [workos:login] shortcode
-      Renderer.php                # HTML shell + bundle enqueue
+      Renderer.php                # HTML shell + bundle enqueue + logo fallback chain
       Nonce.php                   # Profile-scoped CSRF nonces
       RateLimiter.php             # Per-IP / per-email transient buckets
       Radar.php                   # Site-key resolution + request-header extraction
+      ModeSyncer.php              # Keeps global login_mode option in sync with the default profile's mode
   REST/
     Controller.php                # REST controller (registers Auth and TokenAuth)
     TokenAuth.php                 # REST API Bearer token authentication
@@ -794,6 +853,8 @@ src/js/
     flows.tsx                     # 11 flow components (password, magic, mfa, ...)
     ui.tsx                        # 11 primitives (Button, Input, Card, ...)
     radar.ts                      # WorkOS Radar SDK loader
+    redirect.ts                   # forwardQueryArgs() — strips internals, mirrors LoginRedirector allowlist
+    slots.tsx                     # SlotFill slot name constants (10 slots)
     types.ts                      # Shared interfaces
     styles.css                    # Scoped styles (CSS vars)
   admin-profiles/

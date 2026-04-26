@@ -98,13 +98,15 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/AuthKit/ProfileRepository.php` | CPT-backed CRUD + default seeding |
 | `src/WorkOS/Auth/AuthKit/ProfileRouter.php` | Rule-based profile resolution |
 | `src/WorkOS/Auth/AuthKit/LoginCompleter.php` | Post-auth finalizer (EntitlementGate + MFA policy) |
-| `src/WorkOS/Auth/AuthKit/LoginTakeover.php` | wp-login.php `action=login` takeover |
-| `src/WorkOS/Auth/AuthKit/FrontendRoute.php` | `/workos/login/{profile}` rewrite + static `register_rewrite()` |
+| `src/WorkOS/Auth/AuthKit/LoginTakeover.php` | wp-login.php `action=login` takeover, default-profile custom-path bounce, already-signed-in 302 |
+| `src/WorkOS/Auth/AuthKit/LoginRedirector.php` | `for_visitor( Profile )` precedence (post_login_redirect → validated redirect_to → admin_url) + `forward_query_args` filter; mirrors `src/js/authkit/redirect.ts` allowlist |
+| `src/WorkOS/Auth/AuthKit/FrontendRoute.php` | `/workos/login/{profile}` canonical rewrite + per-profile `custom_path` rewrites (signature-gated flush) + already-signed-in guard |
 | `src/WorkOS/Auth/AuthKit/Shortcode.php` | `[workos:login]` shortcode |
 | `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue. Fires `workos_authkit_enqueue_assets` action and applies `workos_authkit_branding` / `workos_authkit_profile_data` / `workos_authkit_body_classes` filters — see `docs/extending-the-login-ui.md` |
 | `src/WorkOS/Auth/AuthKit/Nonce.php` | Profile-scoped CSRF nonces |
 | `src/WorkOS/Auth/AuthKit/RateLimiter.php` | Per-IP / per-email transient buckets |
 | `src/WorkOS/Auth/AuthKit/Radar.php` | WorkOS Radar site-key + request-header extraction |
+| `src/WorkOS/Auth/AuthKit/ModeSyncer.php` | Keeps the global `login_mode` option aligned with the default Login Profile's `mode` whenever a profile is saved |
 | **Organization** | |
 | `src/WorkOS/Organization/Controller.php` | Organization controller |
 | `src/WorkOS/Organization/Manager.php` | Organization CRUD and caching |
@@ -166,6 +168,8 @@ Per-environment constants (take priority over generic):
 | `src/js/authkit/flows.tsx` | 11 flow components (password, magic, signup, reset, mfa, invitation, complete) |
 | `src/js/authkit/ui.tsx` | 11 primitives (Button, Input, Card, …) |
 | `src/js/authkit/radar.ts` | WorkOS Radar SDK loader (+ `window.WorkOSRadar` augmentation) |
+| `src/js/authkit/redirect.ts` | `forwardQueryArgs( destination, originalQuery )` — strips internals (`redirect_to`, `_wpnonce`, `loggedout`, `wp_lang`, `workos_*`, …) and appends safe args; mirrors PHP `LoginRedirector::INTERNAL_QUERY_ARGS` |
+| `src/js/authkit/slots.tsx` | SlotFill slot name constants (10 slots, including `workos.authkit.belowCard`) |
 | `src/js/authkit/types.ts` | Shared interfaces (Profile, AuthResult, MfaRequired, Step, …) |
 | `src/js/authkit/styles.css` | Scoped shell styles (CSS vars) |
 | `src/js/admin-profiles/index.tsx` | Admin Login Profile editor (CRUD) |
