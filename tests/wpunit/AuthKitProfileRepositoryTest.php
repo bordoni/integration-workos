@@ -233,6 +233,139 @@ class AuthKitProfileRepositoryTest extends WPTestCase {
 	/**
 	 * find_by_id returns the hydrated profile.
 	 */
+	/**
+	 * save() rejects a custom_path already used by another profile.
+	 */
+	public function test_save_rejects_duplicate_custom_path(): void {
+		$first = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'        => 'members',
+					'title'       => 'Members',
+					'custom_path' => 'shared/login',
+				]
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $first );
+
+		$second = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'        => 'partners',
+					'title'       => 'Partners',
+					'custom_path' => 'shared/login',
+				]
+			)
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $second );
+		$this->assertSame( 'workos_profile_path_taken', $second->get_error_code() );
+	}
+
+	/**
+	 * Reserved paths (wp-admin, workos, etc.) are rejected at save().
+	 *
+	 * @dataProvider reserved_path_provider
+	 */
+	public function test_save_rejects_reserved_custom_path( string $reserved_path ): void {
+		$result = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'        => 'members',
+					'title'       => 'Members',
+					'custom_path' => $reserved_path,
+				]
+			)
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'workos_profile_path_reserved', $result->get_error_code() );
+	}
+
+	public function reserved_path_provider(): array {
+		// Only paths that survive sanitize_title intact — dotted entries
+		// (wp-login.php, xmlrpc.php) become harmless variants once
+		// normalized, so they don't need explicit blocking.
+		return [
+			'wp-admin'        => [ 'wp-admin' ],
+			'wp-admin nested' => [ 'wp-admin/foo' ],
+			'workos prefixed' => [ 'workos/secret' ],
+			'wp-content'      => [ 'wp-content' ],
+			'feed'            => [ 'feed' ],
+			'default'         => [ 'default' ],
+		];
+	}
+
+	/**
+	 * Updating the default profile with a custom_path is forbidden.
+	 */
+	public function test_save_rejects_custom_path_on_default_profile(): void {
+		$default = $this->repository->ensure_default();
+
+		$attempt = Profile::from_array(
+			array_replace(
+				$default->to_array(),
+				[ 'custom_path' => 'team/login' ]
+			)
+		);
+
+		$result = $this->repository->save( $attempt );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'workos_profile_path_default_locked', $result->get_error_code() );
+	}
+
+	/**
+	 * Two profiles with distinct, non-reserved paths both save successfully.
+	 */
+	public function test_save_allows_unique_custom_paths(): void {
+		$first = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'        => 'members',
+					'custom_path' => 'members',
+				]
+			)
+		);
+		$second = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'        => 'partners',
+					'custom_path' => 'team/login',
+				]
+			)
+		);
+
+		$this->assertInstanceOf( Profile::class, $first );
+		$this->assertInstanceOf( Profile::class, $second );
+		$this->assertSame( 'members', $first->get_custom_path() );
+		$this->assertSame( 'team/login', $second->get_custom_path() );
+	}
+
+	/**
+	 * delete() fires the workos_login_profile_deleted action so listeners
+	 * (e.g. FrontendRoute signature invalidation) can react.
+	 */
+	public function test_delete_fires_deleted_action(): void {
+		$saved = $this->repository->save(
+			Profile::from_array( [ 'slug' => 'members', 'title' => 'Members' ] )
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		$captured = null;
+		$listener = static function ( Profile $profile ) use ( &$captured ): void {
+			$captured = $profile;
+		};
+		add_action( 'workos_login_profile_deleted', $listener );
+
+		$this->repository->delete( $saved->get_id() );
+
+		remove_action( 'workos_login_profile_deleted', $listener );
+
+		$this->assertInstanceOf( Profile::class, $captured );
+		$this->assertSame( 'members', $captured->get_slug() );
+	}
+
 	public function test_find_by_id_returns_hydrated_profile(): void {
 		$saved = $this->repository->save(
 			Profile::from_array(

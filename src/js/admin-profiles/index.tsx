@@ -6,7 +6,12 @@
  * a single file — the editor is a small CRUD form, not a full app.
  */
 
-import { createRoot, useEffect, useState } from '@wordpress/element';
+import {
+	createPortal,
+	createRoot,
+	useEffect,
+	useState,
+} from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import type { ChangeEvent, MouseEvent, ReactNode } from 'react';
 import './styles.css';
@@ -17,6 +22,9 @@ declare global {
 			restUrl: string;
 			nonce: string;
 			pageUrl: string;
+			loginUrlBase: string;
+			siteUrl: string;
+			shortcodeTag: string;
 			profiles: Profile[];
 			activeProfileSlug: string;
 		};
@@ -83,6 +91,7 @@ type LogoMode = 'default' | 'custom' | 'none';
 interface Profile {
 	id: number;
 	slug: string;
+	custom_path: string;
 	title: string;
 	methods: AuthMethod[];
 	organization_id: string;
@@ -100,6 +109,10 @@ interface Profile {
 	};
 	post_login_redirect: string;
 	mode: ProfileMode;
+	// Server-resolved convenience URLs (read-only — populated by
+	// Profile::to_editor_array() on the PHP side).
+	login_url?: string;
+	custom_url?: string;
 }
 
 interface ApiResult< T > {
@@ -158,6 +171,35 @@ function apiUrl( path = '' ): string {
 	return `${ base }${ path }`;
 }
 
+/**
+ * Friendlier copy for known REST error codes. Falls back to the raw
+ * `message` from WP_REST_Server when no override is registered.
+ */
+function errorCopy( code: string | undefined, message: string | undefined ): string {
+	const overrides: Record< string, string > = {
+		workos_profile_path_taken: __(
+			'Another profile already uses this path.',
+			'integration-workos'
+		),
+		workos_profile_path_reserved: __(
+			'That path is reserved by WordPress or this plugin.',
+			'integration-workos'
+		),
+		workos_profile_path_invalid: __(
+			'That path contains characters that cannot be used in a URL.',
+			'integration-workos'
+		),
+		workos_profile_path_default_locked: __(
+			'The default Login Profile cannot use a custom path.',
+			'integration-workos'
+		),
+	};
+	if ( code && overrides[ code ] ) {
+		return overrides[ code ];
+	}
+	return message || __( 'Failed to save.', 'integration-workos' );
+}
+
 async function apiCall< T >(
 	method: string,
 	path: string,
@@ -174,6 +216,149 @@ async function apiCall< T >(
 	} );
 	const data = await res.json().catch( () => ( {} ) );
 	return { ok: res.ok, status: res.status, data: data as T };
+}
+
+/**
+ * Shared clipboard hook keyed by an arbitrary string so multiple buttons
+ * (URL row, shortcode row, list cards) can each track their own
+ * "Copied!" feedback independently.
+ */
+function useCopyToClipboard(): {
+	copiedKey: string;
+	copy: ( key: string, value: string ) => void;
+} {
+	const [ copiedKey, setCopiedKey ] = useState< string >( '' );
+
+	const copy = ( key: string, value: string ): void => {
+		const flash = (): void => {
+			setCopiedKey( key );
+			window.setTimeout( () => {
+				setCopiedKey( ( current ) => ( current === key ? '' : current ) );
+			}, 1500 );
+		};
+		if ( navigator.clipboard?.writeText ) {
+			navigator.clipboard.writeText( value ).then( flash, () => {
+				window.prompt( __( 'Copy', 'integration-workos' ), value );
+			} );
+			return;
+		}
+		window.prompt( __( 'Copy', 'integration-workos' ), value );
+	};
+
+	return { copiedKey, copy };
+}
+
+interface CopyButtonProps {
+	value: string;
+	copyKey: string;
+	copiedKey: string;
+	onCopy: ( key: string, value: string ) => void;
+	ariaLabel: string;
+}
+
+/**
+ * Icon-style copy button — clipboard glyph that flips to a check + "Copied"
+ * for ~1.5s after a successful copy.
+ */
+function CopyButton( {
+	value,
+	copyKey,
+	copiedKey,
+	onCopy,
+	ariaLabel,
+}: CopyButtonProps ) {
+	const isCopied = copiedKey === copyKey;
+	return (
+		<button
+			type="button"
+			className={ `wpa-copy-btn${ isCopied ? ' is-copied' : '' }` }
+			onClick={ () => onCopy( copyKey, value ) }
+			aria-label={ ariaLabel }
+			title={ isCopied ? __( 'Copied', 'integration-workos' ) : ariaLabel }
+		>
+			{ isCopied ? (
+				<svg
+					width="16"
+					height="16"
+					viewBox="0 0 16 16"
+					fill="none"
+					aria-hidden="true"
+				>
+					<path
+						d="M3 8.5l3 3 7-7"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			) : (
+				<svg
+					width="16"
+					height="16"
+					viewBox="0 0 16 16"
+					fill="none"
+					aria-hidden="true"
+				>
+					<rect
+						x="4.5"
+						y="4.5"
+						width="8"
+						height="9"
+						rx="1.5"
+						stroke="currentColor"
+						strokeWidth="1.5"
+					/>
+					<path
+						d="M3.5 11V3.5A1.5 1.5 0 015 2h6"
+						stroke="currentColor"
+						strokeWidth="1.5"
+						strokeLinecap="round"
+					/>
+				</svg>
+			) }
+		</button>
+	);
+}
+
+interface EmbedRowProps {
+	label: string;
+	value: string;
+	copyKey: string;
+	copiedKey: string;
+	onCopy: ( key: string, value: string ) => void;
+	ariaLabel: string;
+}
+
+function EmbedRow( {
+	label,
+	value,
+	copyKey,
+	copiedKey,
+	onCopy,
+	ariaLabel,
+}: EmbedRowProps ) {
+	return (
+		<div className="wpa-embed-row">
+			<span className="wpa-embed-label">{ label }</span>
+			<input
+				type="text"
+				className="wpa-embed-value"
+				value={ value }
+				readOnly
+				onFocus={ ( e ) => e.currentTarget.select() }
+				onClick={ ( e ) => e.currentTarget.select() }
+				aria-label={ label }
+			/>
+			<CopyButton
+				value={ value }
+				copyKey={ copyKey }
+				copiedKey={ copiedKey }
+				onCopy={ onCopy }
+				ariaLabel={ ariaLabel }
+			/>
+		</div>
+	);
 }
 
 interface CheckboxesProps< V extends string > {
@@ -506,6 +691,7 @@ function emptyProfile(): Profile {
 	return {
 		id: 0,
 		slug: '',
+		custom_path: '',
 		title: '',
 		methods: [ 'password', 'magic_code' ],
 		organization_id: '',
@@ -548,6 +734,7 @@ function Editor( {
 	saving,
 }: EditorProps ) {
 	const [ data, setData ] = useState< Profile >( profile );
+	const { copiedKey, copy } = useCopyToClipboard();
 
 	useEffect( () => setData( profile ), [ profile.id, profile.slug ] );
 
@@ -587,6 +774,26 @@ function Editor( {
 				disabled={ isDefault }
 				placeholder={ __( 'members-area', 'integration-workos' ) }
 			/>
+
+			{ ! isDefault && (
+				<label className="wpa-field">
+					<span>{ __( 'Custom path (optional)', 'integration-workos' ) }</span>
+					<input
+						type="text"
+						value={ data.custom_path }
+						onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+							set( { custom_path: e.target.value } )
+						}
+						placeholder={ __( 'members or team/login', 'integration-workos' ) }
+					/>
+					<span className="description">
+						{ __(
+							'Renders the same login page at /your-path. Leave blank to use only the canonical URL.',
+							'integration-workos'
+						) }
+					</span>
+				</label>
+			) }
 
 			<Select< ProfileMode >
 				label={ __( 'Mode', 'integration-workos' ) }
@@ -705,6 +912,12 @@ function Editor( {
 				/>
 			</fieldset>
 
+			<EmbedFieldset
+				profile={ data }
+				copiedKey={ copiedKey }
+				onCopy={ copy }
+			/>
+
 			<div className="wpa-actions">
 				<button
 					className="button button-primary"
@@ -740,11 +953,133 @@ function Editor( {
 	);
 }
 
+/**
+ * Resolve the public URL for a profile's canonical login page.
+ *
+ * Prefers the server-provided value (handles subdir installs correctly)
+ * and falls back to client-side stitching when rendering an unsaved
+ * profile that hasn't been hydrated by the REST layer yet.
+ */
+function resolveLoginUrl( profile: Profile ): string {
+	if ( profile.login_url && profile.login_url !== '' ) {
+		return profile.login_url;
+	}
+	const base = window.workosProfileAdmin?.loginUrlBase || '';
+	return profile.slug ? `${ base }${ profile.slug }/` : '';
+}
+
+/**
+ * Resolve the public URL for the profile's custom path, or '' when unset.
+ */
+function resolveCustomUrl( profile: Profile ): string {
+	if ( '' === profile.custom_path ) {
+		return '';
+	}
+	if ( profile.custom_url && profile.custom_url !== '' ) {
+		return profile.custom_url;
+	}
+	const base = window.workosProfileAdmin?.siteUrl || '/';
+	return `${ base.replace( /\/$/, '' ) }/${ profile.custom_path }/`;
+}
+
+function profileShortcode( slug: string ): string {
+	const tag = window.workosProfileAdmin?.shortcodeTag || 'workos_login_v2';
+	return `[${ tag } profile="${ slug }"]`;
+}
+
+interface EmbedFieldsetProps {
+	profile: Profile;
+	copiedKey: string;
+	onCopy: ( key: string, value: string ) => void;
+}
+
+function EmbedFieldset( { profile, copiedKey, onCopy }: EmbedFieldsetProps ) {
+	if ( ! profile.slug ) {
+		// Unsaved new profile — no slug yet, nothing useful to embed.
+		return null;
+	}
+	const loginUrl  = resolveLoginUrl( profile );
+	const customUrl = resolveCustomUrl( profile );
+	const shortcode = profileShortcode( profile.slug );
+	const idKey     = profile.id || 'new';
+
+	return (
+		<fieldset className="wpa-fieldset wpa-embed-fieldset">
+			<legend>{ __( 'Embed & URLs', 'integration-workos' ) }</legend>
+			<EmbedRow
+				label={ __( 'Login URL', 'integration-workos' ) }
+				value={ loginUrl }
+				copyKey={ `editor:${ idKey }:url` }
+				copiedKey={ copiedKey }
+				onCopy={ onCopy }
+				ariaLabel={ __( 'Copy login URL', 'integration-workos' ) }
+			/>
+			{ '' !== customUrl && (
+				<EmbedRow
+					label={ __( 'Custom URL', 'integration-workos' ) }
+					value={ customUrl }
+					copyKey={ `editor:${ idKey }:custom` }
+					copiedKey={ copiedKey }
+					onCopy={ onCopy }
+					ariaLabel={ __( 'Copy custom URL', 'integration-workos' ) }
+				/>
+			) }
+			<EmbedRow
+				label={ __( 'Shortcode', 'integration-workos' ) }
+				value={ shortcode }
+				copyKey={ `editor:${ idKey }:shortcode` }
+				copiedKey={ copiedKey }
+				onCopy={ onCopy }
+				ariaLabel={ __( 'Copy shortcode', 'integration-workos' ) }
+			/>
+		</fieldset>
+	);
+}
+
 interface ListProps {
 	profiles: Profile[];
 	organizations: Organization[];
 	onSelect: ( profile: Profile ) => void;
 	onCreate: () => void;
+	onDuplicate: ( profile: Profile ) => void;
+	onDelete: ( profile: Profile ) => void;
+}
+
+const METHOD_VISIBLE_CAP = 5;
+
+const methodShortLabels = (): Record< AuthMethod, string > => ( {
+	password:        __( 'Password', 'integration-workos' ),
+	magic_code:      __( 'Magic link', 'integration-workos' ),
+	oauth_google:    __( 'Google', 'integration-workos' ),
+	oauth_microsoft: __( 'Microsoft', 'integration-workos' ),
+	oauth_github:    __( 'GitHub', 'integration-workos' ),
+	oauth_apple:     __( 'Apple', 'integration-workos' ),
+	passkey:         __( 'Passkey', 'integration-workos' ),
+} );
+
+const modeLabels = (): Record< ProfileMode, string > => ( {
+	custom:           __( 'Custom UI', 'integration-workos' ),
+	authkit_redirect: __( 'AuthKit redirect', 'integration-workos' ),
+} );
+
+const enforceShortLabels = (): Record< MfaEnforce, string > => ( {
+	never:       __( 'off', 'integration-workos' ),
+	if_required: __( 'if required', 'integration-workos' ),
+	always:      __( 'always', 'integration-workos' ),
+} );
+
+function signupPostureLabel( signup: Profile[ 'signup' ] ): string {
+	if ( ! signup.enabled ) {
+		return __( 'disabled', 'integration-workos' );
+	}
+	return signup.require_invite
+		? __( 'invite-only', 'integration-workos' )
+		: __( 'open', 'integration-workos' );
+}
+
+function profileInitial( title: string ): string {
+	const trimmed = title.trim();
+	return '' === trimmed ? '?' : trimmed.charAt( 0 ).toUpperCase();
 }
 
 function profileUrl( slug: string ): string {
@@ -754,10 +1089,40 @@ function profileUrl( slug: string ): string {
 		: `${ base }&profile=${ encodeURIComponent( slug ) }`;
 }
 
-function List( { profiles, organizations, onSelect, onCreate }: ListProps ) {
+function List( {
+	profiles,
+	organizations,
+	onSelect,
+	onCreate,
+	onDuplicate,
+	onDelete,
+}: ListProps ) {
+	const { copiedKey, copy } = useCopyToClipboard();
+	const [ titleActionsHost, setTitleActionsHost ] =
+		useState< HTMLElement | null >( null );
+
+	useEffect( () => {
+		setTitleActionsHost(
+			document.getElementById( 'workos-profiles-admin-title-actions' )
+		);
+	}, [] );
+
+	const handleAddClick = (
+		event: MouseEvent< HTMLAnchorElement >
+	): void => {
+		if ( event.defaultPrevented || event.button !== 0 ) {
+			return;
+		}
+		if ( event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ) {
+			return;
+		}
+		event.preventDefault();
+		onCreate();
+	};
+
 	const orgName = ( id: string ): string => {
 		if ( '' === id ) {
-			return '—';
+			return '';
 		}
 		const match = organizations.find( ( o ) => o.id === id );
 		return match ? match.name : id;
@@ -765,7 +1130,7 @@ function List( { profiles, organizations, onSelect, onCreate }: ListProps ) {
 
 	// Real anchors so middle-click + copy-link work; left-click is
 	// intercepted by `onSelect` to keep navigation client-side.
-	const handleClick = (
+	const handleTitleClick = (
 		event: MouseEvent< HTMLAnchorElement >,
 		profile: Profile
 	): void => {
@@ -781,46 +1146,262 @@ function List( { profiles, organizations, onSelect, onCreate }: ListProps ) {
 		onSelect( profile );
 	};
 
+	const confirmDelete = ( profile: Profile ): void => {
+		const message = sprintf(
+			/* translators: %s: profile title. */
+			__( 'Delete “%s”? This cannot be undone.', 'integration-workos' ),
+			profile.title
+		);
+		if ( window.confirm( message ) ) {
+			onDelete( profile );
+		}
+	};
+
+	const labels      = methodShortLabels();
+	const modes       = modeLabels();
+	const mfaShort    = enforceShortLabels();
+
+	const addButton = (
+		<a
+			className="page-title-action"
+			href={ profileUrl( NEW_PROFILE_SENTINEL ) }
+			onClick={ handleAddClick }
+		>
+			{ __( 'Add profile', 'integration-workos' ) }
+		</a>
+	);
+
 	return (
 		<div className="wpa-list">
-			<div className="wpa-list-header">
-				<button className="button button-primary" onClick={ onCreate }>
-					{ __( 'Add profile', 'integration-workos' ) }
-				</button>
-			</div>
-			<table className="wp-list-table widefat striped">
-				<thead>
-					<tr>
-						<th>{ __( 'Title', 'integration-workos' ) }</th>
-						<th>{ __( 'Slug', 'integration-workos' ) }</th>
-						<th>{ __( 'Mode', 'integration-workos' ) }</th>
-						<th>{ __( 'Methods', 'integration-workos' ) }</th>
-						<th>{ __( 'Organization', 'integration-workos' ) }</th>
-					</tr>
-				</thead>
-				<tbody>
-					{ profiles.map( ( p ) => (
-						<tr key={ p.id } className="wpa-row">
-							<td>
-								<strong>
+			{ titleActionsHost
+				? createPortal( addButton, titleActionsHost )
+				: null }
+			{ profiles.length === 0 && (
+				<div className="wpa-empty">
+					{ __(
+						'No login profiles yet. Create your first profile to scope sign-in methods, branding, and MFA.',
+						'integration-workos'
+					) }
+				</div>
+			) }
+			<ul className="wpa-cards">
+				{ profiles.map( ( p ) => {
+					const methods     = p.methods || [];
+					const visible     = methods.slice( 0, METHOD_VISIBLE_CAP );
+					const overflow    = methods.length - visible.length;
+					const org         = orgName( p.organization_id );
+					const isDefault   = p.slug === 'default';
+					const color       = ( p.branding?.primary_color || '' ).trim();
+					const logoUrl     = p.branding?.logo_url || '';
+					const customPath  = ( p.custom_path || '' ).trim();
+					const loginUrl    = resolveLoginUrl( p );
+					const shortcode   = profileShortcode( p.slug );
+					const mediaStyle  = color
+						? { backgroundColor: color }
+						: undefined;
+
+					return (
+						<li key={ p.id } className="wpa-card">
+							<div
+								className="wpa-card-media"
+								style={ mediaStyle }
+								aria-hidden="true"
+							>
+								{ logoUrl ? (
+									<img src={ logoUrl } alt="" />
+								) : (
+									<span className="wpa-card-media-initial">
+										{ profileInitial( p.title ) }
+									</span>
+								) }
+							</div>
+
+							<div className="wpa-card-body">
+								<div className="wpa-card-headline">
 									<a
+										className="wpa-card-title"
 										href={ profileUrl( p.slug ) }
-										onClick={ ( e ) => handleClick( e, p ) }
+										onClick={ ( e ) =>
+											handleTitleClick( e, p )
+										}
 									>
-										{ p.title }
+										{ p.title || p.slug }
 									</a>
-								</strong>
-							</td>
-							<td>
-								<code>{ p.slug }</code>
-							</td>
-							<td>{ p.mode }</td>
-							<td>{ ( p.methods || [] ).join( ', ' ) }</td>
-							<td>{ orgName( p.organization_id ) }</td>
-						</tr>
-					) ) }
-				</tbody>
-			</table>
+									<code className="wpa-card-slug">
+										/{ p.slug }
+									</code>
+								</div>
+
+								<div className="wpa-card-badges">
+									<span
+										className={ `wpa-pill wpa-pill-mode wpa-pill-mode-${ p.mode }` }
+									>
+										{ modes[ p.mode ] || p.mode }
+									</span>
+									{ '' !== customPath && (
+										<span className="wpa-pill wpa-pill-path">
+											{ sprintf(
+												/* translators: %s: custom URL path. */
+												__( 'Path: /%s', 'integration-workos' ),
+												customPath
+											) }
+										</span>
+									) }
+									{ color && (
+										<span className="wpa-color">
+											<span
+												className="wpa-color-swatch"
+												style={ {
+													backgroundColor: color,
+												} }
+												aria-hidden="true"
+											/>
+											<code>{ color }</code>
+										</span>
+									) }
+								</div>
+
+								{ methods.length > 0 ? (
+									<div className="wpa-card-chips">
+										{ visible.map( ( m ) => (
+											<span
+												key={ m }
+												className="wpa-chip"
+											>
+												{ labels[ m ] || m }
+											</span>
+										) ) }
+										{ overflow > 0 && (
+											<span className="wpa-chip wpa-chip-overflow">
+												{ sprintf(
+													/* translators: %d: number of additional methods. */
+													__(
+														'+%d more',
+														'integration-workos'
+													),
+													overflow
+												) }
+											</span>
+										) }
+									</div>
+								) : (
+									<div className="wpa-card-chips">
+										<span className="wpa-chip wpa-chip-warning">
+											{ __(
+												'No sign-in methods enabled',
+												'integration-workos'
+											) }
+										</span>
+									</div>
+								) }
+
+								<div className="wpa-card-meta">
+									<span>
+										<strong>
+											{ __(
+												'Org:',
+												'integration-workos'
+											) }
+										</strong>{ ' ' }
+										{ org ||
+											__(
+												'any',
+												'integration-workos'
+											) }
+									</span>
+									<span>
+										<strong>
+											{ __(
+												'MFA:',
+												'integration-workos'
+											) }
+										</strong>{ ' ' }
+										{ mfaShort[ p.mfa.enforce ] ||
+											p.mfa.enforce }
+									</span>
+									<span>
+										<strong>
+											{ __(
+												'Sign-up:',
+												'integration-workos'
+											) }
+										</strong>{ ' ' }
+										{ signupPostureLabel( p.signup ) }
+									</span>
+								</div>
+
+								<div className="wpa-card-embed">
+									<EmbedRow
+										label={ __(
+											'URL',
+											'integration-workos'
+										) }
+										value={ loginUrl }
+										copyKey={ `card:${ p.id }:url` }
+										copiedKey={ copiedKey }
+										onCopy={ copy }
+										ariaLabel={ __(
+											'Copy login URL',
+											'integration-workos'
+										) }
+									/>
+									<EmbedRow
+										label={ __(
+											'Shortcode',
+											'integration-workos'
+										) }
+										value={ shortcode }
+										copyKey={ `card:${ p.id }:shortcode` }
+										copiedKey={ copiedKey }
+										onCopy={ copy }
+										ariaLabel={ __(
+											'Copy shortcode',
+											'integration-workos'
+										) }
+									/>
+								</div>
+
+								<div className="wpa-card-actions">
+									<button
+										type="button"
+										className="button-link"
+										onClick={ () => onDuplicate( p ) }
+									>
+										{ __(
+											'Duplicate',
+											'integration-workos'
+										) }
+									</button>
+									{ ! isDefault && (
+										<button
+											type="button"
+											className="button-link button-link-delete"
+											onClick={ () => confirmDelete( p ) }
+										>
+											{ __(
+												'Delete',
+												'integration-workos'
+											) }
+										</button>
+									) }
+								</div>
+							</div>
+
+							<div className="wpa-card-cta">
+								<a
+									className="button"
+									href={ profileUrl( p.slug ) }
+									onClick={ ( e ) =>
+										handleTitleClick( e, p )
+									}
+								>
+									{ __( 'Edit', 'integration-workos' ) }
+								</a>
+							</div>
+						</li>
+					);
+				} ) }
+			</ul>
 		</div>
 	);
 }
@@ -948,16 +1529,14 @@ function App(): ReactNode {
 		setSaving( true );
 		setError( '' );
 		const isNew = ! profile.id;
-		const { ok, data } = await apiCall< Profile & { message?: string } >(
+		const { ok, data } = await apiCall< Profile & { message?: string; code?: string } >(
 			isNew ? 'POST' : 'PUT',
 			isNew ? '' : `/${ profile.id }`,
 			profile
 		);
 		setSaving( false );
 		if ( ! ok ) {
-			setError(
-				data.message || __( 'Failed to save.', 'integration-workos' )
-			);
+			setError( errorCopy( data.code, data.message ) );
 			return;
 		}
 		await refreshProfiles();
@@ -979,6 +1558,35 @@ function App(): ReactNode {
 		}
 		setSelected( null );
 		navigateTo( '' );
+		await refreshProfiles();
+	};
+
+	const handleDuplicate = async ( source: Profile ): Promise< void > => {
+		setError( '' );
+		const draft: Profile = {
+			...source,
+			id: 0,
+			// Empty slug lets the server derive one from the title and
+			// avoids a clash with the source profile's existing slug.
+			slug: '',
+			title: sprintf(
+				/* translators: %s: original profile title. */
+				__( '%s (copy)', 'integration-workos' ),
+				source.title || source.slug
+			),
+		};
+		const { ok, data } = await apiCall< Profile & { message?: string } >(
+			'POST',
+			'',
+			draft
+		);
+		if ( ! ok ) {
+			setError(
+				data.message ||
+					__( 'Failed to duplicate profile.', 'integration-workos' )
+			);
+			return;
+		}
 		await refreshProfiles();
 	};
 
@@ -1006,6 +1614,8 @@ function App(): ReactNode {
 					organizations={ organizations }
 					onSelect={ openProfile }
 					onCreate={ openNewProfile }
+					onDuplicate={ handleDuplicate }
+					onDelete={ handleDelete }
 				/>
 			) }
 		</>

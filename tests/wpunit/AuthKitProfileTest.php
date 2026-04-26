@@ -337,4 +337,67 @@ class AuthKitProfileTest extends WPTestCase {
 		$this->assertSame( '', $default_profile->to_editor_array()['branding']['logo_url'] );
 		$this->assertSame( '', $none_profile->to_editor_array()['branding']['logo_url'] );
 	}
+
+	/**
+	 * normalize_custom_path strips leading/trailing slashes and runs each
+	 * segment through sanitize_title — nested paths survive intact.
+	 */
+	public function test_normalize_custom_path_sanitizes_segments(): void {
+		$this->assertSame( 'members', Profile::normalize_custom_path( '/members/' ) );
+		$this->assertSame( 'team/login', Profile::normalize_custom_path( '///Team/Login///' ) );
+		$this->assertSame( 'foo-bar', Profile::normalize_custom_path( 'Foo Bar' ) );
+		$this->assertSame( 'a/b', Profile::normalize_custom_path( '/a//b/' ) );
+	}
+
+	/**
+	 * Slash-only or whitespace-only inputs collapse to the empty string.
+	 */
+	public function test_normalize_custom_path_returns_empty_for_blank_input(): void {
+		$this->assertSame( '', Profile::normalize_custom_path( '' ) );
+		$this->assertSame( '', Profile::normalize_custom_path( '/' ) );
+		$this->assertSame( '', Profile::normalize_custom_path( '///' ) );
+		$this->assertSame( '', Profile::normalize_custom_path( '  ' ) );
+	}
+
+	/**
+	 * custom_path round-trips through from_array → to_array intact.
+	 */
+	public function test_custom_path_round_trips(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'        => 'members',
+				'custom_path' => '/Team/Login/',
+			]
+		);
+
+		$this->assertSame( 'team/login', $profile->get_custom_path() );
+		$this->assertSame( 'team/login', $profile->to_array()['custom_path'] );
+	}
+
+	/**
+	 * to_editor_array surfaces resolved login_url + custom_url for the editor.
+	 */
+	public function test_to_editor_array_resolves_login_and_custom_urls(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'        => 'members',
+				'custom_path' => 'team/login',
+			]
+		);
+
+		$editor = $profile->to_editor_array();
+
+		$this->assertSame( home_url( '/workos/login/members/' ), $editor['login_url'] );
+		$this->assertSame( home_url( '/team/login/' ), $editor['custom_url'] );
+	}
+
+	/**
+	 * Empty custom_path still produces an empty custom_url string for
+	 * predictable React typing.
+	 */
+	public function test_to_editor_array_returns_empty_custom_url_when_unset(): void {
+		$profile = Profile::from_array( [ 'slug' => 'members' ] );
+
+		$this->assertSame( '', $profile->to_editor_array()['custom_url'] );
+	}
 }

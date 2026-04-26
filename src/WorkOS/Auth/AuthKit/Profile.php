@@ -49,6 +49,28 @@ class Profile {
 	public const LOGO_MODE_NONE    = 'none';
 
 	/**
+	 * Paths that must never be claimed as a custom login URL.
+	 *
+	 * Compared after {@see normalize_custom_path()} runs, so entries here
+	 * must already be in sanitize_title shape — anything with a `.` or
+	 * other dropped chars (e.g. `wp-login.php`) becomes an unrelated
+	 * harmless variant and can't reach this list. Repository-level checks
+	 * also block anything starting with `wp-admin` or `workos/`.
+	 */
+	public const RESERVED_PATHS = [
+		'wp-admin',
+		'wp-content',
+		'wp-includes',
+		'wp-json',
+		'workos',
+		'admin',
+		'login',
+		'feed',
+		'comments',
+		'trackback',
+	];
+
+	/**
 	 * Post ID backing this profile, or 0 for unsaved.
 	 *
 	 * @var int
@@ -61,6 +83,17 @@ class Profile {
 	 * @var string
 	 */
 	private string $slug;
+
+	/**
+	 * Optional custom path that maps an arbitrary URL to this profile.
+	 *
+	 * Empty string means no custom path; the canonical /workos/login/{slug}
+	 * URL is always available regardless. Stored without leading or
+	 * trailing slashes (e.g. `members`, `team/login`).
+	 *
+	 * @var string
+	 */
+	private string $custom_path = '';
 
 	/**
 	 * Display title.
@@ -142,6 +175,7 @@ class Profile {
 	public function __construct( array $data ) {
 		$this->id                  = isset( $data['id'] ) ? (int) $data['id'] : 0;
 		$this->slug                = (string) ( $data['slug'] ?? '' );
+		$this->custom_path         = (string) ( $data['custom_path'] ?? '' );
 		$this->title               = (string) ( $data['title'] ?? '' );
 		$this->methods             = array_values( array_filter( (array) ( $data['methods'] ?? [] ), 'is_string' ) );
 		$this->organization_id     = (string) ( $data['organization_id'] ?? '' );
@@ -205,6 +239,8 @@ class Profile {
 
 		// Slug is normalized to WP sanitize_title conventions.
 		$slug = sanitize_title( (string) ( $data['slug'] ?? '' ) );
+
+		$custom_path = self::normalize_custom_path( (string) ( $data['custom_path'] ?? '' ) );
 
 		$title = isset( $data['title'] ) ? (string) $data['title'] : '';
 		if ( '' === $title ) {
@@ -278,6 +314,7 @@ class Profile {
 			[
 				'id'                  => (int) ( $data['id'] ?? 0 ),
 				'slug'                => $slug,
+				'custom_path'         => $custom_path,
 				'title'               => $title,
 				'methods'             => $methods,
 				'organization_id'     => $organization_id,
@@ -313,6 +350,7 @@ class Profile {
 		return self::from_array(
 			[
 				'slug'                => self::DEFAULT_SLUG,
+				'custom_path'         => '',
 				'title'               => __( 'Default Login', 'integration-workos' ),
 				'methods'             => [
 					self::METHOD_PASSWORD,
@@ -367,6 +405,7 @@ class Profile {
 		return [
 			'id'                  => $this->id,
 			'slug'                => $this->slug,
+			'custom_path'         => $this->custom_path,
 			'title'               => $this->title,
 			'methods'             => $this->methods,
 			'organization_id'     => $this->organization_id,
@@ -404,6 +443,11 @@ class Profile {
 			: '';
 
 		$data['branding'] = $branding;
+
+		// Resolved URLs for the editor's "Embed & URLs" section. Kept out
+		// of to_array()/storage so the canonical shape stays minimal.
+		$data['login_url']  = '' !== $this->slug ? home_url( '/workos/login/' . $this->slug . '/' ) : '';
+		$data['custom_url'] = '' !== $this->custom_path ? home_url( '/' . $this->custom_path . '/' ) : '';
 
 		return $data;
 	}
@@ -455,6 +499,45 @@ class Profile {
 	 */
 	public function get_slug(): string {
 		return $this->slug;
+	}
+
+	/**
+	 * Custom path that maps an arbitrary URL to this profile, or '' when unset.
+	 *
+	 * @return string
+	 */
+	public function get_custom_path(): string {
+		return $this->custom_path;
+	}
+
+	/**
+	 * Shape-sanitize a raw custom-path string (no policy checks).
+	 *
+	 * Strips leading/trailing whitespace and slashes, then runs each path
+	 * segment through {@see sanitize_title()} so nested paths like
+	 * `customer/login` survive while `?` and other URL-unsafe chars are
+	 * dropped. Reserved-list and uniqueness enforcement live at the
+	 * repository / REST layer because they need cross-profile context.
+	 *
+	 * @param string $raw Raw user input.
+	 *
+	 * @return string Normalized path with no leading or trailing slash, or ''.
+	 */
+	public static function normalize_custom_path( string $raw ): string {
+		$value = trim( wp_unslash( $raw ) );
+		$value = trim( $value, '/' );
+		if ( '' === $value ) {
+			return '';
+		}
+
+		$segments = array_filter(
+			array_map( 'sanitize_title', explode( '/', $value ) ),
+			static function ( $segment ): bool {
+				return '' !== $segment;
+			}
+		);
+
+		return implode( '/', $segments );
 	}
 
 	/**

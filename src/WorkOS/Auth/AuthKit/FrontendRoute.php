@@ -21,8 +21,9 @@ defined( 'ABSPATH' ) || exit;
  */
 class FrontendRoute {
 
-	public const QUERY_VAR = 'workos_login_profile';
-	public const REWRITE   = '^workos/login/([^/]+)/?$';
+	public const QUERY_VAR        = 'workos_login_profile';
+	public const REWRITE          = '^workos/login/([^/]+)/?$';
+	public const SIGNATURE_OPTION = 'workos_custom_paths_signature';
 
 	/**
 	 * Profile repository.
@@ -56,8 +57,16 @@ class FrontendRoute {
 	 */
 	public function register(): void {
 		add_action( 'init', [ self::class, 'register_rewrite' ] );
+		// Priority 11 so the CPT (registered at init priority 5) and the
+		// canonical rewrite (default init priority 10) are both in place.
+		add_action( 'init', [ $this, 'register_custom_paths' ], 11 );
 		add_filter( 'query_vars', [ $this, 'register_query_var' ] );
 		add_action( 'template_redirect', [ $this, 'maybe_render' ] );
+
+		// React to profile mutations: clear the cached signature so the
+		// next request's `init` re-registers the rules and flushes once.
+		add_action( 'workos_login_profile_saved', [ $this, 'invalidate_signature' ] );
+		add_action( 'workos_login_profile_deleted', [ $this, 'invalidate_signature' ] );
 	}
 
 	/**
@@ -127,5 +136,69 @@ class FrontendRoute {
 		];
 
 		$this->renderer->render_full_page( $profile, $context );
+	}
+
+	/**
+	 * Register one rewrite rule per profile that has a non-empty custom_path.
+	 *
+	 * Each rule maps the custom path to the same {@see self::QUERY_VAR}
+	 * the canonical /workos/login/{slug} rule uses, so {@see maybe_render()}
+	 * needs no changes to handle the new entry points.
+	 *
+	 * Detects path-set changes via a signature hashed across all custom
+	 * paths and triggers a single soft `flush_rewrite_rules( false )` only
+	 * when the signature drifts. .htaccess is left untouched.
+	 *
+	 * @return void
+	 */
+	public function register_custom_paths(): void {
+		$entries = [];
+		foreach ( $this->profiles->all() as $profile ) {
+			if ( Profile::DEFAULT_SLUG === $profile->get_slug() ) {
+				continue;
+			}
+			$path = $profile->get_custom_path();
+			if ( '' === $path ) {
+				continue;
+			}
+			$slug             = $profile->get_slug();
+			$entries[ $path ] = $slug;
+			add_rewrite_rule(
+				'^' . preg_quote( $path, '#' ) . '/?$',
+				'index.php?' . self::QUERY_VAR . '=' . rawurlencode( $slug ),
+				'top'
+			);
+		}
+
+		$signature = self::compute_signature( $entries );
+		$stored    = (string) get_option( self::SIGNATURE_OPTION, '' );
+		if ( $signature !== $stored ) {
+			flush_rewrite_rules( false );
+			update_option( self::SIGNATURE_OPTION, $signature, false );
+		}
+	}
+
+	/**
+	 * Drop the cached path signature so the next `init` rebuilds and flushes.
+	 *
+	 * @return void
+	 */
+	public function invalidate_signature(): void {
+		delete_option( self::SIGNATURE_OPTION );
+	}
+
+	/**
+	 * Compute a stable hash for the path → slug map.
+	 *
+	 * @param array<string,string> $entries Map of custom path to profile slug.
+	 *
+	 * @return string Empty string when there are no entries; an md5 otherwise.
+	 */
+	private static function compute_signature( array $entries ): string {
+		if ( empty( $entries ) ) {
+			return 'empty';
+		}
+		ksort( $entries );
+		return md5( (string) wp_json_encode( $entries ) );
 	}
 }

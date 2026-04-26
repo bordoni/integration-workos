@@ -7,28 +7,281 @@
 
 #workos-profiles-admin-root {
 	--wpa-gap: 16px;
-	max-width: 820px;
 }
 
-#workos-profiles-admin-root .wpa-list-header {
+#workos-profiles-admin-root .wpa-empty {
+	padding: 32px 16px;
+	border: 1px dashed #c3c4c7;
+	border-radius: 6px;
+	background: #fff;
+	color: #50575e;
+	text-align: center;
+}
+
+#workos-profiles-admin-root .wpa-cards {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 12px;
+}
+
+@media (min-width: 1400px) {
+	#workos-profiles-admin-root .wpa-cards {
+		grid-template-columns: repeat(2, minmax(700px, 1fr));
+	}
+}
+
+#workos-profiles-admin-root .wpa-card {
+	display: grid;
+	grid-template-columns: 88px minmax(0, 1fr) auto;
+	gap: 16px;
+	align-items: flex-start;
+	padding: 16px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+	transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+#workos-profiles-admin-root .wpa-card:hover,
+#workos-profiles-admin-root .wpa-card:focus-within {
+	border-color: #2271b1;
+	box-shadow: 0 1px 2px rgba(34, 113, 177, 0.15);
+}
+
+#workos-profiles-admin-root .wpa-card-media {
+	width: 64px;
+	height: 64px;
+	border-radius: 6px;
+	background: #f0f0f1;
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
-	margin-bottom: var(--wpa-gap);
+	justify-content: center;
+	overflow: hidden;
+	border: 1px solid #dcdcde;
 }
 
-#workos-profiles-admin-root .wpa-row {
+#workos-profiles-admin-root .wpa-card-media img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	background: #fff;
+	width: 100%;
+	height: 100%;
+	padding: 4px;
+	box-sizing: border-box;
+}
+
+#workos-profiles-admin-root .wpa-card-media-initial {
+	font-size: 28px;
+	font-weight: 600;
+	color: #fff;
+	text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+	line-height: 1;
+}
+
+#workos-profiles-admin-root .wpa-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+#workos-profiles-admin-root .wpa-card-headline {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 10px;
+	min-width: 0;
+}
+
+#workos-profiles-admin-root .wpa-card-title {
+	font-size: 15px;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+#workos-profiles-admin-root .wpa-card-title:hover {
+	text-decoration: underline;
+}
+
+#workos-profiles-admin-root .wpa-card-slug {
+	font-size: 12px;
+	color: #50575e;
+	background: #f6f7f7;
+	padding: 1px 6px;
+	border-radius: 3px;
+}
+
+#workos-profiles-admin-root .wpa-card-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+#workos-profiles-admin-root .wpa-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 500;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: #f0f0f1;
+	color: #1d2327;
+	line-height: 1.6;
+}
+
+#workos-profiles-admin-root .wpa-pill-mode-custom {
+	background: #e7f3fb;
+	color: #135e96;
+}
+
+#workos-profiles-admin-root .wpa-pill-mode-authkit_redirect {
+	background: #fcf0e6;
+	color: #8a4b00;
+}
+
+#workos-profiles-admin-root .wpa-color {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: #50575e;
+}
+
+#workos-profiles-admin-root .wpa-color-swatch {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border-radius: 3px;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+#workos-profiles-admin-root .wpa-card-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+#workos-profiles-admin-root .wpa-chip {
+	font-size: 12px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: #f0f0f1;
+	color: #1d2327;
+	line-height: 1.6;
+}
+
+#workos-profiles-admin-root .wpa-chip-overflow {
+	background: transparent;
+	color: #50575e;
+	padding: 2px 4px;
+}
+
+#workos-profiles-admin-root .wpa-chip-warning {
+	background: #fcf0f1;
+	color: #8a2424;
+}
+
+#workos-profiles-admin-root .wpa-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 16px;
+	font-size: 12px;
+	color: #50575e;
+}
+
+#workos-profiles-admin-root .wpa-card-meta strong {
+	color: #1d2327;
+	font-weight: 500;
+}
+
+#workos-profiles-admin-root .wpa-card-embed {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 4px;
+}
+
+#workos-profiles-admin-root .wpa-card-embed .wpa-embed-label {
+	min-width: 80px;
+	font-size: 12px;
+}
+
+#workos-profiles-admin-root .wpa-card-embed input.wpa-embed-value {
+	font-size: 12px;
+	padding: 4px 6px;
+}
+
+#workos-profiles-admin-root .wpa-pill-path {
+	background: #eef0f2;
+	color: #1d2327;
+	font-family: monospace;
+}
+
+#workos-profiles-admin-root .wpa-card-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	align-items: center;
+	margin-top: 4px;
+}
+
+#workos-profiles-admin-root .wpa-card-actions .button-link {
+	font-size: 12px;
+	text-decoration: none;
+	color: #2271b1;
+	background: transparent;
+	border: 0;
+	padding: 0;
 	cursor: pointer;
 }
 
-#workos-profiles-admin-root .wpa-row:hover {
-	background: #f6f7f7;
+#workos-profiles-admin-root .wpa-card-actions .button-link:hover {
+	text-decoration: underline;
+}
+
+#workos-profiles-admin-root .wpa-card-actions .button-link-delete {
+	color: #b32d2e;
+}
+
+#workos-profiles-admin-root .wpa-card-cta {
+	display: flex;
+	align-items: flex-start;
+}
+
+@media (max-width: 600px) {
+	#workos-profiles-admin-root .wpa-card {
+		grid-template-columns: 64px minmax(0, 1fr);
+		grid-template-areas:
+			'media body'
+			'cta cta';
+	}
+
+	#workos-profiles-admin-root .wpa-card-media {
+		grid-area: media;
+	}
+
+	#workos-profiles-admin-root .wpa-card-body {
+		grid-area: body;
+	}
+
+	#workos-profiles-admin-root .wpa-card-cta {
+		grid-area: cta;
+		justify-content: flex-end;
+	}
 }
 
 #workos-profiles-admin-root .wpa-editor {
 	display: flex;
 	flex-direction: column;
 	gap: var(--wpa-gap);
+	max-width: 820px;
 }
 
 #workos-profiles-admin-root .wpa-field {
@@ -106,4 +359,75 @@
 #workos-profiles-admin-root .wpa-logo-field .description {
 	font-style: italic;
 	color: #646970;
+}
+
+#workos-profiles-admin-root .wpa-field .description {
+	font-style: italic;
+	color: #646970;
+	font-size: 12px;
+}
+
+#workos-profiles-admin-root .wpa-embed-fieldset {
+	gap: 8px;
+}
+
+#workos-profiles-admin-root .wpa-embed-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+#workos-profiles-admin-root .wpa-embed-label {
+	font-weight: 500;
+	min-width: 110px;
+	color: #1d2327;
+}
+
+#workos-profiles-admin-root input.wpa-embed-value {
+	flex: 1 1 240px;
+	min-width: 0;
+	padding: 6px 8px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 12px;
+	color: #1d2327;
+	cursor: text;
+}
+
+#workos-profiles-admin-root input.wpa-embed-value:focus {
+	border-color: #2271b1;
+	outline: none;
+	box-shadow: 0 0 0 1px #2271b1;
+}
+
+#workos-profiles-admin-root .wpa-copy-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	padding: 4px 6px;
+	cursor: pointer;
+	color: #2271b1;
+	line-height: 1;
+	transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+#workos-profiles-admin-root .wpa-copy-btn:hover {
+	background: #f0f0f1;
+}
+
+#workos-profiles-admin-root .wpa-copy-btn:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+}
+
+#workos-profiles-admin-root .wpa-copy-btn.is-copied {
+	color: #008a20;
+	border-color: #008a20;
+	background: #f0faf2;
 }
