@@ -108,13 +108,17 @@ class Redirect {
 		}
 
 		// Look up role-based redirect entry, falling back to __default__.
+		// `get_redirect_urls()` normalizes legacy string entries to the
+		// structured shape, so every entry here is `{url, first_login_only}`.
 		$redirect_map = self::get_redirect_urls();
 		$role         = self::get_primary_role( $user );
-		$entry        = $redirect_map[ $role ] ?? $redirect_map['__default__'] ?? [];
+		$entry        = $redirect_map[ $role ] ?? $redirect_map['__default__'] ?? [
+			'url'              => '',
+			'first_login_only' => false,
+		];
 
-		// Support both structured entries and legacy string values.
-		$role_url         = is_array( $entry ) ? ( $entry['url'] ?? '' ) : (string) $entry;
-		$first_login_only = is_array( $entry ) ? ! empty( $entry['first_login_only'] ) : false;
+		$role_url         = (string) ( $entry['url'] ?? '' );
+		$first_login_only = ! empty( $entry['first_login_only'] );
 
 		/**
 		 * Override the per-entry "first login only" setting programmatically.

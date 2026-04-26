@@ -388,7 +388,7 @@ class UserCommand extends \WP_CLI_Command {
 		}
 
 		if ( isset( $assoc_args['porcelain'] ) ) {
-			WP_CLI::line( $wp_user->ID );
+			WP_CLI::line( (string) $wp_user->ID );
 			return;
 		}
 

@@ -791,6 +791,38 @@ composer lint:fix     # PHP (auto-fix)
 bun run lint:ts       # TypeScript
 ```
 
+### Static Analysis (PHPStan)
+
+PHPStan runs at **level 5** against `src/`, `integration-workos.php`,
+and `uninstall.php`. The config lives in `phpstan.neon.dist` and is
+enforced by the `PHPStan` GitHub Actions job — PRs to `main` cannot
+merge while it's red.
+
+```bash
+composer phpstan            # Run analysis (--memory-limit=1G)
+composer phpstan:baseline   # Generate phpstan-baseline.neon (fix-everything policy: do not commit)
+```
+
+The stack:
+
+- `phpstan/phpstan` ^2 — analyzer
+- `szepeviktor/phpstan-wordpress` — WordPress core stubs + WP-aware
+  inference (handles `apply_filters`, `wp_remote_request`, hook
+  signatures)
+- `php-stubs/wp-cli-stubs` — `WP_CLI`, `WP_CLI_Command`,
+  `WP_CLI\Formatter`, etc. for the `src/WorkOS/CLI/*` commands
+- `phpstan/extension-installer` — auto-registers extension neon files
+
+`phpstan/stubs.php` declares the `WORKOS_*` constants that
+`Plugin::init()` defines at runtime so PHPStan can resolve them at
+parse time. Strauss-prefixed `WorkOS\Vendor\…` classes are picked up
+automatically via `vendor/autoload.php` in `scanFiles`.
+
+**Policy: no baseline.** Findings must be fixed in the PR that
+introduces them. The `composer phpstan:baseline` script exists as a
+safety hatch, but the resulting file should not be committed without
+discussion.
+
 ### Architecture
 
 The plugin uses a DI container (di52) with a feature-controller pattern:

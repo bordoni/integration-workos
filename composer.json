@@ -24,8 +24,12 @@
 		"codeception/module-filesystem": "^3.0",
 		"dealerdirect/phpcodesniffer-composer-installer": "^1.0",
 		"lucatume/wp-browser": "^4.5",
+		"php-stubs/wp-cli-stubs": "^2.11",
 		"phpcompatibility/phpcompatibility-wp": "^2.1",
+		"phpstan/extension-installer": "^1.4",
+		"phpstan/phpstan": "^2.0",
 		"squizlabs/php_codesniffer": "^3.8",
+		"szepeviktor/phpstan-wordpress": "^2.0",
 		"wp-coding-standards/wpcs": "^3.0"
 	},
 	"autoload": {
@@ -36,7 +40,8 @@
 	},
 	"config": {
 		"allow-plugins": {
-			"dealerdirect/phpcodesniffer-composer-installer": true
+			"dealerdirect/phpcodesniffer-composer-installer": true,
+			"phpstan/extension-installer": true
 		},
 		"sort-packages": true
 	},
@@ -44,6 +49,8 @@
 		"test:wpunit": "vendor/bin/codecept run wpunit",
 		"lint": "phpcs",
 		"lint:fix": "phpcbf",
+		"phpstan": "phpstan analyse --memory-limit=1G",
+		"phpstan:baseline": "phpstan analyse --memory-limit=1G --generate-baseline",
 		"strauss-install": [
 			"test -f ./bin/strauss.phar || (mkdir -p bin && curl -o bin/strauss.phar -L https://github.com/BrianHenryIE/strauss/releases/download/0.26.5/strauss.phar)"
 		],

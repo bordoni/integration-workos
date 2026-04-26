@@ -129,10 +129,7 @@ class ProfileRepository {
 
 		$profiles = [];
 		foreach ( $posts as $post ) {
-			$profile = $this->hydrate( $post );
-			if ( $profile ) {
-				$profiles[] = $profile;
-			}
+			$profiles[] = $this->hydrate( $post );
 		}
 
 		return $profiles;
@@ -311,11 +308,15 @@ class ProfileRepository {
 	/**
 	 * Hydrate a Profile from a WP_Post.
 	 *
+	 * Always returns a Profile — corrupt or missing meta payloads fall
+	 * through to {@see Profile::from_array()}'s defaults rather than
+	 * surfacing a null that callers would have to handle.
+	 *
 	 * @param WP_Post $post Post object.
 	 *
-	 * @return Profile|null Returns null if the meta payload is corrupt beyond recovery.
+	 * @return Profile
 	 */
-	private function hydrate( WP_Post $post ): ?Profile {
+	private function hydrate( WP_Post $post ): Profile {
 		$raw = get_post_meta( $post->ID, self::META_KEY, true );
 
 		$data = [];

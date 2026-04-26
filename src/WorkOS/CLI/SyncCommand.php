@@ -231,10 +231,11 @@ class SyncCommand extends \WP_CLI_Command {
 			$params['organization_id'] = $assoc_args['organization_id'];
 		}
 
-		$imported = 0;
-		$failed   = 0;
-		$skipped  = 0;
-		$cursor   = null;
+		$imported       = 0;
+		$failed         = 0;
+		$skipped        = 0;
+		$cursor         = null;
+		$header_printed = false;
 
 		do {
 			if ( $cursor ) {
@@ -253,8 +254,9 @@ class SyncCommand extends \WP_CLI_Command {
 				break;
 			}
 
-			if ( ! isset( $progress ) ) {
+			if ( ! $header_printed ) {
 				WP_CLI::log( 'Importing WorkOS users...' );
+				$header_printed = true;
 			}
 
 			foreach ( $users as $workos_user ) {
