@@ -21,9 +21,8 @@ browser only ever talks to `/wp-json/workos/v1/auth/*`.
   `logout`, `register`, `lostpassword`, `resetpass`, `confirmaction`,
   `postpass`, `?fallback=1`, `?workos=0` still pass through to WP
   defaults.
-- **Entry points** — `[workos_login_v2]` shortcode, `workos/login-form`
-  block, and `/workos/login/{profile}` rewrite all render the same
-  shell.
+- **Entry points** — `[workos:login]` shortcode and
+  `/workos/login/{profile}` rewrite both render the same shell.
 - **Profile routing rules** — ordered `redirect_to` glob /
   `referrer_host` / `user_role` matchers pick which profile applies to
   a request; first match wins, falls back to the `default` profile.

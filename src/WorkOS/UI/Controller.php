@@ -1,6 +1,6 @@
 <?php
 /**
- * UI Controller — registers shortcode, widget, block, AJAX, and frontend assets.
+ * UI Controller — registers widget, block, AJAX, and frontend assets.
  *
  * @package WorkOS\UI
  */
@@ -22,9 +22,6 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
-		$this->container->singleton( Shortcode::class );
-		$this->container->get( Shortcode::class );
-
 		$this->container->singleton( Block::class );
 		$this->container->get( Block::class );
 
@@ -57,16 +54,15 @@ class Controller extends BaseController {
 	/**
 	 * Conditionally enqueue frontend assets.
 	 *
-	 * Only loads CSS/JS when the login button is actually used on the page.
+	 * Only loads CSS/JS when the login button block or widget is on the page.
 	 */
 	public function maybe_enqueue_frontend_assets(): void {
 		global $post;
 
-		$has_shortcode = $post instanceof \WP_Post && has_shortcode( $post->post_content, 'workos_login' );
-		$has_block     = $post instanceof \WP_Post && has_block( 'workos/login-button', $post );
-		$has_widget    = is_active_widget( false, false, 'workos_login_button' );
+		$has_block  = $post instanceof \WP_Post && has_block( 'workos/login-button', $post );
+		$has_widget = is_active_widget( false, false, 'workos_login_button' );
 
-		if ( ! $has_shortcode && ! $has_block && ! $has_widget ) {
+		if ( ! $has_block && ! $has_widget ) {
 			return;
 		}
 

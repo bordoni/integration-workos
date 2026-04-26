@@ -100,7 +100,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/AuthKit/LoginCompleter.php` | Post-auth finalizer (EntitlementGate + MFA policy) |
 | `src/WorkOS/Auth/AuthKit/LoginTakeover.php` | wp-login.php `action=login` takeover |
 | `src/WorkOS/Auth/AuthKit/FrontendRoute.php` | `/workos/login/{profile}` rewrite + static `register_rewrite()` |
-| `src/WorkOS/Auth/AuthKit/Shortcode.php` | `[workos_login_v2]` shortcode |
+| `src/WorkOS/Auth/AuthKit/Shortcode.php` | `[workos:login]` shortcode |
 | `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue. Fires `workos_authkit_enqueue_assets` action and applies `workos_authkit_branding` / `workos_authkit_profile_data` / `workos_authkit_body_classes` filters — see `docs/extending-the-login-ui.md` |
 | `src/WorkOS/Auth/AuthKit/Nonce.php` | Profile-scoped CSRF nonces |
 | `src/WorkOS/Auth/AuthKit/RateLimiter.php` | Per-IP / per-email transient buckets |
@@ -114,8 +114,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/ActivityLog/EventLogger.php` | Logs WordPress events to local DB table |
 | `src/WorkOS/ActivityLog/AdminPage.php` | Activity log viewer in admin |
 | **UI (Login Button)** | |
-| `src/WorkOS/UI/Controller.php` | UI controller, registers shortcode/block/widget |
-| `src/WorkOS/UI/Shortcode.php` | `[workos_login]` shortcode |
+| `src/WorkOS/UI/Controller.php` | UI controller, registers block/widget |
 | `src/WorkOS/UI/Block.php` | Gutenberg block registration |
 | `src/WorkOS/UI/Widget.php` | Classic widget |
 | `src/WorkOS/UI/Renderer.php` | Shared login button renderer |

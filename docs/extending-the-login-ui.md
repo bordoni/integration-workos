@@ -6,7 +6,7 @@ The `integration-workos` plugin renders its login screen as a single-page React 
 2. **`workos_authkit_enqueue_assets` action** — enqueue per-profile CSS and/or JavaScript files alongside the AuthKit bundle.
 3. **PHP filters** — last-mile mutation of the data the shell renders.
 
-The same surfaces are available everywhere the AuthKit shell appears: the wp-login.php takeover, the `[workos_login_v2]` shortcode, the `workos/login-form` block, and the `/workos/login/{slug}` rewrite.
+The same surfaces are available everywhere the AuthKit shell appears: the wp-login.php takeover, the `[workos:login]` shortcode, and the `/workos/login/{slug}` rewrite.
 
 ---
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * [workos_login] shortcode (Custom AuthKit).
+ * [workos:login] shortcode.
  *
  * @package WorkOS\Auth\AuthKit
  */
@@ -12,13 +12,12 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Renders the AuthKit React shell inline at the shortcode location.
  *
- * This is the Custom-AuthKit shortcode (a new, differentiated short tag
- * `[workos_login_v2]`) — the legacy `[workos_login]` shortcode keeps
- * behaving as it always did (button-to-AuthKit-redirect) for back-compat.
+ * The tag uses the `workos:` colon namespace so all plugin-provided
+ * shortcodes share a single, scannable prefix.
  */
 class Shortcode {
 
-	public const TAG = 'workos_login_v2';
+	public const TAG = 'workos:login';
 
 	/**
 	 * Profile router.

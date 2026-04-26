@@ -28,7 +28,7 @@ defined( 'ABSPATH' ) || exit;
  *
  * Note on missing profiles: `resolve()` always returns a usable Profile,
  * never null — a request for an unknown slug (`/workos/login/nonexistent`
- * or `[workos_login_v2 profile="typo"]`) falls through to the default
+ * or `[workos:login profile="typo"]`) falls through to the default
  * profile rather than 404ing. This is deliberate: the default profile's
  * existence is not a secret, and most mis-typed references are genuine
  * configuration mistakes that are easier to debug when the UI still
