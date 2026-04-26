@@ -341,7 +341,15 @@ function EmbedRow( {
 	return (
 		<div className="wpa-embed-row">
 			<span className="wpa-embed-label">{ label }</span>
-			<code className="wpa-embed-value">{ value }</code>
+			<input
+				type="text"
+				className="wpa-embed-value"
+				value={ value }
+				readOnly
+				onFocus={ ( e ) => e.currentTarget.select() }
+				onClick={ ( e ) => e.currentTarget.select() }
+				aria-label={ label }
+			/>
 			<CopyButton
 				value={ value }
 				copyKey={ copyKey }

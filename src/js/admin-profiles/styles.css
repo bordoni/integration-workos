@@ -374,16 +374,23 @@
 	color: #1d2327;
 }
 
-#workos-profiles-admin-root .wpa-embed-value {
+#workos-profiles-admin-root input.wpa-embed-value {
 	flex: 1 1 240px;
 	min-width: 0;
-	overflow-x: auto;
-	padding: 4px 8px;
+	padding: 6px 8px;
 	background: #f6f7f7;
 	border: 1px solid #dcdcde;
 	border-radius: 3px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	font-size: 12px;
-	white-space: nowrap;
+	color: #1d2327;
+	cursor: text;
+}
+
+#workos-profiles-admin-root input.wpa-embed-value:focus {
+	border-color: #2271b1;
+	outline: none;
+	box-shadow: 0 0 0 1px #2271b1;
 }
 
 #workos-profiles-admin-root .wpa-copy-btn {
