@@ -42,6 +42,24 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **Onboarding Wizard** — guided setup for initial plugin configuration and user sync
 - **WP-CLI Commands** — full CLI access for scripting, bulk operations, and diagnostics
 
+## Screenshots
+
+![Branded Custom AuthKit login](.wordpress-org/screenshot-1.png)
+
+*Branded Custom AuthKit login shown to site visitors — driven by a Login Profile, with logo, heading, brand color, and the sign-in methods (SSO, magic code, passkey, password) you enable.*
+
+![Login Profiles editor](.wordpress-org/screenshot-2.png)
+
+*Login Profiles editor — pick sign-in methods, pin an organization, set the MFA policy, customize the URL path, and brand the card with a logo and color, all without code.*
+
+![WorkOS settings](.wordpress-org/screenshot-3.png)
+
+*WorkOS settings — switch between Production and Staging, manage API credentials and the webhook secret, and choose between Custom AuthKit and AuthKit Redirect login modes.*
+
+![Role mapping and redirects](.wordpress-org/screenshot-4.png)
+
+*Role mapping and redirects — map WorkOS organization roles to WordPress roles, route users to role-specific URLs after login and logout, and choose what happens to deprovisioned users.*
+
 ## Installation
 
 ### From a Release ZIP
