@@ -349,4 +349,282 @@ class AuthKitRendererTest extends WPTestCase {
 
 		$this->assertFalse( has_action( 'login_init', [ $takeover, 'maybe_takeover' ] ) );
 	}
+
+	/**
+	 * When the default profile has a custom_path, the takeover redirects
+	 * /wp-login.php to /custom-path/ instead of rendering inline.
+	 *
+	 * We trap the redirect via the `wp_redirect` filter and throw — that
+	 * short-circuits the `wp_safe_redirect()` -> `wp_redirect()` -> `exit;`
+	 * chain before exit fires, letting us assert on the captured URL.
+	 */
+	public function test_takeover_redirects_when_default_profile_has_custom_path(): void {
+		$this->bootstrap_workos_enabled();
+		$default = $this->repository->ensure_default();
+		$saved   = $this->repository->save(
+			Profile::from_array(
+				array_replace( $default->to_array(), [ 'custom_path' => 'login' ] )
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		$captured = $this->run_takeover_capturing_redirect( [] );
+
+		$this->assertNotNull( $captured, 'Takeover should have triggered a redirect.' );
+		$this->assertSame( home_url( '/login/' ), $captured );
+	}
+
+	/**
+	 * The redirect preserves every incoming GET arg so wp-login.php
+	 * features (redirect_to, interim-login, reauth, ...) survive.
+	 */
+	public function test_takeover_preserves_query_args_on_redirect(): void {
+		$this->bootstrap_workos_enabled();
+		$default = $this->repository->ensure_default();
+		$saved   = $this->repository->save(
+			Profile::from_array(
+				array_replace( $default->to_array(), [ 'custom_path' => 'login' ] )
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		$captured = $this->run_takeover_capturing_redirect(
+			[
+				'redirect_to'   => '/dashboard',
+				'interim-login' => '1',
+				'wp_lang'       => 'en_US',
+			]
+		);
+
+		$this->assertNotNull( $captured );
+		// add_query_arg() doesn't percent-encode `/` in query values — the
+		// raw form is still a valid URL and is what wp_safe_redirect emits.
+		$this->assertStringContainsString( 'redirect_to=/dashboard', $captured );
+		$this->assertStringContainsString( 'interim-login=1', $captured );
+		$this->assertStringContainsString( 'wp_lang=en_US', $captured );
+		$this->assertStringStartsWith( home_url( '/login/' ), $captured );
+	}
+
+	/**
+	 * When the default profile has no custom_path, the takeover renders
+	 * inline (no redirect) — regression guard for the original behavior.
+	 */
+	public function test_takeover_does_not_redirect_when_default_has_no_custom_path(): void {
+		$this->bootstrap_workos_enabled();
+		$this->repository->ensure_default(); // custom_path defaults to ''.
+
+		$captured = $this->run_takeover_capturing_redirect( [] );
+
+		$this->assertNull(
+			$captured,
+			'Takeover must not redirect when the default profile has no custom_path.'
+		);
+	}
+
+	/**
+	 * `?loggedout=true` keeps the user on /wp-login.php for the standard
+	 * "you've been logged out" message — no redirect.
+	 */
+	public function test_takeover_does_not_redirect_when_loggedout_query_present(): void {
+		$this->bootstrap_workos_enabled();
+		$default = $this->repository->ensure_default();
+		$this->repository->save(
+			Profile::from_array(
+				array_replace( $default->to_array(), [ 'custom_path' => 'login' ] )
+			)
+		);
+
+		$captured = $this->run_takeover_capturing_redirect( [ 'loggedout' => 'true' ] );
+
+		$this->assertNull( $captured, '?loggedout must short-circuit the takeover.' );
+	}
+
+	/**
+	 * Make Plugin::is_enabled() return true so should_takeover() proceeds
+	 * past the first early-return.
+	 */
+	private function bootstrap_workos_enabled(): void {
+		\WorkOS\Config::set_active_environment( 'production' );
+		update_option(
+			'workos_production',
+			[
+				'api_key'        => 'sk_test_fake',
+				'client_id'      => 'client_fake',
+				'environment_id' => 'environment_test',
+			]
+		);
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+	}
+
+	/**
+	 * Invoke maybe_takeover() with a synthesized $_GET, capturing any
+	 * wp_safe_redirect() target via the `wp_redirect` filter. Returns the
+	 * URL when a redirect was attempted, null otherwise.
+	 *
+	 * Uses a fake renderer that no-ops `render_full_page()` so the
+	 * inline-render branch doesn't trigger the real renderer's `exit;`.
+	 *
+	 * @param array<string,string> $get Synthesized $_GET payload.
+	 *
+	 * @return string|null
+	 */
+	private function run_takeover_capturing_redirect( array $get ): ?string {
+		$router        = new ProfileRouter( $this->repository );
+		$fake_renderer = new class() extends Renderer {
+			public bool $rendered = false;
+			public function render_full_page( Profile $profile, array $context = [] ): void {
+				$this->rendered = true;
+			}
+		};
+		$takeover = new LoginTakeover( $router, $fake_renderer, $this->repository );
+
+		$captured = null;
+		$listener = static function ( $location ) use ( &$captured ): string {
+			$captured = (string) $location;
+			throw new \RuntimeException( 'workos_test_redirect:' . $captured );
+		};
+		add_filter( 'wp_redirect', $listener, 1, 1 );
+
+		// Stash + replace $_GET so should_takeover/build_context see our payload.
+		$prev_get = $_GET;
+		$_GET     = $get;
+
+		try {
+			$takeover->maybe_takeover();
+		} catch ( \RuntimeException $e ) {
+			// Expected when the redirect was triggered.
+			$this->assertStringStartsWith( 'workos_test_redirect:', $e->getMessage() );
+		} finally {
+			$_GET = $prev_get;
+			remove_filter( 'wp_redirect', $listener, 1 );
+		}
+
+		return $captured;
+	}
+
+	/**
+	 * Already-signed-in users hitting wp-login.php get bounced to the
+	 * profile's post-login destination instead of seeing a login form.
+	 */
+	public function test_takeover_redirects_logged_in_user_to_admin_url_by_default(): void {
+		$this->bootstrap_workos_enabled();
+		$this->repository->ensure_default(); // No post_login_redirect set.
+
+		$user_id = self::factory()->user->create();
+		wp_set_current_user( $user_id );
+
+		try {
+			$captured = $this->run_takeover_capturing_redirect( [] );
+		} finally {
+			wp_set_current_user( 0 );
+		}
+
+		$this->assertSame( admin_url(), $captured );
+	}
+
+	/**
+	 * Profile's `post_login_redirect` wins over the WP default.
+	 */
+	public function test_takeover_redirects_logged_in_user_to_profile_post_login_redirect(): void {
+		$this->bootstrap_workos_enabled();
+		$default = $this->repository->ensure_default();
+		$saved   = $this->repository->save(
+			Profile::from_array(
+				array_replace(
+					$default->to_array(),
+					[ 'post_login_redirect' => '/dashboard' ]
+				)
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		$user_id = self::factory()->user->create();
+		wp_set_current_user( $user_id );
+
+		try {
+			$captured = $this->run_takeover_capturing_redirect( [] );
+		} finally {
+			wp_set_current_user( 0 );
+		}
+
+		$this->assertSame( '/dashboard', $captured );
+	}
+
+	/**
+	 * `forward_query_args = true` carries safe args (utm_*, ref) onto
+	 * the destination but strips internals (redirect_to, _wpnonce, ...).
+	 */
+	public function test_takeover_forwards_safe_query_args_when_enabled(): void {
+		$this->bootstrap_workos_enabled();
+		$default = $this->repository->ensure_default();
+		$saved   = $this->repository->save(
+			Profile::from_array(
+				array_replace(
+					$default->to_array(),
+					[
+						'post_login_redirect' => '/dashboard',
+						'forward_query_args'  => true,
+					]
+				)
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		$user_id = self::factory()->user->create();
+		wp_set_current_user( $user_id );
+
+		try {
+			$captured = $this->run_takeover_capturing_redirect(
+				[
+					'utm_source'    => 'newsletter',
+					'ref'           => 'q4-launch',
+					'redirect_to'   => '/should-be-stripped',
+					'_wpnonce'      => 'should-be-stripped',
+					'interim-login' => '1',
+					'workos_action' => 'reset-password',
+				]
+			);
+		} finally {
+			wp_set_current_user( 0 );
+		}
+
+		$this->assertNotNull( $captured );
+		$this->assertStringContainsString( 'utm_source=newsletter', $captured );
+		$this->assertStringContainsString( 'ref=q4-launch', $captured );
+		$this->assertStringNotContainsString( 'redirect_to=', $captured );
+		$this->assertStringNotContainsString( '_wpnonce=', $captured );
+		$this->assertStringNotContainsString( 'interim-login=', $captured );
+		$this->assertStringNotContainsString( 'workos_action=', $captured );
+	}
+
+	/**
+	 * `forward_query_args = false` (default) keeps the destination clean.
+	 */
+	public function test_takeover_does_not_forward_query_args_when_disabled(): void {
+		$this->bootstrap_workos_enabled();
+		$default = $this->repository->ensure_default();
+		$saved   = $this->repository->save(
+			Profile::from_array(
+				array_replace(
+					$default->to_array(),
+					[ 'post_login_redirect' => '/dashboard' ]
+					// forward_query_args defaults to false.
+				)
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		$user_id = self::factory()->user->create();
+		wp_set_current_user( $user_id );
+
+		try {
+			$captured = $this->run_takeover_capturing_redirect(
+				[ 'utm_source' => 'newsletter' ]
+			);
+		} finally {
+			wp_set_current_user( 0 );
+		}
+
+		$this->assertSame( '/dashboard', $captured );
+	}
 }

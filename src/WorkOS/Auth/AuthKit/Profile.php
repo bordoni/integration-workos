@@ -56,6 +56,10 @@ class Profile {
 	 * other dropped chars (e.g. `wp-login.php`) becomes an unrelated
 	 * harmless variant and can't reach this list. Repository-level checks
 	 * also block anything starting with `wp-admin` or `workos/`.
+	 *
+	 * `login`, `admin`, and `signin` are intentionally NOT reserved —
+	 * those are the obvious values an admin will pick when redirecting
+	 * /wp-login.php to a clean URL via the default profile's custom_path.
 	 */
 	public const RESERVED_PATHS = [
 		'wp-admin',
@@ -63,8 +67,6 @@ class Profile {
 		'wp-includes',
 		'wp-json',
 		'workos',
-		'admin',
-		'login',
 		'feed',
 		'comments',
 		'trackback',
@@ -159,6 +161,15 @@ class Profile {
 	private string $post_login_redirect;
 
 	/**
+	 * Whether to forward inbound query args (utm_*, ref, custom params)
+	 * onto the post-login redirect URL. WordPress / plugin internals
+	 * (redirect_to, _wpnonce, interim-login, etc.) are always stripped.
+	 *
+	 * @var bool
+	 */
+	private bool $forward_query_args = false;
+
+	/**
 	 * Mode.
 	 *
 	 * @var string
@@ -197,6 +208,7 @@ class Profile {
 			'subheading'         => (string) ( $data['branding']['subheading'] ?? '' ),
 		];
 		$this->post_login_redirect = (string) ( $data['post_login_redirect'] ?? '' );
+		$this->forward_query_args  = (bool) ( $data['forward_query_args'] ?? false );
 		$this->mode                = (string) ( $data['mode'] ?? self::MODE_CUSTOM );
 	}
 
@@ -336,6 +348,7 @@ class Profile {
 					'subheading'         => sanitize_text_field( (string) ( $data['branding']['subheading'] ?? '' ) ),
 				],
 				'post_login_redirect' => sanitize_text_field( (string) ( $data['post_login_redirect'] ?? '' ) ),
+				'forward_query_args'  => (bool) ( $data['forward_query_args'] ?? false ),
 				'mode'                => $mode,
 			]
 		);
@@ -415,6 +428,7 @@ class Profile {
 			'mfa'                 => $this->mfa,
 			'branding'            => $this->branding,
 			'post_login_redirect' => $this->post_login_redirect,
+			'forward_query_args'  => $this->forward_query_args,
 			'mode'                => $this->mode,
 		];
 	}
@@ -619,6 +633,16 @@ class Profile {
 	 */
 	public function get_post_login_redirect(): string {
 		return $this->post_login_redirect;
+	}
+
+	/**
+	 * Whether to forward inbound query args (utm_*, ref, etc.) onto the
+	 * post-login redirect URL.
+	 *
+	 * @return bool
+	 */
+	public function should_forward_query_args(): bool {
+		return $this->forward_query_args;
 	}
 
 	/**

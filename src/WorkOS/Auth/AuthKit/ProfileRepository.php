@@ -172,15 +172,6 @@ class ProfileRepository {
 
 		$custom_path = $profile->get_custom_path();
 		if ( '' !== $custom_path ) {
-			// The default profile is the wp-login.php takeover — never give
-			// it a custom path of its own.
-			if ( Profile::DEFAULT_SLUG === $slug ) {
-				return new WP_Error(
-					'workos_profile_path_default_locked',
-					__( 'The default Login Profile cannot use a custom path.', 'integration-workos' )
-				);
-			}
-
 			$reserved = in_array( $custom_path, Profile::RESERVED_PATHS, true )
 				|| Profile::DEFAULT_SLUG === $custom_path
 				|| 0 === strpos( $custom_path, 'wp-admin' )

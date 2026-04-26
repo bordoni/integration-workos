@@ -297,9 +297,10 @@ class AuthKitProfileRepositoryTest extends WPTestCase {
 	}
 
 	/**
-	 * Updating the default profile with a custom_path is forbidden.
+	 * The default profile may now own a custom_path. The wp-login.php
+	 * takeover uses that value to redirect users to a clean URL.
 	 */
-	public function test_save_rejects_custom_path_on_default_profile(): void {
+	public function test_save_allows_custom_path_on_default_profile(): void {
 		$default = $this->repository->ensure_default();
 
 		$attempt = Profile::from_array(
@@ -309,10 +310,11 @@ class AuthKitProfileRepositoryTest extends WPTestCase {
 			)
 		);
 
-		$result = $this->repository->save( $attempt );
+		$saved = $this->repository->save( $attempt );
 
-		$this->assertInstanceOf( WP_Error::class, $result );
-		$this->assertSame( 'workos_profile_path_default_locked', $result->get_error_code() );
+		$this->assertInstanceOf( Profile::class, $saved );
+		$this->assertSame( Profile::DEFAULT_SLUG, $saved->get_slug() );
+		$this->assertSame( 'team/login', $saved->get_custom_path() );
 	}
 
 	/**

@@ -108,6 +108,7 @@ interface Profile {
 		subheading: string;
 	};
 	post_login_redirect: string;
+	forward_query_args: boolean;
 	mode: ProfileMode;
 	// Server-resolved convenience URLs (read-only — populated by
 	// Profile::to_editor_array() on the PHP side).
@@ -187,10 +188,6 @@ function errorCopy( code: string | undefined, message: string | undefined ): str
 		),
 		workos_profile_path_invalid: __(
 			'That path contains characters that cannot be used in a URL.',
-			'integration-workos'
-		),
-		workos_profile_path_default_locked: __(
-			'The default Login Profile cannot use a custom path.',
 			'integration-workos'
 		),
 	};
@@ -708,6 +705,7 @@ function emptyProfile(): Profile {
 			subheading: '',
 		},
 		post_login_redirect: '',
+		forward_query_args: false,
 		mode: 'custom',
 	};
 }
@@ -735,8 +733,14 @@ function Editor( {
 }: EditorProps ) {
 	const [ data, setData ] = useState< Profile >( profile );
 	const { copiedKey, copy } = useCopyToClipboard();
+	const [ useCustomPath, setUseCustomPath ] = useState< boolean >(
+		() => '' !== ( profile.custom_path ?? '' )
+	);
 
-	useEffect( () => setData( profile ), [ profile.id, profile.slug ] );
+	useEffect( () => {
+		setData( profile );
+		setUseCustomPath( '' !== ( profile.custom_path ?? '' ) );
+	}, [ profile.id, profile.slug ] );
 
 	const set = ( patch: Partial< Profile > ): void =>
 		setData( ( prev ) => ( { ...prev, ...patch } ) );
@@ -775,25 +779,48 @@ function Editor( {
 				placeholder={ __( 'members-area', 'integration-workos' ) }
 			/>
 
-			{ ! isDefault && (
-				<label className="wpa-field">
-					<span>{ __( 'Custom path (optional)', 'integration-workos' ) }</span>
+			<fieldset className="wpa-fieldset">
+				<legend>{ __( 'Custom URL path', 'integration-workos' ) }</legend>
+				<label className="wpa-check">
 					<input
-						type="text"
-						value={ data.custom_path }
-						onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
-							set( { custom_path: e.target.value } )
-						}
-						placeholder={ __( 'members or team/login', 'integration-workos' ) }
+						type="checkbox"
+						checked={ useCustomPath }
+						onChange={ ( e: ChangeEvent< HTMLInputElement > ) => {
+							const next = e.target.checked;
+							setUseCustomPath( next );
+							if ( ! next ) {
+								set( { custom_path: '' } );
+							}
+						} }
 					/>
-					<span className="description">
-						{ __(
-							'Renders the same login page at /your-path. Leave blank to use only the canonical URL.',
-							'integration-workos'
-						) }
-					</span>
+					{ __( 'Use a custom URL path', 'integration-workos' ) }
 				</label>
-			) }
+				{ useCustomPath && (
+					<label className="wpa-field">
+						<span>{ __( 'Path', 'integration-workos' ) }</span>
+						<input
+							type="text"
+							value={ data.custom_path }
+							onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+								set( { custom_path: e.target.value } )
+							}
+							placeholder={ __( 'login or members/sign-in', 'integration-workos' ) }
+							autoFocus
+						/>
+						<span className="description">
+							{ isDefault
+								? __(
+										'Redirects /wp-login.php to /your-path while preserving any query arguments. The React login page also renders at /your-path.',
+										'integration-workos'
+								  )
+								: __(
+										'Renders the same login page at /your-path in addition to the canonical URL.',
+										'integration-workos'
+								  ) }
+						</span>
+					</label>
+				) }
+			</fieldset>
 
 			<Select< ProfileMode >
 				label={ __( 'Mode', 'integration-workos' ) }
@@ -823,6 +850,20 @@ function Editor( {
 				onChange={ ( v ) => set( { post_login_redirect: v } ) }
 				placeholder={ __( '/dashboard', 'integration-workos' ) }
 			/>
+
+			<label className="wpa-check">
+				<input
+					type="checkbox"
+					checked={ data.forward_query_args }
+					onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+						set( { forward_query_args: e.target.checked } )
+					}
+				/>
+				{ __(
+					'Forward query args (e.g. utm_source, ref) onto the post-login redirect',
+					'integration-workos'
+				) }
+			</label>
 
 			<fieldset className="wpa-fieldset">
 				<legend>{ __( 'Sign-up', 'integration-workos' ) }</legend>

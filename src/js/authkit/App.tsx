@@ -30,6 +30,7 @@ import {
 	Signup,
 	SignupVerify,
 } from './flows';
+import { forwardQueryArgs } from './redirect';
 import { BelowCard } from './ui';
 
 export interface AppProps {
@@ -109,7 +110,11 @@ export function App( props: AppProps ) {
 	}
 
 	const handleSuccess = ( data: LoginSuccess ): void => {
-		setRedirectTo( data.redirect_to || '/' );
+		const dest = data.redirect_to || '/';
+		const finalDest = profile.forward_query_args
+			? forwardQueryArgs( dest, profile.originalQuery )
+			: dest;
+		setRedirectTo( finalDest );
 		setStep( 'complete' );
 	};
 

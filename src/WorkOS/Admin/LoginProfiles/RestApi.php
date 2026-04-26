@@ -231,20 +231,11 @@ class RestApi {
 		$merged['id'] = $id;
 
 		// Protect the reserved default slug from being renamed out from under
-		// the wp-login.php takeover. Same logic for custom_path: the default
-		// profile is the wp-login takeover and must not own a custom URL.
+		// the wp-login.php takeover. The default profile MAY own a custom_path
+		// (which makes the takeover redirect to /custom-path instead of
+		// rendering inline) — only the slug is locked.
 		if ( Profile::DEFAULT_SLUG === $existing->get_slug() ) {
-			$merged['slug']        = Profile::DEFAULT_SLUG;
-			$merged['custom_path'] = '';
-			if ( isset( $params['custom_path'] ) && '' !== Profile::normalize_custom_path( (string) $params['custom_path'] ) ) {
-				return $this->error_with_status(
-					new WP_Error(
-						'workos_profile_path_default_locked',
-						__( 'The default Login Profile cannot use a custom path.', 'integration-workos' )
-					),
-					400
-				);
-			}
+			$merged['slug'] = Profile::DEFAULT_SLUG;
 		}
 
 		$profile = Profile::from_array( $merged );
