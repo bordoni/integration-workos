@@ -136,8 +136,7 @@ Go to **Tools > WorkOS Diagnostics** in the WordPress admin. The diagnostics pag
 1. Branded Custom AuthKit login shown to site visitors — driven by a Login Profile, with logo, heading, brand color, and the sign-in methods (SSO, magic code, passkey, password) you enable.
 2. Login Profiles editor — pick sign-in methods, pin an organization, set the MFA policy, customize the URL path, and brand the card with a logo and color, all without code.
 3. WorkOS settings — switch between Production and Staging, manage API credentials and the webhook secret, and choose between Custom AuthKit and AuthKit Redirect login modes.
-4. Guided onboarding wizard — validate credentials, pick the default organization, and preview the initial user sync from WordPress to WorkOS.
-5. Role mapping and redirects — map WorkOS organization roles to WordPress roles, route users to role-specific URLs after login and logout, and choose what happens to deprovisioned users.
+4. Role mapping and redirects — map WorkOS organization roles to WordPress roles, route users to role-specific URLs after login and logout, and choose what happens to deprovisioned users.
 
 == External services ==
 
