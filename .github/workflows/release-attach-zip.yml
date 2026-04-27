@@ -24,6 +24,8 @@ jobs:
     name: Attach ZIP to GitHub Release
     needs: build-zip
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download ZIP artifact
         uses: actions/download-artifact@v8
