@@ -53,6 +53,7 @@ jobs:
         with:
           files: ${{ env.ZIP_FILE }}
           tag_name: ${{ github.event.inputs.tag_name || github.event.release.tag_name }}
+          token: ${{ secrets.RELEASE_TOKEN }}
           fail_on_unmatched_files: false
           draft: false
           prerelease: ${{ github.event.release.prerelease }}
