@@ -31,7 +31,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build-zip.outputs.zip_name }}
-          path: ./plugin-zip
+          path: ./plugin-zip/integration-workos
 
       - name: Display downloaded files
         run: |
@@ -42,7 +42,7 @@ jobs:
         run: |
           cd ./plugin-zip
           ZIP_NAME="${{ needs.build-zip.outputs.zip_name }}.zip"
-          zip -r "../$ZIP_NAME" .
+          zip -r "../$ZIP_NAME" integration-workos
           cd ..
           echo "Created release ZIP: $ZIP_NAME"
           ls -la "$ZIP_NAME"
