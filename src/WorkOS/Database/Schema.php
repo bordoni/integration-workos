@@ -22,7 +22,7 @@ class Schema {
 	/**
 	 * Current schema version.
 	 */
-	private const CURRENT_VERSION = 2;
+	private const CURRENT_VERSION = 3;
 
 	/**
 	 * Activation hook — create tables.
@@ -44,7 +44,44 @@ class Schema {
 
 		self::create_tables();
 
+		// Idempotent: the migration short-circuits when the standalone option
+		// is already populated, so it's safe to call on every upgrade.
+		self::migrate_active_environment_to_standalone_option();
+
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
+	}
+
+	/**
+	 * Move the legacy `workos_global['active_environment']` value into the
+	 * standalone `workos_active_environment` option.
+	 *
+	 * Earlier versions wrote the active environment into the serialized
+	 * `workos_global` row, while the admin Settings UI was refactored to
+	 * write a standalone option. The runtime read path now uses the
+	 * standalone option as the source of truth, so existing installs need
+	 * a one-time copy.
+	 */
+	private static function migrate_active_environment_to_standalone_option(): void {
+		// Skip if the standalone option is already populated.
+		$existing = get_option( 'workos_active_environment', null );
+		if ( in_array( $existing, [ 'production', 'staging' ], true ) ) {
+			return;
+		}
+
+		$global = get_option( 'workos_global', [] );
+		if ( ! is_array( $global ) ) {
+			return;
+		}
+
+		$legacy = $global['active_environment'] ?? '';
+		if ( ! in_array( $legacy, [ 'production', 'staging' ], true ) ) {
+			return;
+		}
+
+		update_option( 'workos_active_environment', $legacy );
+
+		unset( $global['active_environment'] );
+		update_option( 'workos_global', $global );
 	}
 
 	/**

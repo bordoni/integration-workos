@@ -26,7 +26,6 @@ class Global_Options extends Options {
 	 */
 	protected function defaults(): array {
 		return [
-			'active_environment'   => 'staging',
 			'diagnostics_results'  => [],
 			'diagnostics_last_run' => 0,
 		];

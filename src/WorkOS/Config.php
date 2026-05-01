@@ -40,7 +40,13 @@ class Config {
 			return constant( 'WORKOS_ENVIRONMENT' );
 		}
 
-		$env = App::container()->get( Global_Options::class )->get( 'active_environment' );
+		$env = get_option( 'workos_active_environment', '' );
+
+		// Back-compat: fall back to the legacy location for installs that
+		// predate the migration in Schema::maybe_upgrade().
+		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
+			$env = App::container()->get( Global_Options::class )->get( 'active_environment', '' );
+		}
 
 		return in_array( $env, [ 'production', 'staging' ], true ) ? $env : 'staging';
 	}
@@ -55,7 +61,7 @@ class Config {
 			return;
 		}
 
-		App::container()->get( Global_Options::class )->set( 'active_environment', $env );
+		update_option( 'workos_active_environment', $env );
 	}
 
 	/**
