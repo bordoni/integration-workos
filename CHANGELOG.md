@@ -21,6 +21,15 @@
   rendered at `admin_footer` so its inner `<form>` no longer nests inside
   the outer settings form, preventing HTML5 constraint validation on the
   hidden required field from aborting the parent form's submission.
+- Active environment — `workos_active_environment` is now the single source
+  of truth for the active environment. The admin Settings UI wrote the
+  user's selection to a standalone option while the runtime auth flow read
+  from `workos_global['active_environment']`, so picking "Production"
+  saved successfully but the runtime kept loading staging credentials and
+  redirecting users to the staging AuthKit. `Config::get_active_environment()`
+  / `set_active_environment()` now read and write the standalone option,
+  with a one-time migration (db_version 2 → 3) that copies any legacy
+  value out of `workos_global` and unsets it.
 
 ## [1.0.0] - 2026-04-23
 
