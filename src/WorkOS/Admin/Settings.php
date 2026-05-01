@@ -37,6 +37,13 @@ class Settings {
 	private const USERS_PAGE = 'workos-users';
 
 	/**
+	 * Whether the create-org modal has been queued for footer render.
+	 *
+	 * @var bool
+	 */
+	private bool $create_org_modal_queued = false;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -1314,13 +1321,22 @@ class Settings {
 			esc_html__( 'Create new organization', 'integration-workos' )
 		);
 
-		$this->render_create_org_modal();
+		// Defer the modal markup to admin_footer so its inner <form> isn't
+		// nested inside the outer settings form (which would break HTML5
+		// constraint validation on the hidden required fields).
+		if ( ! $this->create_org_modal_queued ) {
+			add_action( 'admin_footer', [ $this, 'render_create_org_modal' ] );
+			$this->create_org_modal_queued = true;
+		}
 	}
 
 	/**
 	 * Render the hidden Thickbox modal for creating an organization.
+	 *
+	 * Hooked to admin_footer so the inner <form> is at body-level and not
+	 * nested inside the settings form on the Organization tab.
 	 */
-	private function render_create_org_modal(): void {
+	public function render_create_org_modal(): void {
 		$editing_env = $this->get_editing_environment();
 		?>
 		<div id="workos-create-org-modal" style="display:none">
