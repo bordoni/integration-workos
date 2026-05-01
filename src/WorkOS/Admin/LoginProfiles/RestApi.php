@@ -76,6 +76,15 @@ class RestApi {
 					'methods'             => 'GET',
 					'callback'            => [ $this, 'list_organizations' ],
 					'permission_callback' => [ $this, 'permission_check' ],
+					'args'                => [
+						'refresh' => [
+							'type'              => 'boolean',
+							'required'          => false,
+							'default'           => false,
+							'sanitize_callback' => 'rest_sanitize_boolean',
+							'description'       => 'When true, bypass the cache and re-fetch from WorkOS.',
+						],
+					],
 				],
 			]
 		);
@@ -265,7 +274,8 @@ class RestApi {
 
 	/**
 	 * GET /admin/profiles/organizations — list WorkOS organizations for the
-	 * profile editor's pinned-org picker.
+	 * profile editor's pinned-org picker and the Settings page Organization
+	 * dropdown.
 	 *
 	 * Returns `{ organizations: [{ id, name }], error?: string }`. Uses the
 	 * same transient cache key as the main settings org picker so a single
@@ -273,9 +283,16 @@ class RestApi {
 	 * free-text input when `organizations` is empty and surfaces `error`
 	 * inline.
 	 *
+	 * Pass `?refresh=1` to bypass the transient cache and force a re-fetch
+	 * from WorkOS — used by the manual refresh button next to the
+	 * Organization dropdown when an admin has just created an org in the
+	 * WorkOS dashboard and doesn't want to wait out the 5-minute TTL.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 *
 	 * @return WP_REST_Response
 	 */
-	public function list_organizations(): WP_REST_Response {
+	public function list_organizations( WP_REST_Request $request ): WP_REST_Response {
 		if ( ! workos()->is_enabled() ) {
 			return new WP_REST_Response(
 				[
@@ -287,7 +304,13 @@ class RestApi {
 		}
 
 		$cache_key = 'workos_organizations_cache_' . Config::get_active_environment();
-		$cached    = get_transient( $cache_key );
+		$refresh   = (bool) $request->get_param( 'refresh' );
+
+		if ( $refresh ) {
+			delete_transient( $cache_key );
+		}
+
+		$cached = get_transient( $cache_key );
 		if ( is_array( $cached ) ) {
 			return new WP_REST_Response(
 				[ 'organizations' => $this->shape_organizations( $cached ) ],

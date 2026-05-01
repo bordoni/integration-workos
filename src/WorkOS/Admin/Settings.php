@@ -218,11 +218,60 @@ class Settings {
 			add_thickbox();
 		}
 
+		if ( 'organization' === $current_tab ) {
+			$this->enqueue_organization_refresh_assets();
+		}
+
 		if ( 'users' === $current_tab ) {
 			$this->enqueue_role_mapping_assets();
 			$this->enqueue_redirect_urls_assets();
 			$this->enqueue_logout_redirect_urls_assets();
 		}
+	}
+
+	/**
+	 * Enqueue the organization-refresh script and styles on the Organization tab.
+	 *
+	 * Powers the manual "refresh" button next to the organization dropdown.
+	 * Calls the admin REST endpoint with `?refresh=1` so an admin can pull
+	 * fresh organizations from WorkOS without waiting for the 5-minute
+	 * transient TTL — useful right after creating an org in the WorkOS
+	 * dashboard.
+	 */
+	private function enqueue_organization_refresh_assets(): void {
+		$asset_file = WORKOS_DIR . 'build/organization-refresh.asset.php';
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'workos-organization-refresh',
+			WORKOS_URL . 'build/organization-refresh.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+
+		wp_set_script_translations( 'workos-organization-refresh', 'integration-workos' );
+
+		wp_enqueue_style(
+			'workos-organization-refresh',
+			WORKOS_URL . 'build/organization-refresh.css',
+			[],
+			$asset['version']
+		);
+
+		wp_add_inline_script(
+			'workos-organization-refresh',
+			'window.workosOrgRefresh = ' . wp_json_encode(
+				[
+					'restPath' => '/workos/v1/admin/profiles/organizations',
+				]
+			) . ';',
+			'before'
+		);
 	}
 
 	/**
@@ -1303,7 +1352,8 @@ class Settings {
 			return;
 		}
 
-		echo '<select name="' . esc_attr( $option_name ) . '">';
+		echo '<span class="workos-org-select-wrapper" data-workos-org-select-wrapper>';
+		echo '<select name="' . esc_attr( $option_name ) . '" id="workos-organization-id" data-workos-org-select>';
 		printf( '<option value="">%s</option>', esc_html__( '— Select Organization —', 'integration-workos' ) );
 		foreach ( $organizations as $org ) {
 			$org_id   = $org['id'] ?? '';
@@ -1316,6 +1366,13 @@ class Settings {
 			);
 		}
 		echo '</select>';
+		printf(
+			' <button type="button" class="button button-secondary workos-org-refresh" data-workos-org-refresh aria-label="%1$s" title="%1$s"><span class="dashicons dashicons-update" aria-hidden="true"></span><span class="screen-reader-text">%1$s</span></button>',
+			esc_attr__( 'Refresh organizations from WorkOS', 'integration-workos' )
+		);
+		echo '<span class="spinner workos-org-refresh-spinner" data-workos-org-refresh-spinner aria-hidden="true"></span>';
+		echo '</span>';
+		echo '<p class="workos-org-refresh-error description workos-admin-description-error" data-workos-org-refresh-error hidden></p>';
 		printf(
 			'<p><a href="#TB_inline?width=400&height=250&inlineId=workos-create-org-modal" class="thickbox">%s</a></p>',
 			esc_html__( 'Create new organization', 'integration-workos' )

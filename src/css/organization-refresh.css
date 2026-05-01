@@ -1,0 +1,56 @@
+/**
+ * Organization-refresh button — keeps the dropdown, button, and spinner
+ * aligned, and overlays a busy state that visually blocks the dropdown
+ * while the REST refresh request is in flight.
+ */
+
+.workos-org-select-wrapper {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	position: relative;
+}
+
+.workos-org-select-wrapper .button.workos-org-refresh {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 6px;
+	min-height: 30px;
+	line-height: 1;
+}
+
+.workos-org-select-wrapper .button.workos-org-refresh .dashicons {
+	width: 18px;
+	height: 18px;
+	font-size: 18px;
+	line-height: 1;
+}
+
+.workos-org-select-wrapper .workos-org-refresh-spinner {
+	float: none;
+	margin: 0;
+	visibility: hidden;
+}
+
+.workos-org-select-wrapper .workos-org-refresh-spinner.is-active {
+	visibility: visible;
+}
+
+.workos-org-select-wrapper.is-busy select {
+	pointer-events: none;
+	opacity: 0.55;
+}
+
+.workos-org-refresh-error {
+	margin-top: 6px;
+}
+
+@keyframes workos-org-refresh-spin {
+	from { transform: rotate( 0deg ); }
+	to   { transform: rotate( 360deg ); }
+}
+
+.workos-org-select-wrapper.is-busy .button.workos-org-refresh .dashicons {
+	animation: workos-org-refresh-spin 0.9s linear infinite;
+}
