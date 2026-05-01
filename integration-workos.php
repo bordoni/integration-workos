@@ -3,7 +3,7 @@
  * Plugin Name: Integration with WorkOS
  * Plugin URI:  https://github.com/bordoni/integration-workos
  * Description: Enterprise identity management for WordPress powered by WorkOS. SSO, directory sync, MFA, and user management.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      Gustavo Bordoni
  * Author URI:  https://github.com/bordoni
  * License:     GPL-2.0-or-later

@@ -1,6 +1,6 @@
 {
 	"name": "integration-workos",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Enterprise identity management for WordPress powered by WorkOS.",
 	"private": true,
 	"scripts": {

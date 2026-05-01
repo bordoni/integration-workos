@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,10 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.1 - TBD =
+
+* TBD
+
 = 1.0.0 - 2026-04-23 =
 
 Custom AuthKit (WordPress-hosted login):
@@ -218,6 +222,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+TBD
 
 = 1.0.0 =
 Initial stable release: WordPress-hosted Custom AuthKit (React login with Login Profiles, MFA, and passkeys), plus SSO, Directory Sync, role mapping, organization management, and full admin tooling.

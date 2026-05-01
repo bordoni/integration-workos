@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - TBD
+
+### Added
+
+- TBD
+
 ## [1.0.0] - 2026-04-23
 
 ### Added
