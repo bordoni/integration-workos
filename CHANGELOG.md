@@ -2,9 +2,13 @@
 
 ## [1.0.1] - TBD
 
-### Added
+### Fixed
 
-- TBD
+- Organization tab — fix "Save Settings" being blocked by an invalid hidden
+  form control (`org_name`). The Create Organization Thickbox modal is now
+  rendered at `admin_footer` so its inner `<form>` no longer nests inside
+  the outer settings form, preventing HTML5 constraint validation on the
+  hidden required field from aborting the parent form's submission.
 
 ## [1.0.0] - 2026-04-23
 
