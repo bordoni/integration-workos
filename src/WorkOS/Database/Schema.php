@@ -44,9 +44,9 @@ class Schema {
 
 		self::create_tables();
 
-		if ( $installed < 3 ) {
-			self::migrate_active_environment_to_standalone_option();
-		}
+		// Idempotent: the migration short-circuits when the standalone option
+		// is already populated, so it's safe to call on every upgrade.
+		self::migrate_active_environment_to_standalone_option();
 
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
 	}
