@@ -177,6 +177,8 @@ WorkOS is provided by WorkOS, Inc.
 
 = 1.0.1 - TBD =
 
+* New: Organization tab — manual Refresh button next to the organization dropdown re-fetches organizations from WorkOS on demand via the admin REST endpoint (no admin-ajax), bypassing the 5-minute cache. The dropdown is blocked with a spinner during the refresh and the selected organization is preserved when it still exists.
+* New: `?refresh=1` query parameter on `GET /wp-json/workos/v1/admin/profiles/organizations` to drop the shared transient before fetching.
 * Fix: Organization tab — "Save Settings" was blocked by a hidden, required `org_name` input. The Create Organization modal is now rendered at `admin_footer` so its inner `<form>` is no longer nested inside the settings form.
 
 = 1.0.0 - 2026-04-23 =
@@ -224,7 +226,7 @@ Base platform:
 == Upgrade Notice ==
 
 = 1.0.1 =
-Fixes a regression that prevented saving the Organization tab.
+Adds a manual Refresh button next to the Organization dropdown and fixes a regression that prevented saving the Organization tab.
 
 = 1.0.0 =
 Initial stable release: WordPress-hosted Custom AuthKit (React login with Login Profiles, MFA, and passkeys), plus SSO, Directory Sync, role mapping, organization management, and full admin tooling.

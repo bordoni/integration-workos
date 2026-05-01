@@ -2,6 +2,18 @@
 
 ## [1.0.1] - TBD
 
+### Added
+
+- Organization tab — manual **Refresh** button next to the organization
+  dropdown that re-fetches the WorkOS organization list on demand via the
+  admin REST endpoint (`GET /workos/v1/admin/profiles/organizations?refresh=1`),
+  bypassing the 5-minute transient cache. The dropdown is visually blocked
+  with a spinner while the request is in flight; the previously selected
+  organization is preserved across the refresh when it still exists.
+- `?refresh` query parameter on
+  `GET /wp-json/workos/v1/admin/profiles/organizations` — drops the shared
+  `workos_organizations_cache_{env}` transient before fetching from WorkOS.
+
 ### Fixed
 
 - Organization tab — fix "Save Settings" being blocked by an invalid hidden
