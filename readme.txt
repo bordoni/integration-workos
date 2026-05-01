@@ -175,7 +175,7 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
-= 1.0.1 - TBD =
+= 1.0.1 - 2026-05-01 =
 
 * New: Organization tab — manual Refresh button next to the organization dropdown re-fetches organizations from WorkOS on demand via the admin REST endpoint (no admin-ajax), bypassing the 5-minute cache. The dropdown is blocked with a spinner during the refresh and the selected organization is preserved when it still exists.
 * New: `?refresh=1` query parameter on `GET /wp-json/workos/v1/admin/profiles/organizations` to drop the shared transient before fetching.
