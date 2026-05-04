@@ -9,6 +9,9 @@
 *.cache
 *.log
 
+# Local scratch / drafts
+/tmp/
+
 # PHPStan baseline — fix-everything policy; do not commit a baseline
 # file without team discussion (see AGENTS.md > Static Analysis).
 /phpstan-baseline.neon
