@@ -153,7 +153,7 @@ abstract class BaseEndpoint {
 	 * @return true|WP_Error
 	 */
 	protected function verify_nonce( WP_REST_Request $request, Profile $profile ) {
-		$nonce = (string) $request->get_header( 'X-WP-Nonce' );
+		$nonce = (string) $request->get_header( 'X-WorkOS-Nonce' );
 		if ( '' === $nonce ) {
 			$nonce = (string) $request->get_param( '_nonce' );
 		}

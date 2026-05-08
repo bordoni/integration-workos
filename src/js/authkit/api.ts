@@ -96,7 +96,7 @@ class AuthKitClient {
 			'Content-Type': 'application/json',
 		};
 		if ( method !== 'GET' && this.nonce ) {
-			headers[ 'X-WP-Nonce' ] = this.nonce;
+			headers[ 'X-WorkOS-Nonce' ] = this.nonce;
 		}
 		const radar = this.getRadarToken();
 		if ( radar ) {
