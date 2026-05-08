@@ -142,7 +142,10 @@ class Password extends BaseEndpoint {
 						workos()->api()->send_magic_auth_code( $email, $this->get_radar_token( $request ) );
 
 						return new WP_REST_Response(
-							[ 'email_confirmation_required' => true, 'email' => $email ],
+							[
+								'email_confirmation_required' => true,
+								'email' => $email,
+							],
 							200
 						);
 					}
