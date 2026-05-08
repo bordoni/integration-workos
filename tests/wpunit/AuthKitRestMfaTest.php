@@ -151,7 +151,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 	private function dispatch_with_nonce( string $method, string $route, array $body, string $profile_slug ): WP_REST_Response {
 		$request = new WP_REST_Request( $method, $route );
 		$request->set_header( 'Content-Type', 'application/json' );
-		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( $profile_slug ) );
+		$request->set_header( 'X-WorkOS-Nonce', $this->nonce->mint( $profile_slug ) );
 		$request->set_body( wp_json_encode( $body ) );
 		return rest_get_server()->dispatch( $request );
 	}

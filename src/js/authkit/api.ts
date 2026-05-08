@@ -128,7 +128,7 @@ class AuthKitClient {
 				'Content-Type': 'application/json',
 			};
 			if ( this.nonce ) {
-				refreshHeaders[ 'X-WP-Nonce' ] = this.nonce;
+				refreshHeaders[ 'X-WorkOS-Nonce' ] = this.nonce;
 			}
 			const refreshed = await fetch( `${ this.baseUrl }/session/refresh`, {
 				method: 'POST',

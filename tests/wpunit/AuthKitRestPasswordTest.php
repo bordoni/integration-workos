@@ -159,7 +159,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	private function dispatch_with_nonce( string $method, string $route, array $body = [] ): WP_REST_Response {
 		$request = new WP_REST_Request( $method, $route );
 		$request->set_header( 'Content-Type', 'application/json' );
-		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( $this->profile->get_slug() ) );
+		$request->set_header( 'X-WorkOS-Nonce', $this->nonce->mint( $this->profile->get_slug() ) );
 		$request->set_body( wp_json_encode( $body ) );
 		return rest_get_server()->dispatch( $request );
 	}
@@ -233,7 +233,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 
 		$request = new WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
 		$request->set_header( 'Content-Type', 'application/json' );
-		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( 'magic-only' ) );
+		$request->set_header( 'X-WorkOS-Nonce', $this->nonce->mint( 'magic-only' ) );
 		$request->set_body(
 			wp_json_encode(
 				[
@@ -326,7 +326,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	public function test_authenticate_forwards_radar_header(): void {
 		$request = new WP_REST_Request( 'POST', '/workos/v1/auth/password/authenticate' );
 		$request->set_header( 'Content-Type', 'application/json' );
-		$request->set_header( 'X-WP-Nonce', $this->nonce->mint( 'members' ) );
+		$request->set_header( 'X-WorkOS-Nonce', $this->nonce->mint( 'members' ) );
 		$request->set_header( 'X-WorkOS-Radar-Action-Token', 'radar_tok' );
 		$request->set_body(
 			wp_json_encode(

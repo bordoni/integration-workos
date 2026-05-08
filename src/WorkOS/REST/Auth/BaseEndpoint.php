@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Common concerns for every /wp-json/workos/v1/auth/* endpoint.
  *
  * - Profile resolution from the `profile` request param
- * - Per-profile nonce verification (accepts `X-WP-Nonce` header or `_nonce` body param)
+ * - Per-profile nonce verification (accepts `X-WorkOS-Nonce` header or `_nonce` body param)
  * - Rate limiting via bucketed transients
  * - Radar action-token extraction
  *
@@ -144,7 +144,7 @@ abstract class BaseEndpoint {
 	/**
 	 * Verify the profile-scoped nonce on a mutation request.
 	 *
-	 * Accepts either the `X-WP-Nonce` header (preferred) or a `_nonce`
+	 * Accepts either the `X-WorkOS-Nonce` header (preferred) or a `_nonce`
 	 * body/query param for simple form submissions.
 	 *
 	 * @param WP_REST_Request $request REST request.
