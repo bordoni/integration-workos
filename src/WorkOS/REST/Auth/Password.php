@@ -127,6 +127,39 @@ class Password extends BaseEndpoint {
 			$this->get_radar_token( $request )
 		);
 
+		if ( is_wp_error( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
+			// WorkOS rejected the password — fall back to WordPress authentication.
+			// Handles migrated users whose passwords were never synced to WorkOS.
+			$wp_user = wp_authenticate( $email, $password );
+
+			if ( ! is_wp_error( $wp_user ) ) {
+				$workos_user_id = $this->resolve_workos_user_id( $wp_user, $email );
+
+				if ( $workos_user_id ) {
+					if ( workos()->option( 'wp_password_fallback_email_confirmation', false ) ) {
+						// Email confirmation path: identity is verified via a magic code
+						// instead of syncing the plaintext password to WorkOS.
+						workos()->api()->send_magic_auth_code( $email, $this->get_radar_token( $request ) );
+
+						return new WP_REST_Response(
+							[ 'email_confirmation_required' => true, 'email' => $email ],
+							200
+						);
+					}
+
+					// Direct sync path: one-time password migration to WorkOS so future
+					// logins authenticate directly without needing the fallback.
+					workos()->api()->update_user( $workos_user_id, [ 'password' => $password ] );
+
+					$workos_response = workos()->api()->authenticate_with_password(
+						$email,
+						$password,
+						$this->get_radar_token( $request )
+					);
+				}
+			}
+		}
+
 		if ( is_wp_error( $workos_response ) ) {
 			return $workos_response;
 		}
@@ -276,6 +309,34 @@ class Password extends BaseEndpoint {
 			[ 'ok' => true ],
 			200
 		);
+	}
+
+	/**
+	 * Return the WorkOS user ID linked to a WP user, creating the link if needed.
+	 *
+	 * @param \WP_User $wp_user WP user object.
+	 * @param string   $email   Email address (used for the WorkOS lookup).
+	 *
+	 * @return string WorkOS user ID, or empty string if it could not be resolved.
+	 */
+	private function resolve_workos_user_id( \WP_User $wp_user, string $email ): string {
+		$workos_user_id = (string) get_user_meta( $wp_user->ID, '_workos_user_id', true );
+		if ( $workos_user_id ) {
+			return $workos_user_id;
+		}
+
+		$existing = workos()->api()->list_users( [ 'email' => $email ] );
+		if ( ! is_wp_error( $existing ) && ! empty( $existing['data'][0] ) ) {
+			\WorkOS\Sync\UserSync::link_user( $wp_user->ID, $existing['data'][0] );
+			return (string) $existing['data'][0]['id'];
+		}
+
+		$synced = \WorkOS\Sync\UserSync::sync_existing_user( $wp_user->ID );
+		if ( ! is_wp_error( $synced ) ) {
+			return (string) get_user_meta( $wp_user->ID, '_workos_user_id', true );
+		}
+
+		return '';
 	}
 
 	/**

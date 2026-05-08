@@ -63,6 +63,7 @@ export function App( props: AppProps ) {
 	const [ redirectTo, setRedirectTo ] = useState( '' );
 	const [ mfaState, setMfaState ] = useState< MfaState | null >( null );
 	const [ magicEmail, setMagicEmail ] = useState( '' );
+	const [ magicVerifyBack, setMagicVerifyBack ] = useState< Step >( 'magic_send' );
 	const [ signupContext, setSignupContext ] = useState< SignupContext | null >(
 		null
 	);
@@ -161,6 +162,11 @@ export function App( props: AppProps ) {
 					profile={ profile }
 					onMfa={ handleMfa }
 					onSuccess={ handleSuccess }
+					onEmailConfirmation={ ( confirmedEmail ) => {
+						setMagicEmail( confirmedEmail );
+						setMagicVerifyBack( 'password' );
+						setStep( 'magic_verify' );
+					} }
 					onBack={ ( target ) => setStep( target || 'pick' ) }
 				/>
 			);
@@ -172,6 +178,7 @@ export function App( props: AppProps ) {
 					profile={ profile }
 					onCodeSent={ ( email ) => {
 						setMagicEmail( email );
+						setMagicVerifyBack( 'magic_send' );
 						setStep( 'magic_verify' );
 					} }
 					onBack={ () => setStep( 'pick' ) }
@@ -186,7 +193,7 @@ export function App( props: AppProps ) {
 					email={ magicEmail }
 					onMfa={ handleMfa }
 					onSuccess={ handleSuccess }
-					onBack={ () => setStep( 'magic_send' ) }
+					onBack={ () => setStep( magicVerifyBack ) }
 				/>
 			);
 
