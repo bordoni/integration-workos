@@ -193,10 +193,11 @@ interface PasswordProps {
 	profile: Profile;
 	onMfa: ( data: MfaRequired ) => void;
 	onSuccess: ( data: LoginSuccess ) => void;
+	onEmailConfirmation: ( email: string ) => void;
 	onBack: ( target?: Step ) => void;
 }
 
-export function Password( { client, onMfa, onSuccess, onBack, profile }: PasswordProps ) {
+export function Password( { client, onMfa, onSuccess, onEmailConfirmation, onBack, profile }: PasswordProps ) {
 	const [ email, setEmail ] = useState( '' );
 	const [ password, setPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
@@ -215,7 +216,11 @@ export function Password( { client, onMfa, onSuccess, onBack, profile }: Passwor
 			setError( errorMessage( data ) );
 			return;
 		}
-		const result = data as AuthResult;
+		const result = data as AuthResult & { email_confirmation_required?: boolean };
+		if ( result.email_confirmation_required ) {
+			onEmailConfirmation( email );
+			return;
+		}
 		if ( isMfaRequired( result ) ) {
 			onMfa( result );
 			return;

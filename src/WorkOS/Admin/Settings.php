@@ -659,6 +659,18 @@ class Settings {
 			]
 		);
 
+		add_settings_field(
+			'workos_env_wp_password_fallback_email_confirmation',
+			__( 'Require Email Confirmation on Fallback', 'integration-workos' ),
+			[ $this, 'render_checkbox' ],
+			'workos',
+			'workos_auth',
+			[
+				'name'  => $this->env_option( 'wp_password_fallback_email_confirmation' ),
+				'label' => __( 'When a migrated user logs in with their WordPress password, send a magic code to their email to confirm identity before completing login. Password is not synced to WorkOS.', 'integration-workos' ),
+			]
+		);
+
 		// --- Audit Logging section ---
 		add_settings_section(
 			'workos_audit',
@@ -1997,7 +2009,7 @@ class Settings {
 		}
 
 		// Boolean fields.
-		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled' ];
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation' ];
 		foreach ( $bool_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );

@@ -62,6 +62,20 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	];
 
 	/**
+	 * Ordered queue of HTTP responses consumed one-per-call; falls back to $next_workos when empty.
+	 *
+	 * @var array
+	 */
+	private array $response_queue = [];
+
+	/**
+	 * WP user created for the WP-password-fallback tests.
+	 *
+	 * @var int
+	 */
+	private int $wp_fallback_user_id = 0;
+
+	/**
 	 * Set up a standalone plugin environment + register routes.
 	 */
 	public function setUp(): void {
@@ -117,6 +131,15 @@ class AuthKitRestPasswordTest extends WPTestCase {
 
 		add_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10, 3 );
 
+		// Create a WP user for fallback-path tests. Created after the HTTP filter
+		// so push_user_to_workos fires but gets {} back and skips linking —
+		// leaving _workos_user_id unset for tests that need to control it.
+		$user_id = wp_create_user( 'fallback_user', 'wp_password_123', 'fallback@example.com' );
+		if ( ! is_wp_error( $user_id ) ) {
+			$this->wp_fallback_user_id = $user_id;
+		}
+		$this->captured = []; // discard creation noise
+
 		// Ensure no residual user session.
 		wp_set_current_user( 0 );
 	}
@@ -126,7 +149,13 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	 */
 	public function tearDown(): void {
 		remove_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10 );
-		$this->captured = [];
+		$this->captured        = [];
+		$this->response_queue  = [];
+
+		if ( $this->wp_fallback_user_id ) {
+			wp_delete_user( $this->wp_fallback_user_id );
+			$this->wp_fallback_user_id = 0;
+		}
 
 		foreach ( $this->repository->all() as $profile ) {
 			wp_delete_post( $profile->get_id(), true );
@@ -150,6 +179,9 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			'body'    => $args['body'] ?? '',
 			'headers' => $args['headers'] ?? [],
 		];
+		if ( ! empty( $this->response_queue ) ) {
+			return array_shift( $this->response_queue );
+		}
 		return $this->next_workos;
 	}
 
@@ -402,6 +434,228 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		);
 
 		$this->assertSame( 400, $response->get_status() );
+	}
+
+	// -------------------------------------------------------------------------
+	// WP password fallback tests
+	// -------------------------------------------------------------------------
+
+	/**
+	 * When allow_password_fallback is disabled, WorkOS error is returned immediately
+	 * and wp_authenticate is never attempted.
+	 */
+	public function test_fallback_skipped_when_option_disabled(): void {
+		update_option(
+			'workos_production',
+			[
+				'api_key'                 => 'sk_test_fake',
+				'client_id'               => 'client_fake',
+				'environment_id'          => 'environment_test',
+				'allow_password_fallback' => false,
+			]
+		);
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		$this->next_workos = [
+			'response' => [ 'code' => 401, 'message' => 'Unauthorized' ],
+			'body'     => wp_json_encode( [ 'message' => 'Invalid credentials.' ] ),
+		];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'fallback@example.com',
+				'password' => 'wp_password_123',
+			]
+		);
+
+		$this->assertSame( 'workos_api_error', $response->get_data()['code'] );
+
+		$user_management_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/users' )
+		);
+		$this->assertEmpty( $user_management_calls, 'WP fallback must not run when the option is disabled.' );
+	}
+
+	/**
+	 * WorkOS fails and WP password is also wrong — original WorkOS error is returned.
+	 */
+	public function test_fallback_returns_error_when_wp_auth_fails(): void {
+		$this->next_workos = [
+			'response' => [ 'code' => 401, 'message' => 'Unauthorized' ],
+			'body'     => wp_json_encode( [ 'message' => 'Invalid credentials.' ] ),
+		];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'fallback@example.com',
+				'password' => 'wrong_password',
+			]
+		);
+
+		$this->assertSame( 'workos_api_error', $response->get_data()['code'] );
+
+		$authenticate_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertCount( 1, $authenticate_calls, 'Should not retry authenticate after WP failure.' );
+	}
+
+	/**
+	 * WorkOS fails, WP auth succeeds, user already linked, email confirmation disabled —
+	 * password is synced to WorkOS and login completes directly.
+	 */
+	public function test_fallback_syncs_password_and_completes_login(): void {
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', 'user_wos_fallback' );
+
+		$auth_success = [
+			'response' => [ 'code' => 200, 'message' => 'OK' ],
+			'body'     => wp_json_encode(
+				[
+					'access_token'  => 'eyJhbGciOi.eyJzdWIiOiJ1c2VyX3dva28iLCJleHAiOjk5OTk5OTk5OTl9.sig',
+					'refresh_token' => 'rt_fallback',
+					'user'          => [
+						'id'             => 'user_wos_fallback',
+						'email'          => 'fallback@example.com',
+						'email_verified' => true,
+					],
+				]
+			),
+		];
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 401, 'message' => 'Unauthorized' ], 'body' => wp_json_encode( [ 'message' => 'Invalid credentials.' ] ) ],
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ], // update_user
+			$auth_success,
+		];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'fallback@example.com',
+				'password' => 'wp_password_123',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( 'fallback@example.com', $response->get_data()['user']['email'] );
+
+		$update_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/users/user_wos_fallback' )
+				&& 'PUT' === ( $c['method'] ?? '' )
+		);
+		$this->assertNotEmpty( $update_calls, 'Password must be synced to WorkOS via update_user.' );
+	}
+
+	/**
+	 * WorkOS fails, WP auth succeeds, no _workos_user_id yet — user is found by
+	 * email via list_users, linked, then password is synced and login completes.
+	 */
+	public function test_fallback_links_user_by_email_then_syncs(): void {
+		$auth_success = [
+			'response' => [ 'code' => 200, 'message' => 'OK' ],
+			'body'     => wp_json_encode(
+				[
+					'access_token'  => 'eyJhbGciOi.eyJzdWIiOiJ1c2VyX3dvcyIsImV4cCI6OTk5OTk5OTk5OX0.sig',
+					'refresh_token' => 'rt_linked',
+					'user'          => [
+						'id'             => 'user_wos_linked',
+						'email'          => 'fallback@example.com',
+						'email_verified' => true,
+					],
+				]
+			),
+		];
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 401, 'message' => 'Unauthorized' ], 'body' => wp_json_encode( [ 'message' => 'Invalid credentials.' ] ) ],
+			[
+				'response' => [ 'code' => 200, 'message' => 'OK' ],
+				'body'     => wp_json_encode( [ 'data' => [ [ 'id' => 'user_wos_linked', 'email' => 'fallback@example.com' ] ] ] ),
+			],
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ], // update_user
+			$auth_success,
+		];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'fallback@example.com',
+				'password' => 'wp_password_123',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+
+		$list_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/users' )
+				&& str_contains( $c['url'], 'fallback' )
+		);
+		$this->assertNotEmpty( $list_calls, 'list_users must be called to find the WorkOS account by email.' );
+		$this->assertSame( 'user_wos_linked', get_user_meta( $this->wp_fallback_user_id, '_workos_user_id', true ) );
+	}
+
+	/**
+	 * Email confirmation enabled: WorkOS fails, WP auth succeeds — magic code is sent
+	 * and the shell receives email_confirmation_required. Password is never synced.
+	 */
+	public function test_fallback_email_confirmation_sends_magic_code(): void {
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', 'user_wos_fallback' );
+		update_option(
+			'workos_production',
+			[
+				'api_key'                                 => 'sk_test_fake',
+				'client_id'                               => 'client_fake',
+				'environment_id'                          => 'environment_test',
+				'wp_password_fallback_email_confirmation' => true,
+			]
+		);
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 401, 'message' => 'Unauthorized' ], 'body' => wp_json_encode( [ 'message' => 'Invalid credentials.' ] ) ],
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ], // magic_auth/send
+		];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'fallback@example.com',
+				'password' => 'wp_password_123',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['email_confirmation_required'] );
+		$this->assertSame( 'fallback@example.com', $data['email'] );
+
+		$magic_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertNotEmpty( $magic_calls, 'Magic code must be sent when email confirmation is enabled.' );
+
+		$update_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/users/user_wos_fallback' )
+		);
+		$this->assertEmpty( $update_calls, 'Password must not be synced in email-confirmation mode.' );
 	}
 
 	/**
