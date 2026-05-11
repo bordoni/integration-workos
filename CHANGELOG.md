@@ -1,5 +1,51 @@
 # Changelog
 
+## [1.0.2] - 2026-05-11
+
+### Added
+
+- **WordPress password fallback** — when WorkOS rejects a password, the
+  auth endpoint can now retry against `wp_authenticate()` to cover users
+  whose passwords were never synced to WorkOS (e.g. accounts that existed
+  before the plugin was installed). On success the WP user is linked /
+  synced to WorkOS and, by default, the password is written through to
+  WorkOS so future logins authenticate directly. A new
+  **Require Email Confirmation on Fallback** setting (option
+  `wp_password_fallback_email_confirmation`) switches the post-fallback
+  step to a magic-code email instead of syncing the plaintext password.
+  Gated by the existing `allow_password_fallback` setting (default on).
+- **wp-config.php constant seeder** — defining `WORKOS_*` (or
+  env-scoped `WORKOS_{PRODUCTION|STAGING}_*`) constants in `wp-config.php`
+  now seeds the corresponding settings into the database on boot, so the
+  admin UI reflects them and runtime reads stay on the existing options
+  layer. Covers string credentials (`WORKOS_CLIENT_ID`, `WORKOS_API_KEY`,
+  …), the new boolean toggles (`WORKOS_ALLOW_PASSWORD_FALLBACK`,
+  `WORKOS_WP_PASSWORD_FALLBACK_EMAIL_CONFIRMATION`), and array values
+  (`WORKOS_REDIRECT_URLS`). Skipped via a stored hash check
+  (`workos_constants_hash` option) when nothing has changed — steady-state
+  cost is one autoloaded `get_option()` call per request.
+
+### Fixed
+
+- **REST nonce header** — auth endpoints under `/wp-json/workos/v1/auth/*`
+  now read the nonce from `X-WorkOS-Nonce` instead of `X-WP-Nonce`. The
+  prior name collided with the header WP core and other plugins consume,
+  which could cause the wrong nonce to be validated when multiple
+  scripts attached to the same request. The bundled React shell sends
+  the new header automatically; external clients calling these endpoints
+  directly need to update their header name.
+
+### Tests
+
+- Adds `ConfigSyncConstantsTest` (11 wpunit cases) covering the new
+  constant seeder: string / bool / array maps, env-specific override
+  precedence, empty-string skip, the hash short-circuit, and the
+  trailing in-memory cache reset. The fixture defines `WORKOS_*`
+  constants in `setUp()`; because PHP cannot undefine a constant and
+  Codeception 5 ignores PHPUnit's process-isolation directives, the
+  class is tagged `@group constants` and CI now runs it as a dedicated
+  `codecept run` invocation. Default `slic run wpunit` skips the group.
+
 ## [1.0.1] - 2026-05-01
 
 ### Added

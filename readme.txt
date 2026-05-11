@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,12 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.2 - 2026-05-11 =
+
+* New: WordPress password fallback — if WorkOS rejects a password, the auth endpoint can retry against WordPress's own `wp_authenticate()` to cover users whose passwords were never synced to WorkOS, then link the user to WorkOS and (by default) write the password through so future logins authenticate directly. A new "Require Email Confirmation on Fallback" setting switches the post-fallback step to a magic-code email instead of syncing the plaintext password. Gated by the existing `allow_password_fallback` toggle.
+* New: wp-config.php constant seeder — defining `WORKOS_*` (or env-scoped `WORKOS_{PRODUCTION|STAGING}_*`) constants now seeds those values into the database on boot, so the admin UI reflects them. Covers string credentials, the new boolean toggles, and `WORKOS_REDIRECT_URLS` arrays. Hash-skipped when nothing has changed — one autoloaded option read per request in steady state.
+* Fix: Auth REST endpoints under `/wp-json/workos/v1/auth/*` now read the nonce from `X-WorkOS-Nonce` instead of `X-WP-Nonce` to avoid a header collision with WordPress core and other plugins. The bundled React shell is updated; external clients hitting these endpoints directly must rename the header.
+
 = 1.0.1 - 2026-05-01 =
 
 * New: Organization tab — manual Refresh button next to the organization dropdown re-fetches organizations from WorkOS on demand via the admin REST endpoint (no admin-ajax), bypassing the 5-minute cache. The dropdown is blocked with a spinner during the refresh and the selected organization is preserved when it still exists.
@@ -225,6 +231,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.2 =
+Adds a WordPress-password fallback for the AuthKit password flow (with an optional email-confirmation step) so accounts that pre-date the WorkOS integration can keep logging in, and adds a `wp-config.php` constant seeder for all major settings. Also renames the auth REST nonce header from `X-WP-Nonce` to `X-WorkOS-Nonce` — external clients calling `/wp-json/workos/v1/auth/*` directly need to update the header name.
 
 = 1.0.1 =
 Adds a manual Refresh button next to the Organization dropdown, fixes a regression that prevented saving the Organization tab, and fixes the active-environment selector so picking "Production" actually loads production credentials instead of staging.
