@@ -207,7 +207,7 @@ class Config {
 	}
 
 	/**
-	 * wp_options key used to store the last-seen constants hash.
+	 * Options key used to store the last-seen constants hash.
 	 */
 	private const CONSTANTS_HASH_OPTION = 'workos_constants_hash';
 
@@ -231,7 +231,7 @@ class Config {
 		$class     = 'staging' === $env ? Options\Staging::class : Options\Production::class;
 		$env_upper = strtoupper( $env );
 
-		/** @var Options\Options $options */
+		/* @var Options\Options $options */
 		$options = App::container()->get( $class );
 
 		foreach ( self::CONSTANT_MAP as $key => $generic ) {
@@ -315,8 +315,8 @@ class Config {
 
 		foreach ( self::ARRAY_CONSTANT_MAP as $key => $generic ) {
 			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
-			$values[]  = defined( $env_const ) && is_array( constant( $env_const ) ) ? md5( serialize( constant( $env_const ) ) ) : '';
-			$values[]  = defined( $generic ) && is_array( constant( $generic ) ) ? md5( serialize( constant( $generic ) ) ) : '';
+			$values[]  = defined( $env_const ) && is_array( constant( $env_const ) ) ? md5( wp_json_encode( constant( $env_const ) ) ) : '';
+			$values[]  = defined( $generic ) && is_array( constant( $generic ) ) ? md5( wp_json_encode( constant( $generic ) ) ) : '';
 		}
 
 		return md5( implode( '|', $values ) );
