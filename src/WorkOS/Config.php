@@ -31,6 +31,23 @@ class Config {
 	];
 
 	/**
+	 * Map of boolean setting names to their generic PHP constant overrides.
+	 * Env-specific form: WORKOS_{ENV}_{SETTING} (e.g. WORKOS_STAGING_ALLOW_PASSWORD_FALLBACK).
+	 */
+	private const BOOL_CONSTANT_MAP = [
+		'allow_password_fallback'                 => 'WORKOS_ALLOW_PASSWORD_FALLBACK',
+		'wp_password_fallback_email_confirmation' => 'WORKOS_WP_PASSWORD_FALLBACK_EMAIL_CONFIRMATION',
+	];
+
+	/**
+	 * Map of array setting names to their generic PHP constant overrides.
+	 * Env-specific form: WORKOS_{ENV}_{SETTING} (e.g. WORKOS_STAGING_REDIRECT_URLS).
+	 */
+	private const ARRAY_CONSTANT_MAP = [
+		'redirect_urls' => 'WORKOS_REDIRECT_URLS',
+	];
+
+	/**
 	 * Get the active environment.
 	 *
 	 * @return string 'production' or 'staging'.
@@ -187,6 +204,121 @@ class Config {
 	 */
 	public static function get_site_key(): string {
 		return preg_replace( '#^https?://#', '', untrailingslashit( home_url() ) );
+	}
+
+	/**
+	 * Options key used to store the last-seen constants hash.
+	 */
+	private const CONSTANTS_HASH_OPTION = 'workos_constants_hash';
+
+	/**
+	 * Seed the database from any defined wp-config.php constants.
+	 *
+	 * Skipped entirely when the hash of all constant values matches what was
+	 * stored on the previous run — so the steady-state cost is one autoloaded
+	 * get_option() call per request with no further DB activity.
+	 *
+	 * @return void
+	 */
+	public static function sync_constants_to_db(): void {
+		$hash = self::constants_hash();
+
+		if ( get_option( self::CONSTANTS_HASH_OPTION ) === $hash ) {
+			return;
+		}
+
+		$env       = self::get_active_environment();
+		$class     = 'staging' === $env ? Options\Staging::class : Options\Production::class;
+		$env_upper = strtoupper( $env );
+
+		$options = App::container()->get( $class );
+
+		foreach ( self::CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+
+			if ( defined( $env_const ) && '' !== constant( $env_const ) ) {
+				$value = (string) constant( $env_const );
+			} elseif ( defined( $generic ) && '' !== constant( $generic ) ) {
+				$value = (string) constant( $generic );
+			} else {
+				continue;
+			}
+
+			if ( $value !== (string) $options->get( $key ) ) {
+				$options->set( $key, $value );
+			}
+		}
+
+		$stored_all = $options->all();
+		foreach ( self::BOOL_CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+
+			if ( defined( $env_const ) ) {
+				$value = (bool) constant( $env_const );
+			} elseif ( defined( $generic ) ) {
+				$value = (bool) constant( $generic );
+			} else {
+				continue;
+			}
+
+			$stored = array_key_exists( $key, $stored_all ) ? (bool) $stored_all[ $key ] : null;
+			if ( $value !== $stored ) {
+				$options->set( $key, $value );
+			}
+		}
+
+		foreach ( self::ARRAY_CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+
+			if ( defined( $env_const ) && is_array( constant( $env_const ) ) ) {
+				$value = constant( $env_const );
+			} elseif ( defined( $generic ) && is_array( constant( $generic ) ) ) {
+				$value = constant( $generic );
+			} else {
+				continue;
+			}
+
+			if ( $value !== $options->get( $key ) ) {
+				$options->set( $key, $value );
+			}
+		}
+
+		update_option( self::CONSTANTS_HASH_OPTION, $hash );
+
+		// Clear the in-memory cache so any same-request reads (e.g. settings
+		// page render after save) pick up the freshly written DB values.
+		$options->reset();
+	}
+
+	/**
+	 * Build an md5 hash of the active environment's WORKOS constant values.
+	 *
+	 * @return string
+	 */
+	private static function constants_hash(): string {
+		$env       = self::get_active_environment();
+		$env_upper = strtoupper( $env );
+		$values    = [];
+
+		foreach ( self::CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+			$values[]  = defined( $env_const ) ? (string) constant( $env_const ) : '';
+			$values[]  = defined( $generic ) ? (string) constant( $generic ) : '';
+		}
+
+		foreach ( self::BOOL_CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+			$values[]  = defined( $env_const ) ? ( constant( $env_const ) ? '1' : '0' ) : '';
+			$values[]  = defined( $generic ) ? ( constant( $generic ) ? '1' : '0' ) : '';
+		}
+
+		foreach ( self::ARRAY_CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+			$values[]  = defined( $env_const ) && is_array( constant( $env_const ) ) ? md5( wp_json_encode( constant( $env_const ) ) ) : '';
+			$values[]  = defined( $generic ) && is_array( constant( $generic ) ) ? md5( wp_json_encode( constant( $generic ) ) ) : '';
+		}
+
+		return md5( implode( '|', $values ) );
 	}
 
 	/**

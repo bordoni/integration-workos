@@ -129,7 +129,10 @@ jobs:
           ${SLIC_BIN} composer install
 
       - name: Run wpunit tests
-        run: ${SLIC_BIN} run wpunit --ext DotReporter
+        run: ${SLIC_BIN} run wpunit --skip-group constants --ext DotReporter
+
+      - name: Run wpunit tests (constants group, isolated process)
+        run: ${SLIC_BIN} run wpunit --group constants --ext DotReporter
 
   js-build:
     name: JS Build

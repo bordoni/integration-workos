@@ -374,6 +374,9 @@ class Plugin {
 		// Ensure schema is current.
 		Database\Schema::maybe_upgrade();
 
+		// Seed DB from any wp-config.php constants so the admin UI reflects them.
+		Config::sync_constants_to_db();
+
 		// Register the main controller.
 		$this->container->register( Controller::class );
 	}
