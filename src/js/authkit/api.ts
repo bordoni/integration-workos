@@ -96,7 +96,7 @@ class AuthKitClient {
 			'Content-Type': 'application/json',
 		};
 		if ( method !== 'GET' && this.nonce ) {
-			headers[ 'X-WP-Nonce' ] = this.nonce;
+			headers[ 'X-WorkOS-Nonce' ] = this.nonce;
 		}
 		const radar = this.getRadarToken();
 		if ( radar ) {
@@ -128,7 +128,7 @@ class AuthKitClient {
 				'Content-Type': 'application/json',
 			};
 			if ( this.nonce ) {
-				refreshHeaders[ 'X-WP-Nonce' ] = this.nonce;
+				refreshHeaders[ 'X-WorkOS-Nonce' ] = this.nonce;
 			}
 			const refreshed = await fetch( `${ this.baseUrl }/session/refresh`, {
 				method: 'POST',
