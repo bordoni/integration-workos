@@ -231,7 +231,6 @@ class Config {
 		$class     = 'staging' === $env ? Options\Staging::class : Options\Production::class;
 		$env_upper = strtoupper( $env );
 
-		/* @var Options\Options $options */
 		$options = App::container()->get( $class );
 
 		foreach ( self::CONSTANT_MAP as $key => $generic ) {
