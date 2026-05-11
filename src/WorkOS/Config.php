@@ -40,6 +40,14 @@ class Config {
 	];
 
 	/**
+	 * Map of array setting names to their generic PHP constant overrides.
+	 * Env-specific form: WORKOS_{ENV}_{SETTING} (e.g. WORKOS_STAGING_REDIRECT_URLS).
+	 */
+	private const ARRAY_CONSTANT_MAP = [
+		'redirect_urls' => 'WORKOS_REDIRECT_URLS',
+	];
+
+	/**
 	 * Get the active environment.
 	 *
 	 * @return string 'production' or 'staging'.
@@ -242,6 +250,7 @@ class Config {
 			}
 		}
 
+		$stored_all = $options->all();
 		foreach ( self::BOOL_CONSTANT_MAP as $key => $generic ) {
 			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
 
@@ -253,7 +262,24 @@ class Config {
 				continue;
 			}
 
-			if ( $value !== (bool) $options->get( $key ) ) {
+			$stored = array_key_exists( $key, $stored_all ) ? (bool) $stored_all[ $key ] : null;
+			if ( $value !== $stored ) {
+				$options->set( $key, $value );
+			}
+		}
+
+		foreach ( self::ARRAY_CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+
+			if ( defined( $env_const ) && is_array( constant( $env_const ) ) ) {
+				$value = constant( $env_const );
+			} elseif ( defined( $generic ) && is_array( constant( $generic ) ) ) {
+				$value = constant( $generic );
+			} else {
+				continue;
+			}
+
+			if ( $value !== $options->get( $key ) ) {
 				$options->set( $key, $value );
 			}
 		}
@@ -285,6 +311,12 @@ class Config {
 			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
 			$values[]  = defined( $env_const ) ? ( constant( $env_const ) ? '1' : '0' ) : '';
 			$values[]  = defined( $generic ) ? ( constant( $generic ) ? '1' : '0' ) : '';
+		}
+
+		foreach ( self::ARRAY_CONSTANT_MAP as $key => $generic ) {
+			$env_const = 'WORKOS_' . $env_upper . '_' . strtoupper( $key );
+			$values[]  = defined( $env_const ) && is_array( constant( $env_const ) ) ? md5( serialize( constant( $env_const ) ) ) : '';
+			$values[]  = defined( $generic ) && is_array( constant( $generic ) ) ? md5( serialize( constant( $generic ) ) ) : '';
 		}
 
 		return md5( implode( '|', $values ) );
