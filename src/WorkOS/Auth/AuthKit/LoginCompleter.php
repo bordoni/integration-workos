@@ -55,9 +55,10 @@ class LoginCompleter {
 	 * choose an organization" path as an error with `organization_selection_required`,
 	 * so the same method needs to be able to recover from that error.
 	 *
-	 * @param array|WP_Error $workos_response Response body from the WorkOS authenticate endpoint, or the WP_Error wrapping a WorkOS error response.
-	 * @param Profile        $profile         Active Login Profile.
-	 * @param string         $redirect_to     Client-requested redirect (validated).
+	 * @param array|WP_Error $workos_response         Response body from the WorkOS authenticate endpoint, or the WP_Error wrapping a WorkOS error response.
+	 * @param Profile        $profile                 Active Login Profile.
+	 * @param string         $redirect_to             Client-requested redirect (validated).
+	 * @param bool           $honor_profile_redirect  Whether the profile's `post_login_redirect` should override `$redirect_to`. AuthKit-REST callers leave this `true`; the legacy hosted-AuthKit callback passes `false` so the state-supplied URL still wins for that flow.
 	 *
 	 * @return array|WP_Error
 	 *   On success: {
@@ -70,7 +71,7 @@ class LoginCompleter {
 	 *     'factors'                      => array,
 	 *   }
 	 */
-	public function complete( $workos_response, Profile $profile, string $redirect_to = '' ) {
+	public function complete( $workos_response, Profile $profile, string $redirect_to = '', bool $honor_profile_redirect = true ) {
 		// WorkOS returns `organization_selection_required` when the
 		// authenticate call resolves to a user that belongs to multiple
 		// orgs without an org context. If this profile (or the global
@@ -171,26 +172,28 @@ class LoginCompleter {
 				'email'        => (string) $wp_user->user_email,
 				'display_name' => (string) $wp_user->display_name,
 			],
-			'redirect_to' => $this->resolve_redirect( $profile, $redirect_to, $wp_user ),
+			'redirect_to' => $this->resolve_redirect( $profile, $redirect_to, $wp_user, $honor_profile_redirect ),
 		];
 	}
 
 	/**
 	 * Resolve the post-login redirect.
 	 *
-	 * Profile-level `post_login_redirect` wins over the client's
-	 * `redirect_to` — this is intentional: admins use profile redirects to
-	 * enforce where each login page lands users. Falls back through the
-	 * existing Redirect::resolve() to honor role-based rules.
+	 * For AuthKit-REST flows, profile-level `post_login_redirect` wins over
+	 * the client's `redirect_to` — admins use profile redirects to enforce
+	 * where each login page lands users. The legacy hosted-AuthKit callback
+	 * passes `$honor_profile_redirect = false` so its state-supplied
+	 * `redirect_to` still wins (the legacy contract).
 	 *
-	 * @param Profile $profile     Active profile.
-	 * @param string  $redirect_to Client-provided redirect URL.
-	 * @param WP_User $wp_user     Authenticated user.
+	 * @param Profile $profile                Active profile.
+	 * @param string  $redirect_to            Client-provided redirect URL.
+	 * @param WP_User $wp_user                Authenticated user.
+	 * @param bool    $honor_profile_redirect Whether to let the profile's `post_login_redirect` override `$redirect_to`.
 	 *
 	 * @return string
 	 */
-	private function resolve_redirect( Profile $profile, string $redirect_to, WP_User $wp_user ): string {
-		$profile_redirect = $profile->get_post_login_redirect();
+	private function resolve_redirect( Profile $profile, string $redirect_to, WP_User $wp_user, bool $honor_profile_redirect = true ): string {
+		$profile_redirect = $honor_profile_redirect ? $profile->get_post_login_redirect() : '';
 		$requested        = '' !== $profile_redirect ? $profile_redirect : $redirect_to;
 
 		if ( '' === $requested ) {
@@ -329,24 +332,14 @@ class LoginCompleter {
 			);
 		}
 
-		// Prefer the user_id WorkOS already gave us; fall back to local
-		// meta (set on prior successful logins); last resort, look it up by
-		// email so brand-new linkages still work.
+		// Use the user_id WorkOS attached to the org-selection error body —
+		// that's the user who just authenticated, so it's the only safe
+		// identifier to enroll. WorkOS treats emails as case-insensitive
+		// but does not enforce workspace-wide uniqueness, so a lookup by
+		// email can pick a different user than the one this session
+		// belongs to. If the body has no user_id we refuse to self-heal
+		// rather than guessing.
 		$workos_user_id = (string) ( $body['user_id'] ?? '' );
-		if ( '' === $workos_user_id ) {
-			$workos_user_id = (string) get_user_meta( $wp_user->ID, '_workos_user_id', true );
-		}
-		if ( '' === $workos_user_id ) {
-			$lookup = workos()->api()->list_users(
-				[
-					'email' => $email,
-					'limit' => 1,
-				]
-			);
-			if ( ! is_wp_error( $lookup ) && ! empty( $lookup['data'][0]['id'] ) ) {
-				$workos_user_id = (string) $lookup['data'][0]['id'];
-			}
-		}
 
 		if ( '' === $workos_user_id ) {
 			return new WP_Error(
@@ -356,16 +349,37 @@ class LoginCompleter {
 			);
 		}
 
+		$source_code = (string) ( $body['code'] ?? 'organization_selection_required' );
+
 		$membership = workos()->api()->create_organization_membership( $workos_user_id, $pinned_org );
 		if ( is_wp_error( $membership ) ) {
 			$membership_data = $membership->get_error_data();
 			$membership_body = is_array( $membership_data ) && isset( $membership_data['body'] ) && is_array( $membership_data['body'] ) ? $membership_data['body'] : [];
 			// A duplicate-membership response means we're already good to retry.
 			if ( 'entity_already_exists' === (string) ( $membership_body['code'] ?? '' ) ) {
+				workos_log(
+					sprintf(
+						'Auto-enroll: WorkOS user %s already a member of pinned org %s (source: %s); proceeding to organization-selection grant.',
+						$workos_user_id,
+						$pinned_org,
+						$source_code
+					),
+					'info'
+				);
 				return true;
 			}
 			return $membership;
 		}
+
+		workos_log(
+			sprintf(
+				'Auto-enroll: created WorkOS membership for user %s in pinned org %s (source: %s) during AuthKit login recovery.',
+				$workos_user_id,
+				$pinned_org,
+				$source_code
+			),
+			'info'
+		);
 
 		return true;
 	}

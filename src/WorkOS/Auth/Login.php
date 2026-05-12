@@ -247,9 +247,21 @@ class Login {
 		// through LoginCompleter so the AuthKit-style flows and this OAuth
 		// callback share the same `organization_selection_required`
 		// recovery, MFA gating, and post-login bookkeeping.
-		$result  = workos()->api()->authenticate_with_code( $code, self::get_callback_url() );
-		$profile = $this->resolve_callback_profile( $profile_slug );
-		$outcome = workos()->getContainer()->get( LoginCompleter::class )->complete( $result, $profile, $redirect_to );
+		//
+		// Legacy AuthKit-redirect callbacks (no profile slug in state) must
+		// preserve the original contract where the state-supplied
+		// `redirect_to` wins. Pass `$honor_profile_redirect = false` so the
+		// default profile's `post_login_redirect` doesn't silently override
+		// it. Custom AuthKit callbacks (slug present) keep the new behavior.
+		$result                 = workos()->api()->authenticate_with_code( $code, self::get_callback_url() );
+		$profile                = $this->resolve_callback_profile( $profile_slug );
+		$honor_profile_redirect = '' !== $profile_slug;
+		$outcome                = workos()->getContainer()->get( LoginCompleter::class )->complete(
+			$result,
+			$profile,
+			$redirect_to,
+			$honor_profile_redirect
+		);
 
 		if ( is_wp_error( $outcome ) ) {
 			wp_die(

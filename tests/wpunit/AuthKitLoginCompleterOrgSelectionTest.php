@@ -236,7 +236,6 @@ class AuthKitLoginCompleterOrgSelectionTest extends WPTestCase {
 			]
 		);
 		$this->assertIsInt( $existing_user_id );
-		update_user_meta( $existing_user_id, '_workos_user_id', 'user_legacy' );
 
 		$profile = $this->profile_with_org( 'org_pinned' );
 
@@ -263,6 +262,7 @@ class AuthKitLoginCompleterOrgSelectionTest extends WPTestCase {
 
 		$error = $this->org_selection_error(
 			[
+				'user_id'       => 'user_legacy',
 				'organizations' => [
 					[ 'id' => 'org_other', 'name' => 'Other' ],
 				],
@@ -299,7 +299,6 @@ class AuthKitLoginCompleterOrgSelectionTest extends WPTestCase {
 			]
 		);
 		$this->assertIsInt( $existing_user_id );
-		update_user_meta( $existing_user_id, '_workos_user_id', 'user_legacy' );
 
 		$profile = $this->profile_with_org( 'org_pinned' );
 
@@ -324,6 +323,7 @@ class AuthKitLoginCompleterOrgSelectionTest extends WPTestCase {
 
 		$error = $this->org_selection_error(
 			[
+				'user_id'       => 'user_legacy',
 				'organizations' => [
 					[ 'id' => 'org_other', 'name' => 'Other' ],
 				],
@@ -334,6 +334,44 @@ class AuthKitLoginCompleterOrgSelectionTest extends WPTestCase {
 
 		$this->assertIsArray( $result );
 		$this->assertSame( 'legacy@example.com', $result['user']['email'] );
+	}
+
+	/**
+	 * If a local WP user exists but WorkOS didn't include the authenticated
+	 * `user_id` in the error body, we refuse rather than guess via an
+	 * email lookup that can collide on shared addresses.
+	 */
+	public function test_refuses_self_heal_when_body_has_no_user_id(): void {
+		$existing_user_id = wp_insert_user(
+			[
+				'user_login' => 'legacy_user_no_uid',
+				'user_email' => 'legacy@example.com',
+				'user_pass'  => wp_generate_password(),
+				'role'       => 'subscriber',
+			]
+		);
+		$this->assertIsInt( $existing_user_id );
+
+		$profile = $this->profile_with_org( 'org_pinned' );
+
+		$error = $this->org_selection_error(
+			[
+				// no user_id
+				'organizations' => [
+					[ 'id' => 'org_other', 'name' => 'Other' ],
+				],
+			]
+		);
+
+		$result = $this->completer->complete( $error, $profile );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'workos_authkit_pinned_org_mismatch', $result->get_error_code() );
+		$this->assertSame( 403, $result->get_error_data()['status'] );
+
+		// No membership creation — we refuse before any write.
+		$this->assertSame( [], $this->membership_requests() );
+		$this->assertSame( [], $this->authenticate_requests() );
 	}
 
 	// -------------------------------------------------------------------------
@@ -382,6 +420,73 @@ class AuthKitLoginCompleterOrgSelectionTest extends WPTestCase {
 		$this->assertSame( 'workos_authkit_no_pinned_org', $result->get_error_code() );
 		$this->assertSame( 409, $result->get_error_data()['status'] );
 		$this->assertSame( [], $this->authenticate_requests() );
+	}
+
+	// -------------------------------------------------------------------------
+	// Honor-profile-redirect flag (legacy callback contract)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Profile has a post_login_redirect, but the caller (e.g. legacy
+	 * /workos/callback) opts out by passing $honor_profile_redirect = false.
+	 * The state-supplied redirect_to must win in that case.
+	 */
+	public function test_honor_profile_redirect_false_keeps_client_redirect(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'                => 'default',
+				'title'               => 'Default',
+				'post_login_redirect' => '/profile-target/',
+			]
+		);
+
+		$result = $this->completer->complete(
+			[
+				'user' => [
+					'id'    => 'user_redirect',
+					'email' => 'redirect@example.com',
+				],
+				'access_token'  => 'at_r',
+				'refresh_token' => 'rt_r',
+			],
+			$profile,
+			'/state-target/',
+			false
+		);
+
+		$this->assertIsArray( $result );
+		$this->assertStringContainsString( 'state-target', $result['redirect_to'] );
+		$this->assertStringNotContainsString( 'profile-target', $result['redirect_to'] );
+	}
+
+	/**
+	 * Default behavior (and AuthKit-REST callers): profile redirect still
+	 * wins.
+	 */
+	public function test_honor_profile_redirect_default_lets_profile_win(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'                => 'staff',
+				'title'               => 'Staff',
+				'post_login_redirect' => '/profile-target/',
+			]
+		);
+
+		$result = $this->completer->complete(
+			[
+				'user' => [
+					'id'    => 'user_redirect2',
+					'email' => 'redirect2@example.com',
+				],
+				'access_token'  => 'at_r',
+				'refresh_token' => 'rt_r',
+			],
+			$profile,
+			'/state-target/'
+		);
+
+		$this->assertIsArray( $result );
+		$this->assertStringContainsString( 'profile-target', $result['redirect_to'] );
 	}
 
 	// -------------------------------------------------------------------------
