@@ -7,6 +7,9 @@
 
 namespace WorkOS\Auth;
 
+use WorkOS\Auth\AuthKit\LoginCompleter;
+use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -240,52 +243,66 @@ class Login {
 			);
 		}
 
-		// Exchange code for user.
-		$result = workos()->api()->authenticate_with_code( $code, self::get_callback_url() );
+		// Exchange code for user. Route the response (success or WP_Error)
+		// through LoginCompleter so the AuthKit-style flows and this OAuth
+		// callback share the same `organization_selection_required`
+		// recovery, MFA gating, and post-login bookkeeping.
+		$result  = workos()->api()->authenticate_with_code( $code, self::get_callback_url() );
+		$profile = $this->resolve_callback_profile( $profile_slug );
+		$outcome = workos()->getContainer()->get( LoginCompleter::class )->complete( $result, $profile, $redirect_to );
 
-		if ( is_wp_error( $result ) ) {
+		if ( is_wp_error( $outcome ) ) {
 			wp_die(
-				esc_html( $result->get_error_message() ),
+				esc_html( $outcome->get_error_message() ),
 				esc_html__( 'Authentication Error', 'integration-workos' ),
 				[ 'response' => 403 ]
 			);
 		}
 
-		$workos_user = $result['user'] ?? $result;
-		$wp_user     = \WorkOS\Sync\UserSync::find_or_create_wp_user( $workos_user );
-
-		if ( is_wp_error( $wp_user ) ) {
+		// Step-up auth shouldn't normally surface here — the hosted UI runs
+		// MFA before issuing the code — but if WorkOS does return it,
+		// refuse rather than silently completing the login.
+		if ( ! empty( $outcome['mfa_required'] ) ) {
 			wp_die(
-				esc_html( $wp_user->get_error_message() ),
+				esc_html__( 'This login requires multi-factor authentication, which is not supported on the hosted callback. Try signing in from the login page.', 'integration-workos' ),
 				esc_html__( 'Authentication Error', 'integration-workos' ),
-				[ 'response' => 500 ]
+				[ 'response' => 403 ]
 			);
 		}
 
-		// Store WorkOS tokens.
-		self::store_tokens( $wp_user->ID, $result );
-
-		// Entitlement gate: deny login if user lacks active org membership.
-		\WorkOS\Organization\EntitlementGate::check( $wp_user->ID, $result );
-
-		/** This action is documented in Auth/Login.php */
-		do_action( 'workos_user_authenticated', $wp_user->ID, $result );
-
-		// Set WP auth cookie.
-		wp_set_auth_cookie( $wp_user->ID, true );
-		wp_set_current_user( $wp_user->ID );
-
-		/**
-		 * Fires on WP login.
-		 *
-		 * @param string   $user_login Username.
-		 * @param \WP_User $wp_user    User object.
-		 */
-		do_action( 'wp_login', $wp_user->user_login, $wp_user ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Firing core wp_login action.
-
-		$redirect_to = Redirect::resolve( $redirect_to, $wp_user );
-		wp_safe_redirect( $redirect_to );
+		wp_safe_redirect( (string) ( $outcome['redirect_to'] ?? admin_url() ) );
 		exit;
+	}
+
+	/**
+	 * Resolve a Profile for the OAuth callback.
+	 *
+	 * The state carries the originating profile slug for Custom AuthKit
+	 * flows. Legacy AuthKit-redirect callbacks have no slug — fall through
+	 * to the default profile so LoginCompleter still has profile-scoped
+	 * settings (org pin, MFA enforcement, post-login redirect) to evaluate.
+	 *
+	 * @param string $slug Profile slug from state, may be empty.
+	 *
+	 * @return Profile
+	 */
+	private function resolve_callback_profile( string $slug ): Profile {
+		$repository = workos()->getContainer()->get( ProfileRepository::class );
+		$profile    = '' !== $slug ? $repository->find_by_slug( $slug ) : null;
+
+		if ( ! $profile ) {
+			$profile = $repository->find_by_slug( Profile::DEFAULT_SLUG );
+		}
+
+		if ( ! $profile ) {
+			// Last-resort hydration so we never call into LoginCompleter
+			// with null. ProfileRepository auto-creates the default in
+			// normal installs; this guards against an admin that deleted it.
+			$repository->ensure_default();
+			$profile = $repository->find_by_slug( Profile::DEFAULT_SLUG );
+		}
+
+		return $profile;
 	}
 
 	/**

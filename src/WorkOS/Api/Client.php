@@ -291,6 +291,34 @@ class Client {
 	}
 
 	/**
+	 * Complete an authentication where WorkOS requires the user to pick an organization.
+	 *
+	 * Triggered when a prior authenticate call returned the
+	 * `organization_selection_required` error along with a
+	 * `pending_authentication_token` and a list of candidate organizations.
+	 *
+	 * @param string $pending_auth_token Pending authentication token returned from the prior auth.
+	 * @param string $organization_id    The chosen WorkOS organization ID.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function authenticate_with_organization_selection(
+		string $pending_auth_token,
+		string $organization_id
+	) {
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'client_id'                    => $this->client_id,
+				'client_secret'                => $this->api_key,
+				'grant_type'                   => 'urn:workos:oauth:grant-type:organization-selection',
+				'pending_authentication_token' => $pending_auth_token,
+				'organization_id'              => $organization_id,
+			]
+		);
+	}
+
+	/**
 	 * Exchange a refresh token for a new access token.
 	 *
 	 * Used by both the server-side token refresh in REST\TokenAuth and by the
