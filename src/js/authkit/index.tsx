@@ -32,7 +32,12 @@ function parseConfig( root: HTMLElement ): AppProps {
 		branding: rawProfile.branding ?? {
 			logo_mode: 'default',
 			logo_attachment_id: 0,
-			primary_color: '',
+			page_background: '',
+			card_background: '',
+			card_border: '',
+			button_background: '',
+			button_text: '',
+			links_color: '',
 			heading: '',
 			subheading: '',
 		},

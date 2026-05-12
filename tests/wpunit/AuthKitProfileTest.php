@@ -132,17 +132,23 @@ class AuthKitProfileTest extends WPTestCase {
 	}
 
 	/**
-	 * Non-hex primary colors are stripped.
+	 * Non-hex color values are stripped for all branding color fields.
 	 */
-	public function test_from_array_rejects_non_hex_primary_color(): void {
+	public function test_from_array_rejects_non_hex_colors(): void {
 		$profile = Profile::from_array(
 			[
 				'slug'     => 'partner',
-				'branding' => [ 'primary_color' => 'red' ],
+				'branding' => [
+					'page_background'   => 'red',
+					'button_background' => 'blue',
+					'links_color'       => 'not-a-color',
+				],
 			]
 		);
 
-		$this->assertSame( '', $profile->get_branding()['primary_color'] );
+		$this->assertSame( '', $profile->get_branding()['page_background'] );
+		$this->assertSame( '', $profile->get_branding()['button_background'] );
+		$this->assertSame( '', $profile->get_branding()['links_color'] );
 	}
 
 	/**
@@ -200,7 +206,9 @@ class AuthKitProfileTest extends WPTestCase {
 			'branding'            => [
 				'logo_mode'          => Profile::LOGO_MODE_CUSTOM,
 				'logo_attachment_id' => 99,
-				'primary_color'      => '#ff0066',
+				'page_background'    => '#1e1004',
+				'button_background'  => '#ff0066',
+				'links_color'        => '#ff0066',
 				'heading'            => 'Welcome',
 				'subheading'         => 'Back',
 			],
@@ -219,7 +227,9 @@ class AuthKitProfileTest extends WPTestCase {
 		$this->assertFalse( $serialized['signup']['require_invite'] );
 		$this->assertSame( Profile::MFA_ENFORCE_ALWAYS, $serialized['mfa']['enforce'] );
 		$this->assertSame( [ Profile::FACTOR_TOTP, Profile::FACTOR_SMS ], $serialized['mfa']['factors'] );
-		$this->assertSame( '#ff0066', $serialized['branding']['primary_color'] );
+		$this->assertSame( '#1e1004', $serialized['branding']['page_background'] );
+		$this->assertSame( '#ff0066', $serialized['branding']['button_background'] );
+		$this->assertSame( '#ff0066', $serialized['branding']['links_color'] );
 		$this->assertSame( '/dashboard', $serialized['post_login_redirect'] );
 		$this->assertSame( Profile::MODE_CUSTOM, $serialized['mode'] );
 	}

@@ -34,7 +34,19 @@ export interface ProfileBranding {
 	logo_mode: LogoMode;
 	logo_attachment_id: number;
 	logo_url?: string;
-	primary_color: string;
+	card_border_radius: string;
+	button_border_radius: string;
+	page_background: string;
+	card_background: string;
+	card_border: string;
+	heading_color: string;
+	subheading_color: string;
+	button_background: string;
+	button_text: string;
+	secondary_button_background: string;
+	secondary_button_text: string;
+	secondary_button_border: string;
+	links_color: string;
 	heading: string;
 	subheading: string;
 }
