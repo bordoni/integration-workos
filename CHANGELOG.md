@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.0.3] - 2026-05-12
+
+### Fixed
+
+- **`organization_selection_required` recovery** — AuthKit login flows
+  (magic code, password, MFA verify, invitation accept) now recover
+  transparently when WorkOS responds with the
+  `organization_selection_required` error. `LoginCompleter::complete()`
+  accepts the WP_Error directly, looks up the Profile's pinned
+  `organization_id` (falling back to `Config::get_organization_id()`),
+  and re-authenticates via the
+  `urn:workos:oauth:grant-type:organization-selection` grant. Users no
+  longer see the WorkOS-side "The user must choose an organization to
+  finish their authentication." message when their Login Profile has
+  an org pinned.
+- **Auto-enroll for legacy users** — when the pinned org is missing
+  from WorkOS's candidate list AND a matching local WP user already
+  exists, the plugin self-heals by creating the WorkOS organization
+  membership (`POST /user_management/organization_memberships`) and
+  retrying the org-selection grant. The flow strictly requires the
+  authenticated `user_id` to be present in the WorkOS error body — if
+  it's absent (or no matching WP user exists), the request is rejected
+  with `workos_authkit_pinned_org_mismatch` instead of guessing via an
+  email lookup that can collide on shared addresses. Successful
+  enrollments and `entity_already_exists` short-circuits are logged
+  via `workos_log()` so prod incidents have a breadcrumb.
+- **OAuth callback shares the recovery** — `/workos/callback`
+  (`Login::handle_callback`) now routes the `authenticate_with_code`
+  result through `LoginCompleter::complete()`, so it gets the same
+  `organization_selection_required` recovery, MFA gating, and
+  post-login bookkeeping as the AuthKit REST endpoints. Legacy
+  AuthKit-redirect callbacks (no profile slug in `state`) pass the
+  new `$honor_profile_redirect = false` flag so the state-supplied
+  `redirect_to` still wins — the default profile's
+  `post_login_redirect` will not silently override it for that flow.
+
+### Tests
+
+- Adds `AuthKitLoginCompleterOrgSelectionTest` (9 wpunit cases)
+  covering the recovery branches: silent retry when the pinned org is
+  in the candidate list, self-heal via membership creation for
+  pre-existing WP users, idempotent `entity_already_exists` handling,
+  refusal when the error body omits `user_id`, refusal when no
+  matching WP user exists, the no-pinned-org bail, the legacy
+  `$honor_profile_redirect = false` contract, the default
+  profile-wins contract, and pass-through of unrelated WorkOS errors.
+  Plus a Client-level case asserting the new
+  `authenticate_with_organization_selection` grant body.
+
 ## [1.0.2] - 2026-05-11
 
 ### Added

@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,12 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.3 - 2026-05-12 =
+
+* Fix: AuthKit login flows now recover transparently from WorkOS `organization_selection_required`. When the Login Profile has an organization pinned (with `Config::get_organization_id()` as a fallback), the plugin re-authenticates via the `organization-selection` grant instead of surfacing "The user must choose an organization to finish their authentication." to the user.
+* Fix: pre-existing WordPress users who joined before an organization was pinned are now auto-enrolled into the pinned WorkOS organization. The plugin creates the WorkOS membership and retries the authenticate call when (and only when) a matching local WP user exists and the WorkOS error body carries the authenticated `user_id`. Membership creation and the `entity_already_exists` short-circuit are logged via `workos_log()` (visible under `WP_DEBUG` / `WORKOS_DEBUG`). Strangers and ambiguous lookups still get a clean `pinned_org_mismatch` error — no email-lookup guessing.
+* Fix: the legacy OAuth callback at `/workos/callback` now routes through `LoginCompleter`, so it shares the same `organization_selection_required` recovery, MFA gating, and post-login bookkeeping as the AuthKit REST endpoints. The callback no longer short-circuits on the WorkOS error and discards the OAuth code. Legacy AuthKit-redirect callbacks (no profile slug in `state`) keep their original redirect contract — the state-supplied `redirect_to` still wins over the default profile's `post_login_redirect`.
+
 = 1.0.2 - 2026-05-11 =
 
 * New: WordPress password fallback — if WorkOS rejects a password, the auth endpoint can retry against WordPress's own `wp_authenticate()` to cover users whose passwords were never synced to WorkOS, then link the user to WorkOS and (by default) write the password through so future logins authenticate directly. A new "Require Email Confirmation on Fallback" setting switches the post-fallback step to a magic-code email instead of syncing the plaintext password. Gated by the existing `allow_password_fallback` toggle.
@@ -231,6 +237,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.3 =
+Fixes "The user must choose an organization to finish their authentication." for AuthKit logins and the `/workos/callback` flow. When a Login Profile has an organization pinned, the plugin completes the authenticate call via the `organization-selection` grant transparently, and auto-enrolls pre-existing WordPress users into the pinned WorkOS organization (matching emails only — strangers still get rejected).
 
 = 1.0.2 =
 Adds a WordPress-password fallback for the AuthKit password flow (with an optional email-confirmation step) so accounts that pre-date the WorkOS integration can keep logging in, and adds a `wp-config.php` constant seeder for all major settings. Also renames the auth REST nonce header from `X-WP-Nonce` to `X-WorkOS-Nonce` — external clients calling `/wp-json/workos/v1/auth/*` directly need to update the header name.
