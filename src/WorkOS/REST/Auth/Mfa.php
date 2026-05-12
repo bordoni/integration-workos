@@ -225,10 +225,9 @@ class Mfa extends BaseEndpoint {
 			$this->get_radar_token( $request )
 		);
 
-		if ( is_wp_error( $workos_response ) ) {
-			return $workos_response;
-		}
-
+		// `complete()` handles the `organization_selection_required` error
+		// transparently when the profile has a pinned org. Pass the WP_Error
+		// through so it can decide.
 		$result = $this->login_completer->complete(
 			$workos_response,
 			$profile,

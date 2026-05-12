@@ -9,6 +9,7 @@ namespace WorkOS\Auth\AuthKit;
 
 use WorkOS\Auth\Login;
 use WorkOS\Auth\Redirect;
+use WorkOS\Config;
 use WorkOS\Organization\EntitlementGate;
 use WorkOS\Sync\UserSync;
 use WP_Error;
@@ -49,9 +50,14 @@ class LoginCompleter {
 	/**
 	 * Complete a login or surface the next step.
 	 *
-	 * @param array   $workos_response Response body from the WorkOS authenticate endpoint.
-	 * @param Profile $profile         Active Login Profile.
-	 * @param string  $redirect_to     Client-requested redirect (validated).
+	 * Accepts either the parsed WorkOS authenticate response (array) or the
+	 * `WP_Error` returned by the API client. WorkOS surfaces the "user must
+	 * choose an organization" path as an error with `organization_selection_required`,
+	 * so the same method needs to be able to recover from that error.
+	 *
+	 * @param array|WP_Error $workos_response Response body from the WorkOS authenticate endpoint, or the WP_Error wrapping a WorkOS error response.
+	 * @param Profile        $profile         Active Login Profile.
+	 * @param string         $redirect_to     Client-requested redirect (validated).
 	 *
 	 * @return array|WP_Error
 	 *   On success: {
@@ -64,7 +70,21 @@ class LoginCompleter {
 	 *     'factors'                      => array,
 	 *   }
 	 */
-	public function complete( array $workos_response, Profile $profile, string $redirect_to = '' ) {
+	public function complete( $workos_response, Profile $profile, string $redirect_to = '' ) {
+		// WorkOS returns `organization_selection_required` when the
+		// authenticate call resolves to a user that belongs to multiple
+		// orgs without an org context. If this profile (or the global
+		// setting) has an org pinned, complete transparently via the
+		// organization-selection grant. With no pinned org we bail with a
+		// clear error — there is no in-shell org picker by design.
+		if ( is_wp_error( $workos_response ) ) {
+			$resolved = $this->maybe_resolve_organization_selection( $workos_response, $profile );
+			if ( is_wp_error( $resolved ) ) {
+				return $resolved;
+			}
+			$workos_response = $resolved;
+		}
+
 		// WorkOS signals a required second factor by returning a pending
 		// authentication token and/or an authentication_factor. Hand that
 		// state back to the React shell so it can run the MFA challenge
@@ -202,5 +222,151 @@ class LoginCompleter {
 		}
 
 		return [];
+	}
+
+	/**
+	 * Attempt to recover from a WorkOS `organization_selection_required` error.
+	 *
+	 * Returns one of:
+	 *  - the fresh authenticate response (array) when a pinned org was found
+	 *    and the follow-up grant succeeded — caller should treat this as the
+	 *    new `$workos_response` and continue;
+	 *  - the original WP_Error untouched, if the error wasn't an
+	 *    org-selection prompt;
+	 *  - a WP_Error from the follow-up authenticate call if that fails;
+	 *  - a `workos_authkit_no_pinned_org` WP_Error when WorkOS demands org
+	 *    selection but neither the profile nor the global config has an org
+	 *    pinned (there is no in-shell picker).
+	 *
+	 * @param WP_Error $error   Error returned by the prior authenticate call.
+	 * @param Profile  $profile Active Login Profile.
+	 *
+	 * @return array|WP_Error
+	 */
+	private function maybe_resolve_organization_selection( WP_Error $error, Profile $profile ) {
+		$data = $error->get_error_data();
+		$body = is_array( $data ) && isset( $data['body'] ) && is_array( $data['body'] ) ? $data['body'] : [];
+
+		$code = (string) ( $body['code'] ?? '' );
+		if ( 'organization_selection_required' !== $code ) {
+			return $error;
+		}
+
+		$pending_token = (string) ( $body['pending_authentication_token'] ?? '' );
+		if ( '' === $pending_token ) {
+			return $error;
+		}
+
+		$pinned_org = $profile->get_organization_id();
+		if ( '' === $pinned_org ) {
+			$pinned_org = (string) Config::get_organization_id();
+		}
+
+		if ( '' === $pinned_org ) {
+			return new WP_Error(
+				'workos_authkit_no_pinned_org',
+				__( 'This account belongs to multiple organizations. Pin an organization on the Login Profile to continue.', 'integration-workos' ),
+				[ 'status' => 409 ]
+			);
+		}
+
+		// If the pinned org is not in the candidate list, the user isn't yet
+		// a member. For pre-existing WP users (legacy accounts created
+		// before the org pin was set up) we self-heal by creating the
+		// membership in WorkOS and retrying — this matches the intent of
+		// pinning an org to a Login Profile.
+		$organizations = isset( $body['organizations'] ) && is_array( $body['organizations'] ) ? $body['organizations'] : [];
+		if ( ! empty( $organizations ) ) {
+			$ids = array_filter(
+				array_map(
+					static function ( $org ) {
+						return is_array( $org ) ? (string) ( $org['id'] ?? '' ) : '';
+					},
+					$organizations
+				)
+			);
+			if ( ! in_array( $pinned_org, $ids, true ) ) {
+				$attached = $this->attach_existing_user_to_org( $body, $pinned_org );
+				if ( is_wp_error( $attached ) ) {
+					return $attached;
+				}
+			}
+		}
+
+		return workos()->api()->authenticate_with_organization_selection( $pending_token, $pinned_org );
+	}
+
+	/**
+	 * Add an existing user to the pinned organization in WorkOS.
+	 *
+	 * Self-heals legacy users who pre-date the org pin on the Login Profile:
+	 * if the email in the org-selection error already maps to a WP user, we
+	 * create the WorkOS membership against the pinned org so the follow-up
+	 * organization-selection grant can complete.
+	 *
+	 * @param array  $body       Decoded error body from WorkOS — contains email and possibly user_id.
+	 * @param string $pinned_org Pinned WorkOS organization ID.
+	 *
+	 * @return true|WP_Error true when the membership exists (or was just created); WP_Error when we
+	 *                       refuse to self-heal (no matching local user) or the API call failed.
+	 */
+	private function attach_existing_user_to_org( array $body, string $pinned_org ) {
+		$email = (string) ( $body['email'] ?? '' );
+		if ( '' === $email ) {
+			return new WP_Error(
+				'workos_authkit_pinned_org_mismatch',
+				__( 'This account is not a member of the organization pinned to this login.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
+		$wp_user = get_user_by( 'email', $email );
+		if ( ! $wp_user ) {
+			return new WP_Error(
+				'workos_authkit_pinned_org_mismatch',
+				__( 'This account is not a member of the organization pinned to this login.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
+		// Prefer the user_id WorkOS already gave us; fall back to local
+		// meta (set on prior successful logins); last resort, look it up by
+		// email so brand-new linkages still work.
+		$workos_user_id = (string) ( $body['user_id'] ?? '' );
+		if ( '' === $workos_user_id ) {
+			$workos_user_id = (string) get_user_meta( $wp_user->ID, '_workos_user_id', true );
+		}
+		if ( '' === $workos_user_id ) {
+			$lookup = workos()->api()->list_users(
+				[
+					'email' => $email,
+					'limit' => 1,
+				]
+			);
+			if ( ! is_wp_error( $lookup ) && ! empty( $lookup['data'][0]['id'] ) ) {
+				$workos_user_id = (string) $lookup['data'][0]['id'];
+			}
+		}
+
+		if ( '' === $workos_user_id ) {
+			return new WP_Error(
+				'workos_authkit_pinned_org_mismatch',
+				__( 'This account is not a member of the organization pinned to this login.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
+		$membership = workos()->api()->create_organization_membership( $workos_user_id, $pinned_org );
+		if ( is_wp_error( $membership ) ) {
+			$membership_data = $membership->get_error_data();
+			$membership_body = is_array( $membership_data ) && isset( $membership_data['body'] ) && is_array( $membership_data['body'] ) ? $membership_data['body'] : [];
+			// A duplicate-membership response means we're already good to retry.
+			if ( 'entity_already_exists' === (string) ( $membership_body['code'] ?? '' ) ) {
+				return true;
+			}
+			return $membership;
+		}
+
+		return true;
 	}
 }
