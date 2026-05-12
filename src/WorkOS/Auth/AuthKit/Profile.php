@@ -313,7 +313,7 @@ class Profile {
 			return ( '' !== $value && preg_match( '/^#[0-9a-fA-F]{3,8}$/', $value ) ) ? $value : '';
 		};
 
-		$sanitize_radius = static function ( string $v ): string {
+		$sanitize_radius             = static function ( string $v ): string {
 			$v = trim( $v );
 			return ( '' !== $v && ctype_digit( $v ) ) ? $v : '';
 		};
