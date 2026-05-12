@@ -183,6 +183,25 @@ class ApiClientAuthKitTest extends WPTestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// Organization selection grant
+	// -------------------------------------------------------------------------
+
+	public function test_authenticate_with_organization_selection_uses_grant(): void {
+		$this->client->authenticate_with_organization_selection( 'pat_select', 'org_01ABC' );
+
+		$request = $this->last_request();
+		$this->assertSame( 'POST', $request['method'] );
+		$this->assertStringContainsString( '/user_management/authenticate', $request['url'] );
+
+		$body = $this->last_body_json();
+		$this->assertSame( 'urn:workos:oauth:grant-type:organization-selection', $body['grant_type'] );
+		$this->assertSame( 'pat_select', $body['pending_authentication_token'] );
+		$this->assertSame( 'org_01ABC', $body['organization_id'] );
+		$this->assertSame( 'client_test_fake', $body['client_id'] );
+		$this->assertSame( 'sk_test_fake', $body['client_secret'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// Refresh
 	// -------------------------------------------------------------------------
 
