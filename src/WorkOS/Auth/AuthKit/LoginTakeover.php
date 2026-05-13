@@ -157,11 +157,6 @@ class LoginTakeover {
 			return false;
 		}
 
-		// Don't fight the "you've been logged out" screen — users need to see it.
-		if ( ! empty( SuperGlobals::get_get_var( 'loggedout' ) ) ) {
-			return false;
-		}
-
 		// Plugin-level escape hatch.
 		if ( class_exists( LoginBypass::class ) && LoginBypass::is_active() ) {
 			return false;
