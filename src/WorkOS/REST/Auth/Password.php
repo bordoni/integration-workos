@@ -349,13 +349,21 @@ class Password extends BaseEndpoint {
 	 * @return string
 	 */
 	private function build_password_reset_url( Profile $profile ): string {
-		return add_query_arg(
+		$url = add_query_arg(
 			[
 				'workos_action' => 'reset-password',
 				'profile'       => $profile->get_slug(),
 			],
 			wp_login_url()
 		);
+
+		// `wp_login_url()` flows through the `login_url` and `home_url`
+		// filters; third-party plugins occasionally pipe those through
+		// `esc_url()`, which encodes `&` as `&amp;`. WorkOS pastes our URL
+		// into the reset email verbatim, so an HTML-escaped separator
+		// arrives in the recipient's inbox as `&amp;`. Decode defensively
+		// so the URL we hand WorkOS always uses literal `&`.
+		return htmlspecialchars_decode( $url, ENT_QUOTES | ENT_HTML5 );
 	}
 
 	/**
