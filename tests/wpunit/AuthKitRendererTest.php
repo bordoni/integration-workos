@@ -423,10 +423,17 @@ class AuthKitRendererTest extends WPTestCase {
 	}
 
 	/**
-	 * `?loggedout=true` keeps the user on /wp-login.php for the standard
-	 * "you've been logged out" message — no redirect.
+	 * `?loggedout=true` must not bypass the takeover — customers landing on
+	 * /wp/wp-login.php?loggedout=true (e.g. via the admin-bar Log Out link)
+	 * should be redirected to the profile's custom path like any other
+	 * `action=login` visit. The native "you have been logged out" screen
+	 * advertises wp-login's password field, which legacy customers misread
+	 * as a working password sign-in.
+	 *
+	 * The loggedout arg rides along to /login/ for free via the standard
+	 * GET-arg forwarding; the React form is free to ignore it.
 	 */
-	public function test_takeover_does_not_redirect_when_loggedout_query_present(): void {
+	public function test_takeover_redirects_when_loggedout_query_present(): void {
 		$this->bootstrap_workos_enabled();
 		$default = $this->repository->ensure_default();
 		$this->repository->save(
@@ -437,7 +444,9 @@ class AuthKitRendererTest extends WPTestCase {
 
 		$captured = $this->run_takeover_capturing_redirect( [ 'loggedout' => 'true' ] );
 
-		$this->assertNull( $captured, '?loggedout must short-circuit the takeover.' );
+		$this->assertNotNull( $captured, '?loggedout must no longer short-circuit the takeover.' );
+		$this->assertStringStartsWith( home_url( '/login/' ), $captured );
+		$this->assertStringContainsString( 'loggedout=true', $captured );
 	}
 
 	/**

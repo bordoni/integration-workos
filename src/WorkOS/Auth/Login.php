@@ -74,11 +74,6 @@ class Login {
 			return;
 		}
 
-		// Allow the "You have been logged out" screen to display.
-		if ( ! empty( SuperGlobals::get_get_var( 'loggedout' ) ) ) {
-			return;
-		}
-
 		// Allow fallback login with ?fallback=1.
 		if ( ! empty( SuperGlobals::get_get_var( 'fallback' ) ) && workos()->option( 'allow_password_fallback', true ) ) {
 			return;
