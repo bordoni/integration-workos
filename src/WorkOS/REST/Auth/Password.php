@@ -349,12 +349,19 @@ class Password extends BaseEndpoint {
 	 * @return string
 	 */
 	private function build_password_reset_url( Profile $profile ): string {
+		// `wp_login_url()` runs through the `login_url`/`home_url` filters,
+		// which a host-site filter escapes (`&` → `&amp;` or `&#038;`).
+		// Decode before `add_query_arg()`, not after: `add_query_arg()`
+		// reads the `#` in `&#038;` as a fragment delimiter and shears the
+		// rest of the query off the URL. WorkOS emails the URL verbatim.
+		$login_url = html_entity_decode( wp_login_url(), ENT_QUOTES | ENT_HTML5 );
+
 		return add_query_arg(
 			[
 				'workos_action' => 'reset-password',
 				'profile'       => $profile->get_slug(),
 			],
-			wp_login_url()
+			$login_url
 		);
 	}
 
