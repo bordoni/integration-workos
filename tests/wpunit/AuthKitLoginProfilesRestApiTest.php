@@ -232,6 +232,99 @@ class AuthKitLoginProfilesRestApiTest extends WPTestCase {
 	}
 
 	/**
+	 * Unchecking an auth method actually drops it.
+	 *
+	 * Regression: array_replace_recursive merges numeric-indexed arrays by
+	 * key, so a shorter `methods` payload used to leave the dropped entry
+	 * sitting at the trailing index of the existing array. Saving in the
+	 * editor would appear to do nothing.
+	 */
+	public function test_update_methods_payload_replaces_existing(): void {
+		$this->become_admin();
+
+		$saved = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'    => 'members',
+					'title'   => 'Members',
+					'methods' => [ Profile::METHOD_PASSWORD, Profile::METHOD_MAGIC_CODE, Profile::METHOD_OAUTH_GOOGLE ],
+				]
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		// Drop oauth_google.
+		$response = $this->dispatch(
+			'PUT',
+			self::ROUTE_BASE . '/' . $saved->get_id(),
+			[ 'methods' => [ Profile::METHOD_PASSWORD, Profile::METHOD_MAGIC_CODE ] ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			[ Profile::METHOD_PASSWORD, Profile::METHOD_MAGIC_CODE ],
+			$response->get_data()['methods']
+		);
+
+		// Re-read from the repository so we exercise the persisted state,
+		// not just the response shape.
+		$reloaded = $this->repository->find_by_id( $saved->get_id() );
+		$this->assertSame(
+			[ Profile::METHOD_PASSWORD, Profile::METHOD_MAGIC_CODE ],
+			$reloaded->get_methods()
+		);
+	}
+
+	/**
+	 * Unchecking an MFA factor actually drops it.
+	 *
+	 * Same regression class as methods — `mfa.factors` is a nested
+	 * numerically-indexed array and was equally affected.
+	 */
+	public function test_update_mfa_factors_payload_replaces_existing(): void {
+		$this->become_admin();
+
+		$saved = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'  => 'members',
+					'title' => 'Members',
+					'mfa'   => [
+						'enforce' => Profile::MFA_ENFORCE_IF_REQUIRED,
+						'factors' => [ Profile::FACTOR_TOTP, Profile::FACTOR_SMS, Profile::FACTOR_WEBAUTHN ],
+					],
+				]
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+
+		// Drop webauthn.
+		$response = $this->dispatch(
+			'PUT',
+			self::ROUTE_BASE . '/' . $saved->get_id(),
+			[
+				'mfa' => [
+					'factors' => [ Profile::FACTOR_TOTP, Profile::FACTOR_SMS ],
+				],
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			[ Profile::FACTOR_TOTP, Profile::FACTOR_SMS ],
+			$response->get_data()['mfa']['factors']
+		);
+		// Sibling `enforce` was untouched and must survive the partial merge.
+		$this->assertSame( Profile::MFA_ENFORCE_IF_REQUIRED, $response->get_data()['mfa']['enforce'] );
+
+		$reloaded = $this->repository->find_by_id( $saved->get_id() );
+		$this->assertSame(
+			[ Profile::FACTOR_TOTP, Profile::FACTOR_SMS ],
+			$reloaded->get_mfa()['factors']
+		);
+	}
+
+	/**
 	 * PUT on the default profile cannot change the reserved slug.
 	 */
 	public function test_update_protects_default_slug(): void {

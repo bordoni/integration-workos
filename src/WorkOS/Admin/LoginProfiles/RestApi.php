@@ -239,6 +239,23 @@ class RestApi {
 		$merged       = array_replace_recursive( $existing->to_array(), $params );
 		$merged['id'] = $id;
 
+		// array_replace_recursive merges numerically-indexed arrays by key
+		// and never removes entries that exist in the base but are absent
+		// from the override. For checkbox-group lists (`methods`,
+		// `mfa.factors`) that means unchecking an option silently fails:
+		// the React editor sends a shorter array, but the dropped value
+		// survives at the trailing index. Overwrite list-type fields
+		// explicitly so a shorter payload actually removes entries.
+		// array_key_exists() rather than isset() so the "uncheck everything"
+		// case (empty array) is honored; Profile::from_array() will fall
+		// back to its own defaults from there.
+		if ( array_key_exists( 'methods', $params ) ) {
+			$merged['methods'] = (array) $params['methods'];
+		}
+		if ( isset( $params['mfa'] ) && is_array( $params['mfa'] ) && array_key_exists( 'factors', $params['mfa'] ) ) {
+			$merged['mfa']['factors'] = (array) $params['mfa']['factors'];
+		}
+
 		// Protect the reserved default slug from being renamed out from under
 		// the wp-login.php takeover. The default profile MAY own a custom_path
 		// (which makes the takeover redirect to /custom-path instead of
