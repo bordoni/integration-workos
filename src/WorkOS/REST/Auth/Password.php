@@ -357,12 +357,9 @@ class Password extends BaseEndpoint {
 			wp_login_url()
 		);
 
-		// `wp_login_url()` flows through the `login_url` and `home_url`
-		// filters; third-party plugins occasionally pipe those through
-		// `esc_url()`, which encodes `&` as `&amp;`. WorkOS pastes our URL
-		// into the reset email verbatim, so an HTML-escaped separator
-		// arrives in the recipient's inbox as `&amp;`. Decode defensively
-		// so the URL we hand WorkOS always uses literal `&`.
+		// `wp_login_url()` runs through the `login_url`/`home_url` filters,
+		// which a third-party plugin escapes via `esc_url()` (`&` → `&amp;`).
+		// WorkOS emails the URL verbatim, so decode before handing it over.
 		return htmlspecialchars_decode( $url, ENT_QUOTES | ENT_HTML5 );
 	}
 

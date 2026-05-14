@@ -421,11 +421,8 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	}
 
 	/**
-	 * URLs sent to WorkOS must use literal `&` separators, even if an
-	 * upstream filter HTML-escapes `wp_login_url()`. WorkOS pastes the
-	 * URL into the reset email verbatim, so an escaped separator would
-	 * land in customers' inboxes as `&amp;`. The endpoint defensively
-	 * decodes HTML entities before posting to WorkOS.
+	 * URLs sent to WorkOS use literal `&`, even when an upstream filter
+	 * HTML-escapes `wp_login_url()` — WorkOS emails the URL verbatim.
 	 */
 	public function test_reset_start_sends_url_with_unescaped_ampersands(): void {
 		$escape_login_url = static function (): string {
