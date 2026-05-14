@@ -291,10 +291,22 @@ class Renderer {
 		}
 
 		$resolved = [
-			'logo_url'      => $logo_url,
-			'primary_color' => (string) ( $branding['primary_color'] ?? '' ),
-			'heading'       => (string) ( $branding['heading'] ?? '' ),
-			'subheading'    => (string) ( $branding['subheading'] ?? '' ),
+			'logo_url'                    => $logo_url,
+			'card_border_radius'          => (string) ( $branding['card_border_radius'] ?? '' ),
+			'button_border_radius'        => (string) ( $branding['button_border_radius'] ?? '' ),
+			'page_background'             => (string) ( $branding['page_background'] ?? '' ),
+			'card_background'             => (string) ( $branding['card_background'] ?? '' ),
+			'card_border'                 => (string) ( $branding['card_border'] ?? '' ),
+			'heading_color'               => (string) ( $branding['heading_color'] ?? '' ),
+			'subheading_color'            => (string) ( $branding['subheading_color'] ?? '' ),
+			'button_background'           => (string) ( $branding['button_background'] ?? '' ),
+			'button_text'                 => (string) ( $branding['button_text'] ?? '' ),
+			'secondary_button_background' => (string) ( $branding['secondary_button_background'] ?? '' ),
+			'secondary_button_text'       => (string) ( $branding['secondary_button_text'] ?? '' ),
+			'secondary_button_border'     => (string) ( $branding['secondary_button_border'] ?? '' ),
+			'links_color'                 => (string) ( $branding['links_color'] ?? '' ),
+			'heading'                     => (string) ( $branding['heading'] ?? '' ),
+			'subheading'                  => (string) ( $branding['subheading'] ?? '' ),
 		];
 
 		/**
@@ -323,28 +335,95 @@ class Renderer {
 	private function branding_style_tag( array $branding ): string {
 		$rules = [];
 
-		// Re-validate the primary color as defense-in-depth. Profile::from_array
-		// already regex-matches it against a hex pattern on save, but this
-		// renderer is the last line before raw emission into a CSS context
-		// where `esc_attr` is semantically wrong. Enforcing the same regex
-		// here guarantees that whatever arrives in $branding — now or from
-		// future call sites — cannot introduce a semicolon, closing brace,
-		// or `</style>` sequence.
-		$primary = (string) ( $branding['primary_color'] ?? '' );
-		if ( '' !== $primary && preg_match( '/^#[0-9a-fA-F]{3,8}$/', $primary ) ) {
-			// A custom primary drops the matching WP-blue hover, so override
-			// hover to the same color. Deriving a darker shade would require
-			// a color-math utility and is not worth the added surface area;
-			// a flat hover reads cleanly enough for a branded palette.
-			$rules[] = '--wa-primary: ' . $primary . ';';
-			$rules[] = '--wa-primary-hover: ' . $primary . ';';
+		// Re-validate colors as defense-in-depth. Profile::from_array already
+		// regex-matches them on save, but this is the last line before raw
+		// emission into a CSS context. Enforcing the same regex here ensures
+		// no semicolon, closing brace, or </style> can be injected regardless
+		// of call site.
+		$valid_hex = static function ( string $v ): bool {
+			return '' !== $v && (bool) preg_match( '/^#[0-9a-fA-F]{3,8}$/', $v );
+		};
+
+		$card_radius  = (string) ( $branding['card_border_radius'] ?? '' );
+		$btn_radius   = (string) ( $branding['button_border_radius'] ?? '' );
+		$page_bg      = (string) ( $branding['page_background'] ?? '' );
+		$card_bg      = (string) ( $branding['card_background'] ?? '' );
+		$card_bdr     = (string) ( $branding['card_border'] ?? '' );
+		$heading_clr  = (string) ( $branding['heading_color'] ?? '' );
+		$sub_clr      = (string) ( $branding['subheading_color'] ?? '' );
+		$btn_bg       = (string) ( $branding['button_background'] ?? '' );
+		$btn_text     = (string) ( $branding['button_text'] ?? '' );
+		$sec_btn_bg   = (string) ( $branding['secondary_button_background'] ?? '' );
+		$sec_btn_text = (string) ( $branding['secondary_button_text'] ?? '' );
+		$sec_btn_bdr  = (string) ( $branding['secondary_button_border'] ?? '' );
+		$links        = (string) ( $branding['links_color'] ?? '' );
+
+		if ( '' !== $card_radius && ctype_digit( $card_radius ) ) {
+			$rules[] = '--wa-card-radius:' . (int) $card_radius . 'px;';
 		}
 
-		if ( empty( $rules ) ) {
-			return '';
+		if ( '' !== $btn_radius && ctype_digit( $btn_radius ) ) {
+			$rules[] = '--wa-btn-radius:' . (int) $btn_radius . 'px;';
 		}
 
-		return '<style>#workos-authkit-root{' . implode( ' ', $rules ) . '}</style>';
+		// Page background targets the takeover body, not the root widget.
+		$body_rules = [];
+		if ( $valid_hex( $page_bg ) ) {
+			$body_rules[] = 'background:' . $page_bg . ';';
+		}
+
+		if ( $valid_hex( $card_bg ) ) {
+			$rules[] = '--wa-surface:' . $card_bg . ';';
+		}
+
+		if ( $valid_hex( $card_bdr ) ) {
+			$rules[] = '--wa-card-border:' . $card_bdr . ';';
+		}
+
+		if ( $valid_hex( $heading_clr ) ) {
+			$rules[] = '--wa-heading-color:' . $heading_clr . ';';
+		}
+
+		if ( $valid_hex( $sub_clr ) ) {
+			$rules[] = '--wa-subheading-color:' . $sub_clr . ';';
+		}
+
+		if ( $valid_hex( $btn_bg ) ) {
+			// A custom button color drops the matching WP-blue hover; use the
+			// same value for hover (flat) rather than deriving a darker shade.
+			$rules[] = '--wa-primary:' . $btn_bg . ';';
+			$rules[] = '--wa-primary-hover:' . $btn_bg . ';';
+		}
+
+		if ( $valid_hex( $btn_text ) ) {
+			$rules[] = '--wa-primary-fg:' . $btn_text . ';';
+		}
+
+		if ( $valid_hex( $sec_btn_bg ) ) {
+			$rules[] = '--wa-secondary-bg:' . $sec_btn_bg . ';';
+		}
+
+		if ( $valid_hex( $sec_btn_text ) ) {
+			$rules[] = '--wa-secondary-fg:' . $sec_btn_text . ';';
+		}
+
+		if ( $valid_hex( $sec_btn_bdr ) ) {
+			$rules[] = '--wa-secondary-border:' . $sec_btn_bdr . ';';
+		}
+
+		if ( $valid_hex( $links ) ) {
+			$rules[] = '--wa-links:' . $links . ';';
+		}
+
+		$out = '';
+		if ( ! empty( $body_rules ) ) {
+			$out .= '<style>body.workos-authkit-body{' . implode( ' ', $body_rules ) . '}</style>';
+		}
+		if ( ! empty( $rules ) ) {
+			$out .= '<style>#workos-authkit-root{' . implode( ' ', $rules ) . '}</style>';
+		}
+
+		return $out;
 	}
 
 	/**

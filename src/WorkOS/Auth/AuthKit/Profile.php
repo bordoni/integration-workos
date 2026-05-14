@@ -149,7 +149,7 @@ class Profile {
 	/**
 	 * Branding config.
 	 *
-	 * @var array{logo_mode: string, logo_attachment_id: int, primary_color: string, heading: string, subheading: string}
+	 * @var array{logo_mode: string, logo_attachment_id: int, card_border_radius: string, button_border_radius: string, page_background: string, card_background: string, card_border: string, heading_color: string, subheading_color: string, button_background: string, button_text: string, secondary_button_background: string, secondary_button_text: string, secondary_button_border: string, links_color: string, heading: string, subheading: string}
 	 */
 	private array $branding;
 
@@ -201,11 +201,23 @@ class Profile {
 			'factors' => array_values( array_filter( (array) ( $data['mfa']['factors'] ?? [] ), 'is_string' ) ),
 		];
 		$this->branding            = [
-			'logo_mode'          => (string) ( $data['branding']['logo_mode'] ?? self::LOGO_MODE_DEFAULT ),
-			'logo_attachment_id' => (int) ( $data['branding']['logo_attachment_id'] ?? 0 ),
-			'primary_color'      => (string) ( $data['branding']['primary_color'] ?? '' ),
-			'heading'            => (string) ( $data['branding']['heading'] ?? '' ),
-			'subheading'         => (string) ( $data['branding']['subheading'] ?? '' ),
+			'logo_mode'                   => (string) ( $data['branding']['logo_mode'] ?? self::LOGO_MODE_DEFAULT ),
+			'logo_attachment_id'          => (int) ( $data['branding']['logo_attachment_id'] ?? 0 ),
+			'card_border_radius'          => (string) ( $data['branding']['card_border_radius'] ?? '' ),
+			'button_border_radius'        => (string) ( $data['branding']['button_border_radius'] ?? '' ),
+			'page_background'             => (string) ( $data['branding']['page_background'] ?? '' ),
+			'card_background'             => (string) ( $data['branding']['card_background'] ?? '' ),
+			'card_border'                 => (string) ( $data['branding']['card_border'] ?? '' ),
+			'heading_color'               => (string) ( $data['branding']['heading_color'] ?? '' ),
+			'subheading_color'            => (string) ( $data['branding']['subheading_color'] ?? '' ),
+			'button_background'           => (string) ( $data['branding']['button_background'] ?? '' ),
+			'button_text'                 => (string) ( $data['branding']['button_text'] ?? '' ),
+			'secondary_button_background' => (string) ( $data['branding']['secondary_button_background'] ?? '' ),
+			'secondary_button_text'       => (string) ( $data['branding']['secondary_button_text'] ?? '' ),
+			'secondary_button_border'     => (string) ( $data['branding']['secondary_button_border'] ?? '' ),
+			'links_color'                 => (string) ( $data['branding']['links_color'] ?? '' ),
+			'heading'                     => (string) ( $data['branding']['heading'] ?? '' ),
+			'subheading'                  => (string) ( $data['branding']['subheading'] ?? '' ),
 		];
 		$this->post_login_redirect = (string) ( $data['post_login_redirect'] ?? '' );
 		$this->forward_query_args  = (bool) ( $data['forward_query_args'] ?? false );
@@ -297,10 +309,27 @@ class Profile {
 			$organization_id = '';
 		}
 
-		$primary_color = (string) ( $data['branding']['primary_color'] ?? '' );
-		if ( '' !== $primary_color && ! preg_match( '/^#[0-9a-fA-F]{3,8}$/', $primary_color ) ) {
-			$primary_color = '';
-		}
+		$sanitize_color = static function ( string $value ): string {
+			return ( '' !== $value && preg_match( '/^#[0-9a-fA-F]{3,8}$/', $value ) ) ? $value : '';
+		};
+
+		$sanitize_radius             = static function ( string $v ): string {
+			$v = trim( $v );
+			return ( '' !== $v && ctype_digit( $v ) ) ? $v : '';
+		};
+		$card_border_radius          = $sanitize_radius( (string) ( $data['branding']['card_border_radius'] ?? '' ) );
+		$button_border_radius        = $sanitize_radius( (string) ( $data['branding']['button_border_radius'] ?? '' ) );
+		$page_background             = $sanitize_color( (string) ( $data['branding']['page_background'] ?? '' ) );
+		$card_background             = $sanitize_color( (string) ( $data['branding']['card_background'] ?? '' ) );
+		$card_border                 = $sanitize_color( (string) ( $data['branding']['card_border'] ?? '' ) );
+		$heading_color               = $sanitize_color( (string) ( $data['branding']['heading_color'] ?? '' ) );
+		$subheading_color            = $sanitize_color( (string) ( $data['branding']['subheading_color'] ?? '' ) );
+		$button_background           = $sanitize_color( (string) ( $data['branding']['button_background'] ?? '' ) );
+		$button_text                 = $sanitize_color( (string) ( $data['branding']['button_text'] ?? '' ) );
+		$secondary_button_background = $sanitize_color( (string) ( $data['branding']['secondary_button_background'] ?? '' ) );
+		$secondary_button_text       = $sanitize_color( (string) ( $data['branding']['secondary_button_text'] ?? '' ) );
+		$secondary_button_border     = $sanitize_color( (string) ( $data['branding']['secondary_button_border'] ?? '' ) );
+		$links_color                 = $sanitize_color( (string) ( $data['branding']['links_color'] ?? '' ) );
 
 		$logo_attachment_id = (int) ( $data['branding']['logo_attachment_id'] ?? 0 );
 
@@ -341,11 +370,23 @@ class Profile {
 					'factors' => $mfa_factors,
 				],
 				'branding'            => [
-					'logo_mode'          => $logo_mode,
-					'logo_attachment_id' => $logo_attachment_id,
-					'primary_color'      => $primary_color,
-					'heading'            => sanitize_text_field( (string) ( $data['branding']['heading'] ?? '' ) ),
-					'subheading'         => sanitize_text_field( (string) ( $data['branding']['subheading'] ?? '' ) ),
+					'logo_mode'                   => $logo_mode,
+					'logo_attachment_id'          => $logo_attachment_id,
+					'card_border_radius'          => $card_border_radius,
+					'button_border_radius'        => $button_border_radius,
+					'page_background'             => $page_background,
+					'card_background'             => $card_background,
+					'card_border'                 => $card_border,
+					'heading_color'               => $heading_color,
+					'subheading_color'            => $subheading_color,
+					'button_background'           => $button_background,
+					'button_text'                 => $button_text,
+					'secondary_button_background' => $secondary_button_background,
+					'secondary_button_text'       => $secondary_button_text,
+					'secondary_button_border'     => $secondary_button_border,
+					'links_color'                 => $links_color,
+					'heading'                     => sanitize_text_field( (string) ( $data['branding']['heading'] ?? '' ) ),
+					'subheading'                  => sanitize_text_field( (string) ( $data['branding']['subheading'] ?? '' ) ),
 				],
 				'post_login_redirect' => sanitize_text_field( (string) ( $data['post_login_redirect'] ?? '' ) ),
 				'forward_query_args'  => (bool) ( $data['forward_query_args'] ?? false ),
@@ -384,7 +425,12 @@ class Profile {
 				'branding'            => [
 					'logo_mode'          => self::LOGO_MODE_DEFAULT,
 					'logo_attachment_id' => 0,
-					'primary_color'      => '',
+					'page_background'    => '',
+					'card_background'    => '',
+					'card_border'        => '',
+					'button_background'  => '',
+					'button_text'        => '',
+					'links_color'        => '',
 					'heading'            => __( 'Sign in', 'integration-workos' ),
 					'subheading'         => '',
 				],
@@ -620,7 +666,7 @@ class Profile {
 	/**
 	 * Branding configuration.
 	 *
-	 * @return array{logo_attachment_id: int, primary_color: string, heading: string, subheading: string}
+	 * @return array{logo_attachment_id: int, page_background: string, card_background: string, card_border: string, button_background: string, button_text: string, links_color: string, heading: string, subheading: string}
 	 */
 	public function get_branding(): array {
 		return $this->branding;

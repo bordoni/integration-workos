@@ -83,21 +83,27 @@ class AuthKitRendererTest extends WPTestCase {
 	}
 
 	/**
-	 * Branding primary color appears as a scoped CSS variable.
+	 * Branding colors appear as scoped CSS variables.
 	 */
 	public function test_render_mount_emits_branding_style_tag(): void {
 		$profile = Profile::from_array(
 			[
 				'slug'     => 'members',
 				'title'    => 'Members',
-				'branding' => [ 'primary_color' => '#ff3366' ],
+				'branding' => [
+					'page_background'   => '#1e1004',
+					'button_background' => '#ff3366',
+					'links_color'       => '#3d7bf5',
+				],
 			]
 		);
 
 		$html = $this->renderer->render_mount( $profile );
 
-		$this->assertStringContainsString( '--wa-primary: #ff3366', $html );
-		$this->assertStringContainsString( '--wa-primary-hover: #ff3366', $html );
+		$this->assertStringContainsString( 'background:#1e1004', $html );
+		$this->assertStringContainsString( '--wa-primary:#ff3366', $html );
+		$this->assertStringContainsString( '--wa-primary-hover:#ff3366', $html );
+		$this->assertStringContainsString( '--wa-links:#3d7bf5', $html );
 	}
 
 	/**

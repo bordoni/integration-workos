@@ -103,7 +103,19 @@ interface Profile {
 		logo_mode: LogoMode;
 		logo_attachment_id: number;
 		logo_url?: string;
-		primary_color: string;
+		card_border_radius: string;
+		button_border_radius: string;
+		page_background: string;
+		card_background: string;
+		card_border: string;
+		heading_color: string;
+		subheading_color: string;
+		button_background: string;
+		button_text: string;
+		secondary_button_background: string;
+		secondary_button_text: string;
+		secondary_button_border: string;
+		links_color: string;
 		heading: string;
 		subheading: string;
 	};
@@ -684,6 +696,48 @@ function LogoField( { mode, attachmentId, url, onChange }: LogoFieldProps ) {
 	);
 }
 
+interface ColorRowProps {
+	label: string;
+	value: string;
+	onChange: ( next: string ) => void;
+}
+
+function ColorRow( { label, value, onChange }: ColorRowProps ) {
+	const safeColor = /^#[0-9a-fA-F]{6}$/.test( value ) ? value : '#000000';
+	return (
+		<div className="wpa-color-row">
+			<span className="wpa-color-row-label">{ label }</span>
+			<label className="wpa-color-row-swatch-wrap" title={ label }>
+				<span
+					className="wpa-color-row-swatch"
+					style={ { backgroundColor: value || undefined } }
+					aria-hidden="true"
+				/>
+				<input
+					type="color"
+					className="wpa-color-row-picker"
+					value={ safeColor }
+					onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+						onChange( e.target.value )
+					}
+					aria-label={ label }
+				/>
+			</label>
+			<input
+				type="text"
+				className="wpa-color-row-hex"
+				value={ value }
+				onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+					onChange( e.target.value )
+				}
+				placeholder="#000000"
+				maxLength={ 7 }
+				spellCheck={ false }
+			/>
+		</div>
+	);
+}
+
 function emptyProfile(): Profile {
 	return {
 		id: 0,
@@ -700,7 +754,19 @@ function emptyProfile(): Profile {
 			logo_mode: 'default',
 			logo_attachment_id: 0,
 			logo_url: '',
-			primary_color: '',
+			card_border_radius: '',
+			button_border_radius: '',
+			page_background: '',
+			card_background: '',
+			card_border: '',
+			heading_color: '',
+			subheading_color: '',
+			button_background: '',
+			button_text: '',
+			secondary_button_background: '',
+			secondary_button_text: '',
+			secondary_button_border: '',
+			links_color: '',
 			heading: '',
 			subheading: '',
 		},
@@ -945,12 +1011,94 @@ function Editor( {
 					value={ data.branding.subheading }
 					onChange={ ( v ) => setBranding( { subheading: v } ) }
 				/>
-				<TextField
-					label={ __( 'Primary color', 'integration-workos' ) }
-					value={ data.branding.primary_color }
-					onChange={ ( v ) => setBranding( { primary_color: v } ) }
-					placeholder={ __( '#2271b1', 'integration-workos' ) }
-				/>
+				<label className="wpa-field">
+					<span>{ __( 'Card border radius (px)', 'integration-workos' ) }</span>
+					<input
+						type="number"
+						className="wpa-border-radius-input"
+						value={ data.branding.card_border_radius }
+						min={ 0 }
+						max={ 999 }
+						onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+							setBranding( { card_border_radius: e.target.value } )
+						}
+						placeholder="3"
+					/>
+				</label>
+				<label className="wpa-field">
+					<span>{ __( 'Button border radius (px)', 'integration-workos' ) }</span>
+					<input
+						type="number"
+						className="wpa-border-radius-input"
+						value={ data.branding.button_border_radius }
+						min={ 0 }
+						max={ 999 }
+						onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+							setBranding( { button_border_radius: e.target.value } )
+						}
+						placeholder="3"
+					/>
+				</label>
+				<div className="wpa-branding-colors">
+					<div className="wpa-branding-colors-header">
+						{ __( 'Colors', 'integration-workos' ) }
+					</div>
+					<ColorRow
+						label={ __( 'Page background', 'integration-workos' ) }
+						value={ data.branding.page_background }
+						onChange={ ( v ) => setBranding( { page_background: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Card background', 'integration-workos' ) }
+						value={ data.branding.card_background }
+						onChange={ ( v ) => setBranding( { card_background: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Card border', 'integration-workos' ) }
+						value={ data.branding.card_border }
+						onChange={ ( v ) => setBranding( { card_border: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Heading color', 'integration-workos' ) }
+						value={ data.branding.heading_color }
+						onChange={ ( v ) => setBranding( { heading_color: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Subheading color', 'integration-workos' ) }
+						value={ data.branding.subheading_color }
+						onChange={ ( v ) => setBranding( { subheading_color: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Primary button background', 'integration-workos' ) }
+						value={ data.branding.button_background }
+						onChange={ ( v ) => setBranding( { button_background: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Primary button text', 'integration-workos' ) }
+						value={ data.branding.button_text }
+						onChange={ ( v ) => setBranding( { button_text: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Secondary button background', 'integration-workos' ) }
+						value={ data.branding.secondary_button_background }
+						onChange={ ( v ) => setBranding( { secondary_button_background: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Secondary button text', 'integration-workos' ) }
+						value={ data.branding.secondary_button_text }
+						onChange={ ( v ) => setBranding( { secondary_button_text: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Secondary button border / OR divider', 'integration-workos' ) }
+						value={ data.branding.secondary_button_border }
+						onChange={ ( v ) => setBranding( { secondary_button_border: v } ) }
+					/>
+					<ColorRow
+						label={ __( 'Links', 'integration-workos' ) }
+						value={ data.branding.links_color }
+						onChange={ ( v ) => setBranding( { links_color: v } ) }
+					/>
+				</div>
 			</fieldset>
 
 			<EmbedFieldset
@@ -1232,7 +1380,7 @@ function List( {
 					const overflow    = methods.length - visible.length;
 					const org         = orgName( p.organization_id );
 					const isDefault   = p.slug === 'default';
-					const color       = ( p.branding?.primary_color || '' ).trim();
+					const color       = ( p.branding?.button_background || '' ).trim();
 					const logoUrl     = p.branding?.logo_url || '';
 					const customUrl   = resolveCustomUrl( p );
 					const hasCustom   = '' !== customUrl;
