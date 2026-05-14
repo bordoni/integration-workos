@@ -8,6 +8,7 @@
 namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
+use WorkOS\Auth\AuthKit\LoginRedirectCacheHeaders;
 use WorkOS\Auth\AuthKit\LoginTakeover;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
@@ -437,6 +438,45 @@ class AuthKitRendererTest extends WPTestCase {
 		$captured = $this->run_takeover_capturing_redirect( [ 'loggedout' => 'true' ] );
 
 		$this->assertNull( $captured, '?loggedout must short-circuit the takeover.' );
+	}
+
+	/**
+	 * Redirects to AuthKit custom paths are auth-state dependent and must
+	 * never be cached by browsers or edge caches.
+	 */
+	public function test_login_redirect_cache_headers_match_custom_path_redirects(): void {
+		$default = $this->repository->ensure_default();
+		$this->repository->save(
+			Profile::from_array(
+				array_replace( $default->to_array(), [ 'custom_path' => 'login' ] )
+			)
+		);
+
+		$headers = new LoginRedirectCacheHeaders( $this->repository );
+
+		$this->assertTrue(
+			$headers->should_prevent_cache( home_url( '/login/?redirect_to=' . rawurlencode( home_url( '/' ) ) ), 302 )
+		);
+		$this->assertTrue(
+			$headers->should_prevent_cache( wp_login_url( home_url( '/' ) ), 302 )
+		);
+		$this->assertTrue(
+			$headers->should_prevent_cache( home_url( '/workos/login/default/' ), 302 )
+		);
+	}
+
+	/**
+	 * Non-login redirects and non-redirect statuses are left alone.
+	 */
+	public function test_login_redirect_cache_headers_ignore_unrelated_redirects(): void {
+		$headers = new LoginRedirectCacheHeaders( $this->repository );
+
+		$this->assertFalse(
+			$headers->should_prevent_cache( home_url( '/pricing/' ), 302 )
+		);
+		$this->assertFalse(
+			$headers->should_prevent_cache( home_url( '/login/' ), 200 )
+		);
 	}
 
 	/**

@@ -35,6 +35,7 @@ class Controller extends BaseController {
 		$this->container->singleton( Shortcode::class );
 		$this->container->singleton( FrontendRoute::class );
 		$this->container->singleton( ModeSyncer::class );
+		$this->container->singleton( LoginRedirectCacheHeaders::class );
 
 		// Register the CPT early — `init` priority 5 so other components that
 		// query the type on `init` (priority 10+) see a registered post type.
@@ -47,6 +48,7 @@ class Controller extends BaseController {
 		$this->container->get( Shortcode::class )->register();
 		$this->container->get( FrontendRoute::class )->register();
 		$this->container->get( ModeSyncer::class )->register();
+		$this->container->get( LoginRedirectCacheHeaders::class )->register();
 	}
 
 	/**
@@ -58,6 +60,7 @@ class Controller extends BaseController {
 		remove_action( 'init', [ $this, 'register_post_type' ], 5 );
 
 		$this->container->get( LoginTakeover::class )->unregister();
+		$this->container->get( LoginRedirectCacheHeaders::class )->unregister();
 	}
 
 	/**
