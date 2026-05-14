@@ -421,12 +421,28 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	}
 
 	/**
+	 * Both the named (`&amp;`, e.g. `esc_attr()`) and numeric (`&#038;`,
+	 * emitted by `esc_url()` in display context) forms an upstream
+	 * `login_url` filter might produce.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public function escaped_ampersand_provider(): array {
+		return [
+			'named entity (&amp;)'    => [ '&amp;' ],
+			'numeric entity (&#038;)' => [ '&#038;' ],
+		];
+	}
+
+	/**
 	 * URLs sent to WorkOS use literal `&`, even when an upstream filter
 	 * HTML-escapes `wp_login_url()` — WorkOS emails the URL verbatim.
+	 *
+	 * @dataProvider escaped_ampersand_provider
 	 */
-	public function test_reset_start_sends_url_with_unescaped_ampersands(): void {
-		$escape_login_url = static function (): string {
-			return 'https://example.test/wp-login.php?reauth=1&amp;redirect_to=https%3A%2F%2Fexample.test%2Fdashboard';
+	public function test_reset_start_sends_url_with_unescaped_ampersands( string $escaped_amp ): void {
+		$escape_login_url = static function () use ( $escaped_amp ): string {
+			return 'https://example.test/wp-login.php?reauth=1' . $escaped_amp . 'redirect_to=https%3A%2F%2Fexample.test%2Fdashboard';
 		};
 		add_filter( 'login_url', $escape_login_url );
 
@@ -460,6 +476,8 @@ class AuthKitRestPasswordTest extends WPTestCase {
 
 		$reset_url = $body['password_reset_url'];
 		$this->assertStringNotContainsString( '&amp;', $reset_url, 'URL must not contain HTML-escaped ampersands.' );
+		$this->assertStringNotContainsString( '&#038;', $reset_url, 'URL must not contain numeric-entity ampersands.' );
+		$this->assertStringContainsString( 'reauth=1&redirect_to=', $reset_url, 'Upstream-filter separator must be a literal &.' );
 		$this->assertStringContainsString( 'workos_action=reset-password', $reset_url );
 		$this->assertStringContainsString( 'profile=members', $reset_url );
 	}

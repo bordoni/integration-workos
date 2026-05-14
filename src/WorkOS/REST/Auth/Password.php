@@ -358,9 +358,10 @@ class Password extends BaseEndpoint {
 		);
 
 		// `wp_login_url()` runs through the `login_url`/`home_url` filters,
-		// which a third-party plugin escapes via `esc_url()` (`&` → `&amp;`).
-		// WorkOS emails the URL verbatim, so decode before handing it over.
-		return htmlspecialchars_decode( $url, ENT_QUOTES | ENT_HTML5 );
+		// which a host-site filter escapes (`&` → `&amp;` or `&#038;`,
+		// depending on the escaper). `html_entity_decode()` reverses both
+		// the named and numeric forms; WorkOS emails the URL verbatim.
+		return html_entity_decode( $url, ENT_QUOTES | ENT_HTML5 );
 	}
 
 	/**
