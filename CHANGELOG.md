@@ -1,5 +1,58 @@
 # Changelog
 
+## [1.0.4] - 2026-05-14
+
+### Fixed
+
+- **Logged-out screen leaks classic wp-login** (#18) — both
+  `LoginTakeover::should_takeover()` and
+  `Login::maybe_redirect_to_authkit()` short-circuited on
+  `?loggedout=true`, so the native "you have been logged out" screen
+  rendered with the wp-login username/password field. Legacy
+  customers misread that as a still-working classic sign-in and kept
+  trying to use it even though their credentials live in WorkOS. The
+  bypasses are removed; with a `custom_path`-equipped default
+  profile, `/wp/wp-login.php?loggedout=true` now 302s to
+  `/login/?loggedout=true` via the existing `redirect_to_custom_path`
+  forwarder. The `?fallback=1`, `?workos=0`, and
+  `action=logout|lostpassword|rp|...` bypasses are unchanged.
+- **Password reset URLs HTML-encoded in WorkOS emails** (#17) —
+  `wp_login_url()` runs through the `login_url` / `home_url` filters;
+  a host-side filter piped it through `esc_url()`, encoding `&` →
+  `&amp;`. WorkOS emailed the URL verbatim, so reset links arrived
+  as `?workos_action=…&amp;profile=…&amp;token=…` and broke. The
+  plugin now decodes HTML entities in `build_password_reset_url()`
+  before POSTing to WorkOS. A regression wpunit test fails without
+  the fix.
+- **Infinite login redirect loops** (#15) — auth redirects now send
+  no-cache / no-store headers so a cached redirect response cannot
+  trap the browser in a redirect cycle when the user navigates back
+  to a previously visited URL.
+- **Unchecking auth methods or MFA factors did not persist** (#14) —
+  `update_profile` in `Admin/LoginProfiles/RestApi.php` ran
+  `array_replace_recursive($existing, $params)` so partial PUTs only
+  needed to send touched fields. For numerically-indexed lists that
+  function merges by key and never removes entries that exist in the
+  base but are absent from the override, so unchecking `oauth_google`
+  on a profile with `['password', 'magic_code', 'oauth_google']` left
+  `oauth_google` at index 2 of the merged result. After the merge,
+  `methods` and `mfa.factors` are now explicitly overwritten from the
+  incoming payload when the client sent them — `array_key_exists()`
+  is used (not `isset()`) so an empty array (uncheck-everything save)
+  is honored. Scalars and associative branches like `signup`,
+  `branding`, and the `mfa` envelope itself were unaffected.
+
+### Tests
+
+- Adds two cases in `AuthKitLoginProfilesRestApiTest`:
+  `test_update_methods_payload_replaces_existing` and
+  `test_update_mfa_factors_payload_replaces_existing` — start with
+  multiple values, PUT with fewer, assert dropped values are gone in
+  both the response and a fresh repository read; the second also
+  asserts the sibling `mfa.enforce` survives the partial merge.
+- Adds a wpunit regression covering HTML-entity decoding in
+  `build_password_reset_url()`.
+
 ## [1.0.3] - 2026-05-12
 
 ### Fixed

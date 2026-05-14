@@ -4,7 +4,7 @@
 
 Enterprise identity management for WordPress powered by WorkOS. SSO, directory sync, MFA, and user management.
 
-- **Version:** 1.0.1
+- **Version:** 1.0.4
 - **Namespace:** `WorkOS\`
 - **PHP Requirement:** 7.4+
 - **WordPress Requirement:** 5.9+
@@ -205,6 +205,19 @@ composer phpstan      # Static analysis (PHPStan level 5, --memory-limit=1G)
 `@wordpress/scripts` v30 transpiles `.ts` / `.tsx` natively via its default
 babel preset (no ts-loader, no custom webpack rules). `tsc` runs in
 `noEmit` mode purely for strict type-checking and editor IntelliSense.
+
+## Releasing / Version Bumps
+
+When bumping the plugin version, update **every** location below in the same commit. Missing any of them causes WordPress, the runtime, and the `.org` listing to disagree about which version is installed.
+
+| Location | What to change |
+|----------|----------------|
+| `integration-workos.php` | `Version:` header (line ~6) |
+| `src/WorkOS/Plugin.php` | `private string $version = 'X.Y.Z';` (the `$version` property used by `WORKOS_VERSION`) |
+| `readme.txt` | `Stable tag:` line |
+| `AGENTS.md` | `**Version:**` line in Project Overview |
+
+Also add a matching entry to the changelog in `readme.txt` (and `README.md` if its changelog is kept in sync).
 
 ## Testing
 

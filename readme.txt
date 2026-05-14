@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,13 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.4 - 2026-05-14 =
+
+* Fix: `wp-login.php?loggedout=true` is now claimed by the AuthKit takeover instead of rendering native wp-login. The "you have been logged out" screen advertised the wp-login username/password field, which legacy customers misread as a still-working classic sign-in. The URL now 302s to `/login/?loggedout=true` (or the configured custom path) so the React form handles it. `?fallback=1`, `?workos=0`, and `action=logout|lostpassword|rp|...` bypasses are unchanged. (#18)
+* Fix: WorkOS password reset emails arrived with HTML-escaped query separators (`?workos_action=…&amp;profile=…&amp;token=…`) when a `home_url`/`login_url` filter on the host ran the URL through `esc_url()`. The plugin now decodes HTML entities in `build_password_reset_url()` before posting to WorkOS so the emailed link is valid. (#17)
+* Fix: prevent infinite login redirect loops by sending `Cache-Control: no-store` / `Pragma: no-cache` headers on auth redirects so cached responses do not trap the browser in a redirect cycle when returning to a previously visited URL. (#15)
+* Fix: unchecking an auth method or MFA factor on a Login Profile now persists. `update_profile`'s `array_replace_recursive($existing, $params)` merge preserved trailing entries from the existing list when the incoming list was shorter, so removed methods reappeared after save. The REST update now explicitly overwrites `methods` and `mfa.factors` from the payload (using `array_key_exists()` so an empty array is honored). Other scalar/associative fields are unaffected. (#14)
+
 = 1.0.3 - 2026-05-12 =
 
 * Fix: AuthKit login flows now recover transparently from WorkOS `organization_selection_required`. When the Login Profile has an organization pinned (with `Config::get_organization_id()` as a fallback), the plugin re-authenticates via the `organization-selection` grant instead of surfacing "The user must choose an organization to finish their authentication." to the user.
@@ -237,6 +244,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.4 =
+Fixes the "you have been logged out" screen leaking the native wp-login form, password-reset emails arriving with HTML-encoded `&amp;` in the link, an infinite redirect loop caused by cached redirect responses, and a Login Profile editor bug where unchecking an auth method or MFA factor did not persist on save.
 
 = 1.0.3 =
 Fixes "The user must choose an organization to finish their authentication." for AuthKit logins and the `/workos/callback` flow. When a Login Profile has an organization pinned, the plugin completes the authenticate call via the `organization-selection` grant transparently, and auto-enrolls pre-existing WordPress users into the pinned WorkOS organization (matching emails only — strangers still get rejected).
