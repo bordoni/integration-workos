@@ -210,8 +210,8 @@ class LoginTakeover {
 	 * @return void
 	 */
 	private function normalize_query_string(): void {
-		$raw = $_SERVER['QUERY_STRING'] ?? ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		if ( $raw === '' ) {
+		$raw = \wp_unslash( $_SERVER['QUERY_STRING'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		if ( '' === $raw ) {
 			return;
 		}
 		if ( ! str_contains( $raw, '&amp;' ) && ! str_contains( $raw, '&#038;' ) ) {
@@ -219,7 +219,6 @@ class LoginTakeover {
 		}
 		$decoded = html_entity_decode( $raw, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		parse_str( $decoded, $params );
-		
 		$_GET = array_merge( $_GET, $params ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	}
 
