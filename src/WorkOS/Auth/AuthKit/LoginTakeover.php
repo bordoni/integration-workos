@@ -75,6 +75,8 @@ class LoginTakeover {
 	 * @return void
 	 */
 	public function maybe_takeover(): void {
+		$this->normalize_query_string();
+
 		if ( ! $this->should_takeover() ) {
 			return;
 		}
@@ -194,6 +196,31 @@ class LoginTakeover {
 		];
 
 		return $this->router->resolve( $context );
+	}
+
+	/**
+	 * Re-populate $_GET when the raw query string contains HTML-encoded
+	 * ampersands (`&amp;` or `&#038;`).
+	 *
+	 * Email delivery services (e.g. Microsoft SafeLinks) sometimes preserve
+	 * HTML entity encoding from the email template and forward the URL to the
+	 * browser verbatim. PHP then parses `amp;token` instead of `token`,
+	 * leaving $_GET['token'] empty and breaking the reset-confirm flow.
+	 *
+	 * @return void
+	 */
+	private function normalize_query_string(): void {
+		$raw = $_SERVER['QUERY_STRING'] ?? ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		if ( $raw === '' ) {
+			return;
+		}
+		if ( ! str_contains( $raw, '&amp;' ) && ! str_contains( $raw, '&#038;' ) ) {
+			return;
+		}
+		$decoded = html_entity_decode( $raw, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		parse_str( $decoded, $params );
+		
+		$_GET = array_merge( $_GET, $params ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	}
 
 	/**
