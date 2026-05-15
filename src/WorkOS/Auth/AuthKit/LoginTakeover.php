@@ -75,7 +75,7 @@ class LoginTakeover {
 	 * @return void
 	 */
 	public function maybe_takeover(): void {
-		$this->normalize_query_string();
+		$this->maybe_canonicalize_query();
 
 		if ( ! $this->should_takeover() ) {
 			return;
@@ -199,34 +199,45 @@ class LoginTakeover {
 	}
 
 	/**
-	 * Re-populate $_GET when the raw query string contains HTML-encoded
-	 * ampersands (`&amp;` or `&#038;`).
+	 * Redirect to a canonical URL when the raw query string contains HTML
+	 * entity-encoded separators (e.g. `&amp;`, `&#038;`, `&#38;`, `&#x26;`).
 	 *
-	 * Email delivery services (e.g. Microsoft SafeLinks) sometimes preserve
-	 * HTML entity encoding from the email template and forward the URL to the
-	 * browser verbatim. PHP then parses `amp;token` instead of `token`,
-	 * leaving $_GET['token'] empty and breaking the reset-confirm flow.
+	 * This fixes cases where encoded ampersands cause PHP to parse query keys
+	 * incorrectly (breaking flows like password resets).
 	 *
-	 * @return void
+	 * @return void Exits via wp_safe_redirect on the canonical path; otherwise returns.
 	 */
-	private function normalize_query_string(): void {
-		$raw = wp_unslash( $_SERVER['QUERY_STRING'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+	private function maybe_canonicalize_query(): void {
+		if ( 'GET' !== SuperGlobals::get_server_var( 'REQUEST_METHOD' ) ) {
+			return;
+		}
+
+		$raw = (string) wp_unslash( $_SERVER['QUERY_STRING'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		if ( '' === $raw ) {
 			return;
 		}
-		if ( ! str_contains( $raw, '&amp;' ) && ! str_contains( $raw, '&#038;' ) ) {
+		if ( ! str_contains( $raw, '&amp;' ) && ! str_contains( $raw, '&#' ) ) {
 			return;
 		}
-		$decoded = html_entity_decode( $raw, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-		parse_str( $decoded, $params );
 
-		// Restore only the keys this class uses to avoid injecting arbitrary $_GET values.
-		$allowed = [ 'workos_action', 'workos_profile', 'token', 'invitation_token', 'redirect_to', 'fallback' ];
-		foreach ( $allowed as $key ) {
-			if ( isset( $params[ $key ] ) && null === SuperGlobals::get_get_var( $key ) ) {
-				$_GET[ $key ] = $params[ $key ]; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			}
+		$canonical = strtr(
+			$raw,
+			[
+				'&amp;'  => '&',
+				'&#038;' => '&',
+				'&#38;'  => '&',
+				'&#x26;' => '&',
+			]
+		);
+		if ( $canonical === $raw ) {
+			return;
 		}
+
+		$path = (string) strtok( (string) SuperGlobals::get_server_var( 'REQUEST_URI' ), '?' );
+
+		nocache_headers();
+		wp_safe_redirect( $path . '?' . $canonical, 302 );
+		exit;
 	}
 
 	/**

@@ -679,16 +679,16 @@ class AuthKitRendererTest extends WPTestCase {
 	
 	/**
 	 * When the raw query string contains `&amp;` — as produced by email
-	 * delivery services (e.g. SafeLinks) that preserve HTML entity encoding
+	 * delivery chains (e.g. SafeLinks) that preserve HTML entity encoding
 	 * from the email template — PHP mis-parses `amp;token` instead of
-	 * `token`. normalize_query_string() must repair $_GET so that the
-	 * reset-confirm step is reached.
+	 * `token`. maybe_canonicalize_query() must 302 to a canonical URL so
+	 * the browser re-requests with clean separators.
 	 */
-	public function test_normalize_query_string_fixes_amp_entity_so_reset_confirm_is_reached(): void {
+	public function test_canonicalize_query_redirects_when_amp_entity_present(): void {
 		$this->bootstrap_workos_enabled();
 		$this->repository->ensure_default();
 
-		$context = $this->run_takeover_capturing_context(
+		$result = $this->run_takeover(
 			// PHP mis-parses &amp; — profile and token land under wrong keys.
 			[
 				'workos_action' => 'reset-password',
@@ -698,24 +698,22 @@ class AuthKitRendererTest extends WPTestCase {
 			'workos_action=reset-password&amp;profile=default&amp;token=tok_abc123'
 		);
 
-		$this->assertSame(
-			'reset_confirm',
-			$context['initial_step'] ?? null,
-			'normalize_query_string() must repair &amp; so reset_confirm is reached.'
-		);
-		$this->assertSame( 'tok_abc123', $context['reset_token'] ?? null );
+		$this->assertNotNull( $result['redirect'], 'A 302 to the canonical URL must be issued.' );
+		$this->assertStringContainsString( '?workos_action=reset-password&profile=default&token=tok_abc123', (string) $result['redirect'] );
+		$this->assertStringNotContainsString( 'amp;', (string) $result['redirect'] );
+		$this->assertNull( $result['context'], 'Renderer must not run on the redirect path.' );
 	}
 
 	/**
 	 * The numeric entity `&#038;` produced by WordPress esc_url() in display
-	 * context must also be normalised. PHP splits on the `&` inside `&#038;`,
-	 * leaving `#038;token` as the key instead of `token`.
+	 * context must also be canonicalised — PHP splits on the `&` inside
+	 * `&#038;` and the redirect path must replace it with a literal `&`.
 	 */
-	public function test_normalize_query_string_fixes_numeric_entity_so_reset_confirm_is_reached(): void {
+	public function test_canonicalize_query_redirects_when_numeric_entity_present(): void {
 		$this->bootstrap_workos_enabled();
 		$this->repository->ensure_default();
 
-		$context = $this->run_takeover_capturing_context(
+		$result = $this->run_takeover(
 			// PHP splits &#038; on the & — keys become #038;profile / #038;token.
 			[
 				'workos_action' => 'reset-password',
@@ -725,23 +723,21 @@ class AuthKitRendererTest extends WPTestCase {
 			'workos_action=reset-password&#038;profile=default&#038;token=tok_xyz789'
 		);
 
-		$this->assertSame(
-			'reset_confirm',
-			$context['initial_step'] ?? null,
-			'normalize_query_string() must repair &#038; so reset_confirm is reached.'
-		);
-		$this->assertSame( 'tok_xyz789', $context['reset_token'] ?? null );
+		$this->assertNotNull( $result['redirect'], 'A 302 to the canonical URL must be issued.' );
+		$this->assertStringContainsString( '?workos_action=reset-password&profile=default&token=tok_xyz789', (string) $result['redirect'] );
+		$this->assertStringNotContainsString( '#038;', (string) $result['redirect'] );
+		$this->assertNull( $result['context'], 'Renderer must not run on the redirect path.' );
 	}
 
 	/**
 	 * A correctly-encoded URL (literal & separators) must reach reset_confirm
-	 * unchanged — the normaliser must not corrupt clean requests.
+	 * without redirecting — the canonicaliser must not bounce clean requests.
 	 */
-	public function test_normalize_query_string_is_noop_for_clean_query_string(): void {
+	public function test_canonicalize_query_is_noop_for_clean_url(): void {
 		$this->bootstrap_workos_enabled();
 		$this->repository->ensure_default();
 
-		$context = $this->run_takeover_capturing_context(
+		$result = $this->run_takeover(
 			[
 				'workos_action' => 'reset-password',
 				'profile'       => 'default',
@@ -750,45 +746,47 @@ class AuthKitRendererTest extends WPTestCase {
 			'workos_action=reset-password&profile=default&token=tok_clean'
 		);
 
+		$this->assertNull( $result['redirect'], 'No redirect must fire on a clean URL.' );
 		$this->assertSame(
 			'reset_confirm',
-			$context['initial_step'] ?? null,
+			$result['context']['initial_step'] ?? null,
 			'Clean URLs must still reach reset_confirm.'
 		);
-		$this->assertSame( 'tok_clean', $context['reset_token'] ?? null );
+		$this->assertSame( 'tok_clean', $result['context']['reset_token'] ?? null );
 	}
 
 	/**
-	 * workos_action=reset-password without a token must NOT set reset_confirm
-	 * even after normalization — the existing gate in build_context() holds.
+	 * workos_action=reset-password without a token must NOT set reset_confirm —
+	 * the gate in build_context() still applies on the canonical request.
 	 */
-	public function test_normalize_query_string_without_token_does_not_start_reset_confirm(): void {
+	public function test_canonicalize_query_without_token_does_not_start_reset_confirm(): void {
 		$this->bootstrap_workos_enabled();
 		$this->repository->ensure_default();
 
-		$context = $this->run_takeover_capturing_context(
+		$result = $this->run_takeover(
 			[ 'workos_action' => 'reset-password' ],
 			'workos_action=reset-password'
 		);
 
+		$this->assertNull( $result['redirect'] );
 		$this->assertArrayNotHasKey(
 			'initial_step',
-			$context ?? [],
-			'Without a token, reset_confirm must not be set regardless of normalization.'
+			$result['context'] ?? [],
+			'Without a token, reset_confirm must not be set.'
 		);
 	}
 
 	/**
-	 * Invoke maybe_takeover() with synthesized $_GET and $_SERVER['QUERY_STRING'],
-	 * capturing the context array passed to render_full_page(). Returns the
-	 * context when the inline-render branch is reached, null if a redirect fired.
+	 * Invoke maybe_takeover() with synthesized $_GET and $_SERVER state. Returns
+	 * both the captured render context (when the inline-render branch is reached)
+	 * and the redirect URL (when wp_safe_redirect is called).
 	 *
 	 * @param array<string,string> $get          Synthesized $_GET (as PHP's parser produces it).
 	 * @param string               $query_string Raw QUERY_STRING (what the server receives).
 	 *
-	 * @return array<string,mixed>|null
+	 * @return array{context: ?array<string,mixed>, redirect: ?string}
 	 */
-	private function run_takeover_capturing_context( array $get, string $query_string ): ?array {
+	private function run_takeover( array $get, string $query_string ): array {
 		$router        = new ProfileRouter( $this->repository );
 		$fake_renderer = new class() extends Renderer {
 			public ?array $captured = null;
@@ -798,26 +796,38 @@ class AuthKitRendererTest extends WPTestCase {
 		};
 		$takeover = new LoginTakeover( $router, $fake_renderer );
 
-		$listener = static function ( $location ): string {
+		$redirect_url = null;
+		$listener     = static function ( $location ) use ( &$redirect_url ): string {
+			$redirect_url = (string) $location;
 			throw new \RuntimeException( 'workos_test_redirect:' . $location );
 		};
 		add_filter( 'wp_redirect', $listener, 1, 1 );
 
-		$prev_get = $_GET;
-		$prev_qs  = $_SERVER['QUERY_STRING'] ?? '';
-		$_GET                    = $get;
-		$_SERVER['QUERY_STRING'] = $query_string;
+		$prev_get    = $_GET;
+		$prev_qs     = $_SERVER['QUERY_STRING'] ?? '';
+		$prev_method = $_SERVER['REQUEST_METHOD'] ?? '';
+		$prev_uri    = $_SERVER['REQUEST_URI'] ?? '';
+
+		$_GET                      = $get;
+		$_SERVER['QUERY_STRING']   = $query_string;
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+		$_SERVER['REQUEST_URI']    = '/wp-login.php' . ( '' !== $query_string ? '?' . $query_string : '' );
 
 		try {
 			$takeover->maybe_takeover();
 		} catch ( \RuntimeException $e ) {
 			$this->assertStringStartsWith( 'workos_test_redirect:', $e->getMessage() );
 		} finally {
-			$_GET                    = $prev_get;
-			$_SERVER['QUERY_STRING'] = $prev_qs;
+			$_GET                      = $prev_get;
+			$_SERVER['QUERY_STRING']   = $prev_qs;
+			$_SERVER['REQUEST_METHOD'] = $prev_method;
+			$_SERVER['REQUEST_URI']    = $prev_uri;
 			remove_filter( 'wp_redirect', $listener, 1 );
 		}
 
-		return $fake_renderer->captured;
+		return [
+			'context'  => $fake_renderer->captured,
+			'redirect' => $redirect_url,
+		];
 	}
 }
