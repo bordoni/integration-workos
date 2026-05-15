@@ -210,7 +210,7 @@ class LoginTakeover {
 	 * @return void
 	 */
 	private function normalize_query_string(): void {
-		$raw = \wp_unslash( $_SERVER['QUERY_STRING'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$raw = wp_unslash( $_SERVER['QUERY_STRING'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		if ( '' === $raw ) {
 			return;
 		}
@@ -219,7 +219,14 @@ class LoginTakeover {
 		}
 		$decoded = html_entity_decode( $raw, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		parse_str( $decoded, $params );
-		$_GET = array_merge( $_GET, $params ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+		// Restore only the keys this class uses to avoid injecting arbitrary $_GET values.
+		$allowed = [ 'workos_action', 'workos_profile', 'token', 'invitation_token', 'redirect_to', 'fallback' ];
+		foreach ( $allowed as $key ) {
+			if ( isset( $params[ $key ] ) && null === SuperGlobals::get_get_var( $key ) ) {
+				$_GET[ $key ] = $params[ $key ]; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			}
+		}
 	}
 
 	/**
