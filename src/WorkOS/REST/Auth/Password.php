@@ -7,7 +7,9 @@
 
 namespace WorkOS\REST\Auth;
 
+use WorkOS\Auth\AuthKit\FrontendRoute;
 use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -225,6 +227,11 @@ class Password extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		$redirect_url = ( new RedirectValidator() )->validate(
+			(string) $request->get_param( 'redirect_url' ),
+			$profile
+		);
+
 		// Fire the WorkOS send call but *always* return 200 to prevent email
 		// enumeration (an attacker cannot tell whether an account exists).
 		// Also normalize response time: WorkOS answers valid + unknown
@@ -235,7 +242,7 @@ class Password extends BaseEndpoint {
 
 		workos()->api()->send_password_reset(
 			$email,
-			$this->build_password_reset_url( $profile ),
+			$this->build_password_reset_url( $profile, $redirect_url ),
 			$this->get_radar_token( $request )
 		);
 
@@ -307,8 +314,16 @@ class Password extends BaseEndpoint {
 			return $workos_response;
 		}
 
+		$redirect_url = ( new RedirectValidator() )->validate(
+			(string) $request->get_param( 'redirect_url' ),
+			$profile
+		);
+
 		return new WP_REST_Response(
-			[ 'ok' => true ],
+			[
+				'ok'           => true,
+				'redirect_url' => $redirect_url,
+			],
 			200
 		);
 	}
@@ -344,25 +359,33 @@ class Password extends BaseEndpoint {
 	/**
 	 * Build the URL emailed to users for completing a password reset.
 	 *
-	 * @param Profile $profile Active profile.
+	 * Points at the AuthKit React shell at /workos/login/{slug}, which
+	 * already mounts directly into the `reset_confirm` step when `token`
+	 * is present in the URL (FrontendRoute::maybe_render). WorkOS appends
+	 * its generated reset token as `&token=…` before sending the email.
+	 *
+	 * @param Profile $profile      Active profile.
+	 * @param string  $redirect_url Optional same-host URL to send the user to
+	 *                              after they finish resetting.
 	 *
 	 * @return string
 	 */
-	private function build_password_reset_url( Profile $profile ): string {
-		// `wp_login_url()` runs through the `login_url`/`home_url` filters,
-		// which a host-site filter escapes (`&` → `&amp;` or `&#038;`).
-		// Decode before `add_query_arg()`, not after: `add_query_arg()`
-		// reads the `#` in `&#038;` as a fragment delimiter and shears the
-		// rest of the query off the URL. WorkOS emails the URL verbatim.
-		$login_url = html_entity_decode( wp_login_url(), ENT_QUOTES | ENT_HTML5 );
-
-		return add_query_arg(
-			[
-				'workos_action' => 'reset-password',
-				'profile'       => $profile->get_slug(),
-			],
-			$login_url
+	private function build_password_reset_url( Profile $profile, string $redirect_url = '' ): string {
+		// `home_url()` runs through filters that may HTML-encode `&`. Decode
+		// before `add_query_arg()` so `&#038;` doesn't shear the query off
+		// (see prior fix: commits 750dfa5 / f040ac4). WorkOS emails the URL
+		// verbatim, so a clean URL in == a clean URL out.
+		$base = html_entity_decode(
+			FrontendRoute::url_for_profile( $profile ),
+			ENT_QUOTES | ENT_HTML5
 		);
+
+		$args = [];
+		if ( '' !== $redirect_url ) {
+			$args['redirect_to'] = $redirect_url;
+		}
+
+		return $args ? add_query_arg( $args, $base ) : $base;
 	}
 
 	/**

@@ -803,6 +803,7 @@ export function ResetRequest( { client, profile, onSent, onBack }: ResetRequestP
 		setError( '' );
 		const { ok, data } = await client.json( '/password/reset/start', {
 			email,
+			redirect_url: profile.redirectTo,
 		} );
 		setLoading( false );
 		if ( ! ok ) {
@@ -879,25 +880,37 @@ interface ResetConfirmProps {
 	onDone: () => void;
 }
 
+interface ResetConfirmResponse {
+	ok: boolean;
+	redirect_url?: string;
+}
+
 export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmProps ) {
 	const [ password, setPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
 	const [ success, setSuccess ] = useState( false );
+	const [ redirectUrl, setRedirectUrl ] = useState( '' );
 
 	const submit = async ( event: FormEvent ) => {
 		event.preventDefault();
 		setLoading( true );
 		setError( '' );
-		const { ok, data } = await client.json( '/password/reset/confirm', {
-			token,
-			new_password: password,
-		} );
+		const { ok, data } = await client.json< ResetConfirmResponse >(
+			'/password/reset/confirm',
+			{
+				token,
+				new_password: password,
+				redirect_url: profile.redirectTo,
+			}
+		);
 		setLoading( false );
 		if ( ! ok ) {
 			setError( errorMessage( data ) );
 			return;
 		}
+		const payload = data as ResetConfirmResponse;
+		setRedirectUrl( payload?.redirect_url ?? '' );
 		setSuccess( true );
 	};
 
@@ -906,6 +919,14 @@ export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmPr
 		profile.branding.heading || __( 'Sign in', 'integration-workos' );
 
 	if ( success ) {
+		const handleContinue = (): void => {
+			if ( redirectUrl ) {
+				window.location.assign( redirectUrl );
+				return;
+			}
+			onDone();
+		};
+
 		return (
 			<FlowCard
 				logoUrl={ profile.branding.logo_url }
@@ -917,16 +938,23 @@ export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmPr
 							{ __( 'Password reset', 'integration-workos' ) }
 						</Heading>
 						<Subheading>
-							{ __(
-								'You can now sign in with your new password.',
-								'integration-workos'
-							) }
+							{ redirectUrl
+								? __(
+										'You can now sign in with your new password. Continuing…',
+										'integration-workos'
+								  )
+								: __(
+										'You can now sign in with your new password.',
+										'integration-workos'
+								  ) }
 						</Subheading>
 					</>
 				}
 			>
-				<Button onClick={ onDone }>
-					{ __( 'Continue to sign in', 'integration-workos' ) }
+				<Button onClick={ handleContinue }>
+					{ redirectUrl
+						? __( 'Continue', 'integration-workos' )
+						: __( 'Continue to sign in', 'integration-workos' ) }
 				</Button>
 				<AuthKitSlot
 					name={ SLOT_AFTER_PRIMARY_ACTION }

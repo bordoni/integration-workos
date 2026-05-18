@@ -14,5 +14,6 @@ module.exports = {
 		'onboarding': path.resolve( __dirname, 'src/js/onboarding.js' ),
 		'authkit': path.resolve( __dirname, 'src/js/authkit/index.tsx' ),
 		'admin-profiles': path.resolve( __dirname, 'src/js/admin-profiles/index.tsx' ),
+		'admin-password-reset': path.resolve( __dirname, 'src/js/admin-password-reset/index.ts' ),
 	},
 };
