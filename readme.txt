@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.4
+Stable tag: 1.0.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,10 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.5 - 2026-05-18 =
+
+* New: WorkOS → Users admin page. Paginated, searchable React list of WorkOS users for the active environment, with a per-row "Open in WorkOS" deep-link straight to the user's Dashboard page. Lets admins triage WorkOS users (including re-enabling a suppressed email under the Dashboard's Emails tab) without bouncing through the Dashboard's own user picker. Requires `manage_options`. No bulk re-enable yet — WorkOS does not expose a public REST endpoint for the "Re-enable email" action. ([CONS-273](https://linear.app/nexcess/issue/CONS-273/re-enable-workos-emails-for-affected-portal-users))
+
 = 1.0.4 - 2026-05-14 =
 
 * Fix: `wp-login.php?loggedout=true` is now claimed by the AuthKit takeover instead of rendering native wp-login. The "you have been logged out" screen advertised the wp-login username/password field, which legacy customers misread as a still-working classic sign-in. The URL now 302s to `/login/?loggedout=true` (or the configured custom path) so the React form handles it. `?fallback=1`, `?workos=0`, and `action=logout|lostpassword|rp|...` bypasses are unchanged. (#18)
@@ -244,6 +248,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.5 =
+Adds a new WorkOS → Users admin page (read-only, paginated, searchable) with deep-links into the WorkOS Dashboard so admins can re-enable a user's suppressed email faster. No bulk re-enable yet — WorkOS does not expose a public API for that action.
 
 = 1.0.4 =
 Fixes the "you have been logged out" screen leaking the native wp-login form, password-reset emails arriving with HTML-encoded `&amp;` in the link, an infinite redirect loop caused by cached redirect responses, and a Login Profile editor bug where unchecking an auth method or MFA factor did not persist on save.

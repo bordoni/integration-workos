@@ -1,0 +1,116 @@
+/* Scoped to the admin-users React mount root. */
+
+#workos-users-admin-root .workos-users-app {
+	margin-top: 1em;
+}
+
+#workos-users-admin-root .workos-users-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 12px;
+	flex-wrap: wrap;
+}
+
+#workos-users-admin-root .workos-users-search {
+	flex: 1 1 320px;
+	max-width: 480px;
+	min-width: 220px;
+	padding: 6px 10px;
+	font-size: 14px;
+}
+
+#workos-users-admin-root .workos-users-pagesize {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+}
+
+#workos-users-admin-root .workos-users-env {
+	margin-left: auto;
+	color: #50575e;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+#workos-users-admin-root .workos-users-notice {
+	margin: 8px 0 12px;
+}
+
+#workos-users-admin-root .workos-users-table-wrap {
+	position: relative;
+	min-height: 200px;
+}
+
+#workos-users-admin-root .workos-users-table th,
+#workos-users-admin-root .workos-users-table td {
+	vertical-align: middle;
+}
+
+#workos-users-admin-root .workos-users-id {
+	font-size: 11px;
+	color: #646970;
+	margin-top: 2px;
+}
+
+#workos-users-admin-root .workos-users-id code {
+	font-size: 11px;
+	background: transparent;
+	padding: 0;
+}
+
+#workos-users-admin-root .workos-users-verified {
+	color: #00a32a;
+	font-weight: 600;
+	margin-left: 4px;
+}
+
+#workos-users-admin-root .workos-users-no-link {
+	color: #8c8f94;
+}
+
+#workos-users-admin-root .workos-users-empty-row {
+	text-align: center;
+	color: #50575e;
+	padding: 32px 12px;
+}
+
+#workos-users-admin-root .workos-users-empty {
+	padding: 16px;
+	background: #f6f7f7;
+	border-left: 4px solid #72aee6;
+	margin-top: 12px;
+}
+
+#workos-users-admin-root .workos-users-row-skeleton td {
+	height: 48px;
+}
+
+#workos-users-admin-root .workos-users-skeleton-bar {
+	display: block;
+	height: 12px;
+	background: linear-gradient( 90deg, #f0f0f1 0%, #dcdcde 50%, #f0f0f1 100% );
+	background-size: 200% 100%;
+	border-radius: 3px;
+	animation: workos-users-skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes workos-users-skeleton {
+	0% { background-position: 200% 0; }
+	100% { background-position: -200% 0; }
+}
+
+#workos-users-admin-root .workos-users-pagination {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+#workos-users-admin-root .workos-users-loading {
+	color: #50575e;
+	font-size: 12px;
+	margin-left: 8px;
+}
