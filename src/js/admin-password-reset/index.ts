@@ -12,9 +12,17 @@
 import { __, sprintf } from '@wordpress/i18n';
 import './styles.css';
 
+/**
+ * Runtime config injected via `wp_localize_script()` on `window.workosPasswordReset`.
+ *
+ * Mirrors the shape produced by {@link \WorkOS\Auth\PasswordResetAdmin\Assets::register_assets()}.
+ */
 interface PasswordResetConfig {
+	/** Base REST URL — admin endpoint is `${restUrl}{id}/password-reset`. */
 	restUrl: string;
+	/** WP REST nonce (`wp_rest`). */
 	nonce: string;
+	/** Pre-translated UI strings (admin locale, server-side translated). */
 	strings: {
 		confirm: string;
 		sending: string;
@@ -23,11 +31,18 @@ interface PasswordResetConfig {
 	};
 }
 
+/**
+ * Successful response payload from `POST /workos/v1/admin/users/{id}/password-reset`.
+ */
 interface SuccessResponse {
 	ok: true;
+	/** Masked email like `j•••@e•••.com` — never the full address. */
 	email_hint: string;
 }
 
+/**
+ * Error response payload (`code`/`message` shape returned by `WP_Error::__construct`).
+ */
 interface ErrorResponse {
 	code?: string;
 	message?: string;
@@ -39,10 +54,25 @@ declare global {
 	}
 }
 
+/**
+ * Read the localized config from the global namespace.
+ *
+ * Returns null when the script was loaded without its localize-script
+ * companion (e.g. on a page outside the registered admin screens).
+ */
 function getConfig(): PasswordResetConfig | null {
 	return window.workosPasswordReset ?? null;
 }
 
+/**
+ * Render a transient WP admin notice at the top of the current screen.
+ *
+ * Replaces any previously rendered notice with the same id so rapid
+ * clicks don't stack multiple banners. Auto-dismisses after 7 seconds.
+ *
+ * @param message Pre-translated message to display.
+ * @param kind    Visual variant — maps to `.notice-success` / `.notice-error`.
+ */
 function showNotice( message: string, kind: 'success' | 'error' ): void {
 	const existing = document.getElementById(
 		'workos-pwreset-notice'
@@ -70,6 +100,17 @@ function showNotice( message: string, kind: 'success' | 'error' ): void {
 	}, 7000 );
 }
 
+/**
+ * Send a password-reset request for the user identified by a trigger element.
+ *
+ * Reads `data-user-id`, `data-redirect-url`, and `data-profile` off the
+ * button, prompts the operator to confirm, then POSTs to the admin REST
+ * endpoint with the WP REST nonce. The button is put in a busy state
+ * while the request is in-flight and restored in the `finally` block so
+ * a failed call leaves the UI usable.
+ *
+ * @param button Trigger element clicked by the operator.
+ */
 async function sendReset( button: HTMLElement ): Promise< void > {
 	const config = getConfig();
 	if ( ! config ) {
@@ -138,6 +179,14 @@ async function sendReset( button: HTMLElement ): Promise< void > {
 	}
 }
 
+/**
+ * Document-level click listener — delegates to {@link sendReset} when the
+ * click originates inside a `.workos-pwreset-trigger` element.
+ *
+ * Delegation (vs per-element binding) lets surfaces like the users.php
+ * row action and the shortcode share one bound handler regardless of
+ * when the trigger element is rendered into the DOM.
+ */
 document.addEventListener( 'click', ( event ) => {
 	const target = event.target as HTMLElement | null;
 	if ( ! target ) {

@@ -880,11 +880,29 @@ interface ResetConfirmProps {
 	onDone: () => void;
 }
 
+/**
+ * Successful body shape for `POST /password/reset/confirm`.
+ *
+ * The server validates and echoes `redirect_url` so the React shell can
+ * navigate the user to a post-reset destination without re-running the
+ * same-host validation client-side. An absent or empty value means
+ * "fall back to the existing onDone behavior" (return to sign-in).
+ */
 interface ResetConfirmResponse {
 	ok: boolean;
 	redirect_url?: string;
 }
 
+/**
+ * Reset-confirm step — user submits a new password with the token that
+ * came in via the email link (`?token=…` on `/workos/login/{profile}`).
+ *
+ * On success we read the server-validated `redirect_url` from the
+ * response payload; the success card's "Continue" button uses that URL
+ * if present, falling back to the parent's `onDone` (which returns the
+ * user to the method picker so they can sign in with their new
+ * password).
+ */
 export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmProps ) {
 	const [ password, setPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
