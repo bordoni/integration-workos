@@ -13,7 +13,9 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **React login shell** on wp-login.php, `[workos:login]` shortcode, and a dedicated `/workos/login/{profile}` route — all driven by the same TypeScript bundle
 - **Login Profiles** — admin-defined presets (enabled methods, pinned organization, signup/invite/reset toggles, MFA policy, branding) managed through a React admin editor at **WorkOS → Login Profiles**
 - **Sign-in methods**: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey
-- **In-app flows**: self-serve sign-up with email verification, invitation acceptance, password reset
+- **In-app flows**: self-serve sign-up with email verification, invitation acceptance, password reset (two-field new-password form with `wp.passwordStrength.meter` gating, optional auto-login on success, post-reset `redirect_url` validated same-host)
+- **Admin-triggered password reset** — send a WorkOS reset email on behalf of any linked user via `POST /wp-json/workos/v1/admin/users/{id}/password-reset` (gated by `edit_user($id)` so the same route covers self-service). Surfaced as a row action under the **WorkOS column** on `wp-admin/users.php`, a button on the user-edit screen, a per-row button on the WorkOS Users admin page, and a `[workos:password-reset]` shortcode. Successful sends are audited as `password_reset.admin_sent` in the activity log; emails point at the in-site React shell (`/workos/login/{slug}?token=…&redirect_to=…`) and the new password is mirrored to the linked WP user so `?fallback=1` / `wp_authenticate` / REST app passwords stay in sync. See [`docs/password-reset.md`](docs/password-reset.md).
+- **Skeleton placeholders** on every AuthKit surface (wp-login.php takeover, `/workos/login/{profile}`, shortcode) — pre-hydration markup from PHP plus a React `FlowSkeleton` during bootstrap, mirroring the real card heights so swap-in is a flicker not a jump.
 - **MFA** — TOTP, SMS, WebAuthn/passkey with full enrollment + challenge UI; profile-level `mfa.enforce` (`never` / `if_required` / `always`) and factor allowlist
 - **Profile routing rules** — ordered `redirect_to` glob / `referrer_host` / `user_role` matchers pick the right profile per request
 - **WorkOS Radar** anti-fraud integration — browser SDK supplies an action token the plugin forwards on every server-side auth call
@@ -161,6 +163,7 @@ Each profile stores:
 | `signup`                 | `{enabled, require_invite}` — toggles self-serve signup          |
 | `invite_flow`            | Allow invitation acceptance                                      |
 | `password_reset_flow`    | Allow in-app password reset                                      |
+| `auto_login_after_reset` | When `true` (default), `reset_confirm` re-authenticates the user with the new password (still running MFA / org-selection / entitlement gates via `LoginCompleter`), sets the WP auth cookie, and lands them on the validated `redirect_url`. When `false`, the user lands on the "Password reset — Continue to sign in" card and signs in manually. |
 | `mfa`                    | `{enforce: never|if_required|always, factors: [totp,sms,webauthn]}` |
 | `branding`               | `{logo_mode, logo_attachment_id, primary_color, heading, subheading}` — `logo_mode` is `default` / `custom` / `none` (see "Logo modes" in [`docs/extending-the-login-ui.md`](docs/extending-the-login-ui.md)) |
 | `post_login_redirect`    | URL the React shell navigates to on success (beats `redirect_to`)|

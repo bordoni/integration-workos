@@ -637,6 +637,40 @@ When the toggle is off, the user is left on a "Continue to sign in" card after a
 
 ---
 
+## Extending the WP Users list (WorkOS column)
+
+The "Send password reset" link lives in a slot-keyed row-action list under the WorkOS column on `wp-admin/users.php`. Third-party plugins can extend that same list via the `workos_user_list_column_actions` filter:
+
+```php
+add_filter(
+    'workos_user_list_column_actions',
+    function ( array $actions, int $user_id, string $workos_id ): array {
+        if ( ! current_user_can( 'edit_user', $user_id ) ) {
+            return $actions;
+        }
+
+        $actions['my_plugin_audit'] = sprintf(
+            '<span class="audit"><a href="%s">%s</a></span>',
+            esc_url(
+                add_query_arg(
+                    [ 'workos_user_id' => $workos_id ],
+                    admin_url( 'admin.php?page=my-plugin-audit' )
+                )
+            ),
+            esc_html__( 'Audit history', 'my-plugin' )
+        );
+
+        return $actions;
+    },
+    10,
+    3
+);
+```
+
+The filter only fires for users with a non-empty `_workos_user_id` meta (so unlinked rows never invoke your callback). Each entry is a fully-formed `<span class="…"><a …>Label</a></span>` string keyed by action slug; the keys exist so a later plugin can replace or reorder a specific action without rebuilding the full list. Entries are joined with ` | ` separators on render.
+
+---
+
 ## Internal references
 
 | Concept | Source |
