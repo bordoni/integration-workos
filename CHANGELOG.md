@@ -30,9 +30,12 @@
   endpoint is gated by `edit_user($id)` (so the same route also
   covers self-service from the shortcode), rate-limited per-IP and
   per-target, and writes a `password_reset.admin_sent` event to the
-  activity log. Triggered from three surfaces: a `Send WorkOS
-  password reset` inline row action on `wp-admin/users.php`, a
-  `Password Reset` panel on the user-edit screen, and a
+  activity log. Triggered from three surfaces: a `Send password
+  reset` row action under the WorkOS column on
+  `wp-admin/users.php` (next to "View in WorkOS" and "Re-sync", so
+  all WorkOS-specific per-row actions cluster together via the
+  new `workos_user_list_column_actions` filter), a `Password
+  Reset` panel on the user-edit screen, and a
   `[workos:password-reset]` shortcode that toggles between
   admin-of-other (`user="…"`) and self-service modes based on its
   attributes. Companion `redirect_url` parameter threads through

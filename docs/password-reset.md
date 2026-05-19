@@ -15,6 +15,7 @@ It is written for two audiences in parallel: a developer integrating against the
 | Self-service start | `POST /wp-json/workos/v1/auth/password/reset/start` | Profile-scoped nonce | Anyone (anonymous OK) |
 | Self-service confirm | `POST /wp-json/workos/v1/auth/password/reset/confirm` | Profile-scoped nonce | Anyone with a valid reset token |
 | Admin-triggered | `POST /wp-json/workos/v1/admin/users/{id}/password-reset` | WP REST nonce + `edit_user($id)` capability | Editors / admins (also covers self-service from a logged-in context) |
+| WP Users list (row action under the WorkOS column) | Posts to the admin endpoint | WP REST nonce + `edit_user($id)` | Admins, in the linked-user row only |
 | Shortcode | `[workos:password-reset]` | Rendered server-side; uses admin endpoint | Page authors |
 
 All three converge on the same WorkOS API call (`POST /user_management/password_reset/send`), and all three honor the same `redirect_url` and profile policy (`password_reset_flow`, `auto_login_after_reset`).
