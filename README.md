@@ -171,7 +171,10 @@ The `branding.logo` field defaults to the WordPress Site Icon when no
 per-profile logo is set. See
 [`docs/extending-the-login-ui.md`](docs/extending-the-login-ui.md) for the
 full developer guide on injecting React elements (SlotFill), enqueuing
-per-profile CSS/JS, and the available PHP filters.
+per-profile CSS/JS, and the available PHP filters. For password-reset
+integrations (admin-triggered, self-service, shortcode, redirect_url
+policy, what-not-to-do), see
+[`docs/password-reset.md`](docs/password-reset.md).
 
 ### Custom paths
 
