@@ -60,6 +60,21 @@
   dependency of the AuthKit bundle by `Renderer::enqueue()`; when
   zxcvbn is still loading the meter reports "Checking strength…"
   rather than gating on a transient.
+- **Skeleton placeholders on every AuthKit surface** — wp-login.php
+  takeover, `/workos/login/{profile}`, and `[workos:login]` shortcode
+  now paint a card-shaped skeleton with shimmering placeholder rows
+  the moment the page lands, instead of a blank gap while the React
+  bundle downloads and `client.bootstrap()` resolves. The skeleton
+  comes from two places that mirror each other shape-for-shape: PHP
+  embeds it inside the mount `<div>` so it's visible from first paint
+  (Renderer emits 1-input or 2-input variants based on context —
+  reset_confirm gets two, pick gets one with no footer); React's new
+  `FlowSkeleton` ui component takes over from the `booted=false`
+  branch in App.tsx during the bootstrap RTT. Heights match the
+  hydrated form exactly (heading 24px, subheading 20px, label 16px,
+  input 44px, button 40px) so the swap is a flicker, not a layout
+  jump. Shimmer animates only `background-position` (no transforms,
+  no opacity) and is disabled under `prefers-reduced-motion`.
 - **Password mirror to the WP user on reset** — when a WorkOS reset
   succeeds and the WorkOS user is linked to a WP user (via
   `_workos_user_id` meta), the plugin now also runs

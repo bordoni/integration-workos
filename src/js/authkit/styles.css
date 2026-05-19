@@ -366,3 +366,91 @@ body.workos-authkit-body #workos-authkit-root {
 #workos-authkit-root .wa-password-strength--mismatch strong {
 	color: #d63638;
 }
+
+/*
+ * Flow skeleton — placeholder card shown during the React app
+ * bootstrap (App.tsx booted=false), in lieu of the empty page that
+ * otherwise appears for ~50-300ms while `client.bootstrap()` resolves.
+ *
+ * Heights match the real elements one-for-one (heading 24px, subheading
+ * 20px, label 20px, input 44px, button 40px) so swapping the skeleton
+ * for the hydrated FlowCard doesn't move the page. The shimmer is
+ * animated via `background-position` only — no transforms, no opacity
+ * toggling — so the box never resizes and the parent layout is locked
+ * the moment the card paints.
+ */
+#workos-authkit-root .wa-skeleton {
+	background: linear-gradient(
+		90deg,
+		rgba( 0, 0, 0, 0.04 ) 0%,
+		rgba( 0, 0, 0, 0.08 ) 50%,
+		rgba( 0, 0, 0, 0.04 ) 100%
+	);
+	background-size: 200% 100%;
+	border-radius: var( --wa-radius );
+	animation: wa-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+#workos-authkit-root .wa-skeleton--heading {
+	height: 24px;
+	width: 60%;
+}
+
+#workos-authkit-root .wa-skeleton--subheading {
+	height: 20px;
+	width: 80%;
+}
+
+#workos-authkit-root .wa-skeleton-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#workos-authkit-root .wa-skeleton--label {
+	height: 16px;
+	width: 35%;
+}
+
+#workos-authkit-root .wa-skeleton--input {
+	height: 44px;
+	width: 100%;
+}
+
+#workos-authkit-root .wa-skeleton--button {
+	height: 40px;
+	width: 100%;
+}
+
+#workos-authkit-root .wa-skeleton--footer {
+	height: 16px;
+	width: 45%;
+	margin: 4px auto 0;
+}
+
+#workos-authkit-root .wa-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect( 0, 0, 0, 0 );
+	white-space: nowrap;
+	border: 0;
+}
+
+@keyframes wa-skeleton-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+@media ( prefers-reduced-motion: reduce ) {
+	#workos-authkit-root .wa-skeleton {
+		animation: none;
+	}
+}

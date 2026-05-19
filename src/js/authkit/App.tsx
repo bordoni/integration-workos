@@ -31,7 +31,7 @@ import {
 	SignupVerify,
 } from './flows';
 import { forwardQueryArgs } from './redirect';
-import { BelowCard } from './ui';
+import { BelowCard, FlowSkeleton } from './ui';
 
 export interface AppProps {
 	profile: Profile;
@@ -107,7 +107,20 @@ export function App( props: AppProps ) {
 	}, [ client ] );
 
 	if ( ! booted ) {
-		return null;
+		// Reset_confirm renders two password fields; everything else
+		// renders one. Pick the matching skeleton height so the swap to
+		// the hydrated form doesn't shift the card.
+		const skeletonFields = 'reset_confirm' === initial ? 2 : 1;
+		return (
+			<FlowSkeleton
+				logoUrl={ profile.branding.logo_url }
+				logoAlt={
+					profile.branding.heading || __( 'Sign in', 'integration-workos' )
+				}
+				fieldCount={ skeletonFields }
+				withFooter={ 'pick' !== initial }
+			/>
+		);
 	}
 
 	const handleSuccess = ( data: LoginSuccess ): void => {

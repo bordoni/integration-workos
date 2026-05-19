@@ -184,6 +184,7 @@ WorkOS is provided by WorkOS, Inc.
 * New: Password strength + confirmation on the reset-confirm step. Users must enter the new password twice; the value is scored in real time via WordPress's `wp.passwordStrength.meter` (zxcvbn) and the submit button stays disabled until the fields match and the score reaches Strong. Site name and common words are passed as the zxcvbn disallowed list.
 * New: Per-profile `auto_login_after_reset` toggle (default on). When enabled, a successful password reset signs the user in (via the shared `LoginCompleter`, so MFA / organization selection / entitlement gates still apply) and lands them on the validated post-reset redirect URL. With the toggle off the user lands on the existing "Password reset — Continue to sign in" card.
 * New: Password reset mirrors the new password to the linked WordPress user via `wp_set_password()` so the WP password fallback (`?fallback=1`, `wp_authenticate`, REST app passwords) stays in sync with the WorkOS password the user just typed. Unlinked users no-op cleanly.
+* New: Skeleton placeholders on every AuthKit surface (wp-login.php takeover, `/workos/login/{profile}`, and the shortcode) paint a card-shaped silhouette with shimmering rows the moment the page lands, instead of a blank gap while the React bundle downloads and bootstraps. Heights match the hydrated form one-to-one so the swap is a flicker, not a layout jump. Honours `prefers-reduced-motion`.
 
 = 1.0.4 - 2026-05-14 =
 
