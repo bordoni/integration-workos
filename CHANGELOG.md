@@ -60,6 +60,16 @@
   dependency of the AuthKit bundle by `Renderer::enqueue()`; when
   zxcvbn is still loading the meter reports "Checking strength…"
   rather than gating on a transient.
+- **Password mirror to the WP user on reset** — when a WorkOS reset
+  succeeds and the WorkOS user is linked to a WP user (via
+  `_workos_user_id` meta), the plugin now also runs
+  `wp_set_password()` on the linked WP user with the new plaintext.
+  Keeps the WordPress password fallback paths (`?fallback=1` on
+  wp-login.php, the `wp_authenticate` filter, REST app passwords) in
+  sync with what the user just typed in the React shell — without it
+  the old WP password would silently keep working after the WorkOS
+  rotation. Best-effort: unlinked users no-op cleanly; a write
+  failure never fails the reset response.
 - **Auto-login after password reset** — new per-profile toggle
   `auto_login_after_reset` (default: on). When enabled, a
   successful reset_confirm authenticates the user with the new

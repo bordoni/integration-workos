@@ -923,6 +923,158 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	}
 
 	/**
+	 * After a successful reset the WP user row's `user_pass` is updated to
+	 * match the new password. Keeps `?fallback=1` / `wp_authenticate` /
+	 * REST app passwords from drifting away from what the user typed in
+	 * the React shell.
+	 */
+	public function test_reset_confirm_mirrors_new_password_to_wp_user(): void {
+		// Link the existing fallback WP user to a deterministic WorkOS id
+		// so the mirror lookup resolves to a row we can assert against.
+		$workos_id = 'user_wos_mirror';
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', $workos_id );
+
+		$reset_body = wp_json_encode(
+			[
+				'user' => [
+					'id'             => $workos_id,
+					'email'          => 'fallback@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+		$auth_body = wp_json_encode(
+			[
+				'access_token' => 'access_xyz',
+				'user'         => [
+					'id'             => $workos_id,
+					'email'          => 'fallback@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $reset_body ],
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $auth_body ],
+		];
+
+		$new_password = 'BrandNewPassword4Mirror!';
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_mirror',
+				'new_password' => $new_password,
+			]
+		);
+		$this->assertSame( 200, $response->get_status() );
+
+		// The WP user can now authenticate with the new plaintext password.
+		$auth = wp_authenticate( 'fallback_user', $new_password );
+		$this->assertInstanceOf( \WP_User::class, $auth );
+		$this->assertSame( $this->wp_fallback_user_id, $auth->ID );
+
+		// And the *old* WP password no longer works.
+		$failed = wp_authenticate( 'fallback_user', 'wp_password_123' );
+		$this->assertInstanceOf( \WP_Error::class, $failed );
+	}
+
+	/**
+	 * Password mirror also runs when `auto_login_after_reset` is off — the
+	 * WP password must follow the WorkOS one regardless of session policy.
+	 */
+	public function test_reset_confirm_mirrors_password_even_without_auto_login(): void {
+		// Auto-login OFF.
+		$this->repository->save(
+			Profile::from_array(
+				[
+					'id'                     => $this->profile->get_id(),
+					'slug'                   => 'members',
+					'methods'                => [ Profile::METHOD_PASSWORD ],
+					'password_reset_flow'    => true,
+					'auto_login_after_reset' => false,
+				]
+			)
+		);
+
+		$workos_id = 'user_wos_mirror_no_auto';
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', $workos_id );
+
+		$this->response_queue = [
+			[
+				'response' => [ 'code' => 200, 'message' => 'OK' ],
+				'body'     => wp_json_encode(
+					[ 'user' => [ 'id' => $workos_id, 'email' => 'fallback@example.com' ] ]
+				),
+			],
+		];
+
+		$new_password = 'AnotherStrong1MirrorPass!';
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_mirror_no_auto',
+				'new_password' => $new_password,
+			]
+		);
+		$this->assertSame( 200, $response->get_status() );
+
+		$auth = wp_authenticate( 'fallback_user', $new_password );
+		$this->assertInstanceOf( \WP_User::class, $auth );
+	}
+
+	/**
+	 * When the WorkOS user is not linked to a WP user the mirror silently
+	 * no-ops — the reset still returns 200 and the call to authenticate
+	 * still fires (auto-login on by default).
+	 */
+	public function test_reset_confirm_skips_mirror_when_user_not_linked(): void {
+		// Make sure the fallback user is NOT linked.
+		delete_user_meta( $this->wp_fallback_user_id, '_workos_user_id' );
+
+		$workos_id = 'user_wos_no_link';
+
+		$this->response_queue = [
+			[
+				'response' => [ 'code' => 200, 'message' => 'OK' ],
+				'body'     => wp_json_encode(
+					[ 'user' => [ 'id' => $workos_id, 'email' => 'stranger@example.com' ] ]
+				),
+			],
+			// auto_login attempt — return an MFA-shaped result so LoginCompleter
+			// hands back early without trying to mint a session for a user it
+			// can't resolve.
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ],
+		];
+
+		$old_hash = get_userdata( $this->wp_fallback_user_id )->user_pass;
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_no_link',
+				'new_password' => 'WhateverPassword!42',
+			]
+		);
+		$this->assertSame( 200, $response->get_status() );
+
+		// fallback user's password hash is unchanged.
+		$this->assertSame(
+			$old_hash,
+			get_userdata( $this->wp_fallback_user_id )->user_pass,
+			'Unlinked users must NOT have their WP password touched.'
+		);
+	}
+
+	/**
 	 * Off-site redirect_url is rejected (validated against home_url) on the
 	 * confirm endpoint too — same policy as start.
 	 */

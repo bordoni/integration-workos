@@ -319,6 +319,14 @@ class Password extends BaseEndpoint {
 			$profile
 		);
 
+		// Mirror the new password into the linked WP user so the WordPress
+		// password-fallback path (e.g. `?fallback=1` on wp-login.php, the
+		// `wp_authenticate` filter, REST app passwords) stays in sync with
+		// what the user just chose in the React shell. Runs *before*
+		// LoginCompleter so the auth cookie minted below survives the
+		// session invalidation `wp_set_password()` performs.
+		$this->mirror_password_to_wp_user( $workos_response, $new_password );
+
 		// Default response shape — the "reset finished, please sign in" path.
 		$response_body = [
 			'ok'           => true,
@@ -367,6 +375,43 @@ class Password extends BaseEndpoint {
 		}
 
 		return new WP_REST_Response( $response_body, 200 );
+	}
+
+	/**
+	 * Mirror a freshly-reset WorkOS password into the linked WP user row.
+	 *
+	 * The WP password fallback (`?fallback=1`, `wp_authenticate`, REST app
+	 * passwords) sits outside WorkOS. If we let it drift, a user who reset
+	 * their WorkOS password could still log in via `wp_authenticate` using
+	 * the old credential — confusing at best, a security regression at worst.
+	 * Best-effort: a missing link, a WP user without the meta, or a WP error
+	 * never fails the reset itself; the password change against WorkOS has
+	 * already succeeded by the time we get here.
+	 *
+	 * @param mixed  $workos_response Parsed reset_password response (carries
+	 *                                the `user` object with the WorkOS id).
+	 * @param string $new_password    Plaintext password the user just set.
+	 *
+	 * @return void
+	 */
+	private function mirror_password_to_wp_user( $workos_response, string $new_password ): void {
+		if ( ! is_array( $workos_response ) ) {
+			return;
+		}
+
+		$workos_user_id = (string) ( $workos_response['user']['id'] ?? '' );
+		if ( '' === $workos_user_id ) {
+			return;
+		}
+
+		$wp_user_id = \WorkOS\Sync\UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
+		if ( $wp_user_id <= 0 ) {
+			return;
+		}
+
+		// `wp_set_password()` hashes the password and invalidates all
+		// existing sessions for the user — exactly what we want here.
+		wp_set_password( $new_password, $wp_user_id );
 	}
 
 	/**
