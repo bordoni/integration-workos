@@ -259,8 +259,28 @@ class RestApi {
 			);
 		}
 
+		// Resolve the local WP user_id (if the user is linked) so the React
+		// row can wire up the "Send password reset" trigger that lives at
+		// `POST /workos/v1/admin/users/{wp_user_id}/password-reset`. Empty
+		// when the WorkOS user has no matching WP row yet.
+		$wp_user_id = 0;
+		if ( '' !== $id ) {
+			$users = get_users(
+				[
+					'meta_key'   => '_workos_user_id',
+					'meta_value' => $id,
+					'number'     => 1,
+					'fields'     => 'ID',
+				]
+			);
+			if ( ! empty( $users ) ) {
+				$wp_user_id = (int) $users[0];
+			}
+		}
+
 		return [
 			'id'              => $id,
+			'wp_user_id'      => $wp_user_id,
 			'email'           => $email,
 			'email_verified'  => ! empty( $user['email_verified'] ),
 			'first_name'      => isset( $user['first_name'] ) ? (string) $user['first_name'] : '',
