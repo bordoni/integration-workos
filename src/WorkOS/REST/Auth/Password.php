@@ -443,9 +443,11 @@ class Password extends BaseEndpoint {
 	 */
 	private function build_password_reset_url( Profile $profile, string $redirect_url = '' ): string {
 		// `home_url()` runs through filters that may HTML-encode `&`. Decode
-		// before `add_query_arg()` so `&#038;` doesn't shear the query off
-		// (see prior fix: commits 750dfa5 / f040ac4). WorkOS emails the URL
-		// verbatim, so a clean URL in == a clean URL out.
+		// the base before `add_query_arg()` so `&#038;` doesn't shear the
+		// query off (see prior fix: commits 750dfa5 / f040ac4), AND decode
+		// the final URL — a same-host `redirect_to` may carry its own
+		// escaped ampersands through, and WorkOS emails the URL verbatim,
+		// so any entity left in == a broken link out.
 		$base = html_entity_decode(
 			FrontendRoute::url_for_profile( $profile ),
 			ENT_QUOTES | ENT_HTML5
@@ -456,7 +458,9 @@ class Password extends BaseEndpoint {
 			$args['redirect_to'] = $redirect_url;
 		}
 
-		return $args ? add_query_arg( $args, $base ) : $base;
+		$url = $args ? add_query_arg( $args, $base ) : $base;
+
+		return html_entity_decode( $url, ENT_QUOTES | ENT_HTML5 );
 	}
 
 	/**

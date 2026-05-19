@@ -400,4 +400,62 @@ class AuthKitProfileTest extends WPTestCase {
 
 		$this->assertSame( '', $profile->to_editor_array()['custom_url'] );
 	}
+
+	/**
+	 * `auto_login_after_reset` defaults to true so existing installs
+	 * inherit the new "sign user in after reset" behaviour without an
+	 * explicit migration.
+	 */
+	public function test_auto_login_after_reset_defaults_to_true(): void {
+		$profile = Profile::from_array( [ 'slug' => 'no-toggle' ] );
+
+		$this->assertTrue( $profile->is_auto_login_after_reset_enabled() );
+	}
+
+	/**
+	 * The reserved default profile carries the toggle on.
+	 */
+	public function test_defaults_profile_has_auto_login_after_reset_on(): void {
+		$this->assertTrue(
+			Profile::defaults()->is_auto_login_after_reset_enabled()
+		);
+	}
+
+	/**
+	 * Explicit `false` is honoured (covers the "admin unticked the
+	 * checkbox" persistence path).
+	 */
+	public function test_auto_login_after_reset_can_be_disabled(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'                   => 'no-auto-login',
+				'auto_login_after_reset' => false,
+			]
+		);
+
+		$this->assertFalse( $profile->is_auto_login_after_reset_enabled() );
+	}
+
+	/**
+	 * The field round-trips through to_array → from_array unchanged.
+	 *
+	 * Important because the admin REST update path serializes the profile
+	 * back out via `to_array()` before persisting, so a missing key here
+	 * would silently flip the toggle on every save.
+	 */
+	public function test_auto_login_after_reset_round_trip(): void {
+		$source = Profile::from_array(
+			[
+				'slug'                   => 'round-trip',
+				'auto_login_after_reset' => false,
+			]
+		);
+
+		$serialized = $source->to_array();
+		$this->assertArrayHasKey( 'auto_login_after_reset', $serialized );
+		$this->assertFalse( $serialized['auto_login_after_reset'] );
+
+		$rebuilt = Profile::from_array( $serialized );
+		$this->assertFalse( $rebuilt->is_auto_login_after_reset_enabled() );
+	}
 }

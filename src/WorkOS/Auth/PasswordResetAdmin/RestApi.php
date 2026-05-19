@@ -293,7 +293,9 @@ class RestApi {
 			$args['redirect_to'] = $redirect_url;
 		}
 
-		return $args ? add_query_arg( $args, $base ) : $base;
+		$url = $args ? add_query_arg( $args, $base ) : $base;
+
+		return html_entity_decode( $url, ENT_QUOTES | ENT_HTML5 );
 	}
 
 	/**
