@@ -267,6 +267,14 @@ export function App( props: AppProps ) {
 					profile={ profile }
 					token={ resetToken ?? '' }
 					onDone={ () => setStep( 'pick' ) }
+					onSignedIn={ ( dest ) => {
+						const finalDest = profile.forward_query_args
+							? forwardQueryArgs( dest, profile.originalQuery )
+							: dest;
+						setRedirectTo( finalDest );
+						setStep( 'complete' );
+					} }
+					onMfa={ handleMfa }
 				/>
 			);
 

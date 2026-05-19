@@ -140,6 +140,14 @@ class Profile {
 	private bool $password_reset_flow;
 
 	/**
+	 * Whether to sign the user in automatically once they finish resetting
+	 * their password (and then send them to the post-reset redirect).
+	 *
+	 * @var bool
+	 */
+	private bool $auto_login_after_reset;
+
+	/**
 	 * MFA config.
 	 *
 	 * @var array{enforce: string, factors: string[]}
@@ -184,32 +192,33 @@ class Profile {
 	 * @param array $data Pre-validated data.
 	 */
 	public function __construct( array $data ) {
-		$this->id                  = isset( $data['id'] ) ? (int) $data['id'] : 0;
-		$this->slug                = (string) ( $data['slug'] ?? '' );
-		$this->custom_path         = (string) ( $data['custom_path'] ?? '' );
-		$this->title               = (string) ( $data['title'] ?? '' );
-		$this->methods             = array_values( array_filter( (array) ( $data['methods'] ?? [] ), 'is_string' ) );
-		$this->organization_id     = (string) ( $data['organization_id'] ?? '' );
-		$this->signup              = [
+		$this->id                     = isset( $data['id'] ) ? (int) $data['id'] : 0;
+		$this->slug                   = (string) ( $data['slug'] ?? '' );
+		$this->custom_path            = (string) ( $data['custom_path'] ?? '' );
+		$this->title                  = (string) ( $data['title'] ?? '' );
+		$this->methods                = array_values( array_filter( (array) ( $data['methods'] ?? [] ), 'is_string' ) );
+		$this->organization_id        = (string) ( $data['organization_id'] ?? '' );
+		$this->signup                 = [
 			'enabled'        => (bool) ( $data['signup']['enabled'] ?? false ),
 			'require_invite' => (bool) ( $data['signup']['require_invite'] ?? false ),
 		];
-		$this->invite_flow         = (bool) ( $data['invite_flow'] ?? true );
-		$this->password_reset_flow = (bool) ( $data['password_reset_flow'] ?? true );
-		$this->mfa                 = [
+		$this->invite_flow            = (bool) ( $data['invite_flow'] ?? true );
+		$this->password_reset_flow    = (bool) ( $data['password_reset_flow'] ?? true );
+		$this->auto_login_after_reset = (bool) ( $data['auto_login_after_reset'] ?? true );
+		$this->mfa                    = [
 			'enforce' => (string) ( $data['mfa']['enforce'] ?? self::MFA_ENFORCE_IF_REQUIRED ),
 			'factors' => array_values( array_filter( (array) ( $data['mfa']['factors'] ?? [] ), 'is_string' ) ),
 		];
-		$this->branding            = [
+		$this->branding               = [
 			'logo_mode'          => (string) ( $data['branding']['logo_mode'] ?? self::LOGO_MODE_DEFAULT ),
 			'logo_attachment_id' => (int) ( $data['branding']['logo_attachment_id'] ?? 0 ),
 			'primary_color'      => (string) ( $data['branding']['primary_color'] ?? '' ),
 			'heading'            => (string) ( $data['branding']['heading'] ?? '' ),
 			'subheading'         => (string) ( $data['branding']['subheading'] ?? '' ),
 		];
-		$this->post_login_redirect = (string) ( $data['post_login_redirect'] ?? '' );
-		$this->forward_query_args  = (bool) ( $data['forward_query_args'] ?? false );
-		$this->mode                = (string) ( $data['mode'] ?? self::MODE_CUSTOM );
+		$this->post_login_redirect    = (string) ( $data['post_login_redirect'] ?? '' );
+		$this->forward_query_args     = (bool) ( $data['forward_query_args'] ?? false );
+		$this->mode                   = (string) ( $data['mode'] ?? self::MODE_CUSTOM );
 	}
 
 	/**
@@ -324,32 +333,33 @@ class Profile {
 
 		return new self(
 			[
-				'id'                  => (int) ( $data['id'] ?? 0 ),
-				'slug'                => $slug,
-				'custom_path'         => $custom_path,
-				'title'               => $title,
-				'methods'             => $methods,
-				'organization_id'     => $organization_id,
-				'signup'              => [
+				'id'                     => (int) ( $data['id'] ?? 0 ),
+				'slug'                   => $slug,
+				'custom_path'            => $custom_path,
+				'title'                  => $title,
+				'methods'                => $methods,
+				'organization_id'        => $organization_id,
+				'signup'                 => [
 					'enabled'        => (bool) ( $data['signup']['enabled'] ?? false ),
 					'require_invite' => (bool) ( $data['signup']['require_invite'] ?? false ),
 				],
-				'invite_flow'         => (bool) ( $data['invite_flow'] ?? true ),
-				'password_reset_flow' => (bool) ( $data['password_reset_flow'] ?? true ),
-				'mfa'                 => [
+				'invite_flow'            => (bool) ( $data['invite_flow'] ?? true ),
+				'password_reset_flow'    => (bool) ( $data['password_reset_flow'] ?? true ),
+				'auto_login_after_reset' => (bool) ( $data['auto_login_after_reset'] ?? true ),
+				'mfa'                    => [
 					'enforce' => $mfa_enforce,
 					'factors' => $mfa_factors,
 				],
-				'branding'            => [
+				'branding'               => [
 					'logo_mode'          => $logo_mode,
 					'logo_attachment_id' => $logo_attachment_id,
 					'primary_color'      => $primary_color,
 					'heading'            => sanitize_text_field( (string) ( $data['branding']['heading'] ?? '' ) ),
 					'subheading'         => sanitize_text_field( (string) ( $data['branding']['subheading'] ?? '' ) ),
 				],
-				'post_login_redirect' => sanitize_text_field( (string) ( $data['post_login_redirect'] ?? '' ) ),
-				'forward_query_args'  => (bool) ( $data['forward_query_args'] ?? false ),
-				'mode'                => $mode,
+				'post_login_redirect'    => sanitize_text_field( (string) ( $data['post_login_redirect'] ?? '' ) ),
+				'forward_query_args'     => (bool) ( $data['forward_query_args'] ?? false ),
+				'mode'                   => $mode,
 			]
 		);
 	}
@@ -362,34 +372,35 @@ class Profile {
 	public static function defaults(): self {
 		return self::from_array(
 			[
-				'slug'                => self::DEFAULT_SLUG,
-				'custom_path'         => '',
-				'title'               => __( 'Default Login', 'integration-workos' ),
-				'methods'             => [
+				'slug'                   => self::DEFAULT_SLUG,
+				'custom_path'            => '',
+				'title'                  => __( 'Default Login', 'integration-workos' ),
+				'methods'                => [
 					self::METHOD_PASSWORD,
 					self::METHOD_MAGIC_CODE,
 					self::METHOD_OAUTH_GOOGLE,
 				],
-				'organization_id'     => '',
-				'signup'              => [
+				'organization_id'        => '',
+				'signup'                 => [
 					'enabled'        => false,
 					'require_invite' => false,
 				],
-				'invite_flow'         => true,
-				'password_reset_flow' => true,
-				'mfa'                 => [
+				'invite_flow'            => true,
+				'password_reset_flow'    => true,
+				'auto_login_after_reset' => true,
+				'mfa'                    => [
 					'enforce' => self::MFA_ENFORCE_IF_REQUIRED,
 					'factors' => [ self::FACTOR_TOTP ],
 				],
-				'branding'            => [
+				'branding'               => [
 					'logo_mode'          => self::LOGO_MODE_DEFAULT,
 					'logo_attachment_id' => 0,
 					'primary_color'      => '',
 					'heading'            => __( 'Sign in', 'integration-workos' ),
 					'subheading'         => '',
 				],
-				'post_login_redirect' => '',
-				'mode'                => self::MODE_CUSTOM,
+				'post_login_redirect'    => '',
+				'mode'                   => self::MODE_CUSTOM,
 			]
 		);
 	}
@@ -416,20 +427,21 @@ class Profile {
 	 */
 	public function to_array(): array {
 		return [
-			'id'                  => $this->id,
-			'slug'                => $this->slug,
-			'custom_path'         => $this->custom_path,
-			'title'               => $this->title,
-			'methods'             => $this->methods,
-			'organization_id'     => $this->organization_id,
-			'signup'              => $this->signup,
-			'invite_flow'         => $this->invite_flow,
-			'password_reset_flow' => $this->password_reset_flow,
-			'mfa'                 => $this->mfa,
-			'branding'            => $this->branding,
-			'post_login_redirect' => $this->post_login_redirect,
-			'forward_query_args'  => $this->forward_query_args,
-			'mode'                => $this->mode,
+			'id'                     => $this->id,
+			'slug'                   => $this->slug,
+			'custom_path'            => $this->custom_path,
+			'title'                  => $this->title,
+			'methods'                => $this->methods,
+			'organization_id'        => $this->organization_id,
+			'signup'                 => $this->signup,
+			'invite_flow'            => $this->invite_flow,
+			'password_reset_flow'    => $this->password_reset_flow,
+			'auto_login_after_reset' => $this->auto_login_after_reset,
+			'mfa'                    => $this->mfa,
+			'branding'               => $this->branding,
+			'post_login_redirect'    => $this->post_login_redirect,
+			'forward_query_args'     => $this->forward_query_args,
+			'mode'                   => $this->mode,
 		];
 	}
 
@@ -606,6 +618,17 @@ class Profile {
 	 */
 	public function is_password_reset_flow_enabled(): bool {
 		return $this->password_reset_flow;
+	}
+
+	/**
+	 * Whether to auto-authenticate the user after a successful password
+	 * reset (and send them to the validated post-reset redirect) instead
+	 * of bouncing them back to the sign-in form.
+	 *
+	 * @return bool
+	 */
+	public function is_auto_login_after_reset_enabled(): bool {
+		return $this->auto_login_after_reset;
 	}
 
 	/**

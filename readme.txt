@@ -181,6 +181,7 @@ WorkOS is provided by WorkOS, Inc.
 * New: `redirect_url` parameter on the admin REST endpoint and on the existing public reset endpoints. The value is validated against `home_url()` host, threaded through the WorkOS-hosted email link, and used by the AuthKit React shell to send the user to the chosen page after a successful reset. Fixes the CONS-287 regression where the post-reset URL was unconfigurable.
 * New: WorkOS reset emails now point at the in-site React reset page (`/workos/login/{slug}?token=…&redirect_to=…`) instead of `wp-login.php`. The old `wp-login.php?workos_action=reset-password` URL still resolves cleanly so any reset emails already in users' inboxes keep working.
 * New: Password strength + confirmation on the reset-confirm step. Users must enter the new password twice; the value is scored in real time via WordPress's `wp.passwordStrength.meter` (zxcvbn) and the submit button stays disabled until the fields match and the score reaches Strong. Site name and common words are passed as the zxcvbn disallowed list.
+* New: Per-profile `auto_login_after_reset` toggle (default on). When enabled, a successful password reset signs the user in (via the shared `LoginCompleter`, so MFA / organization selection / entitlement gates still apply) and lands them on the validated post-reset redirect URL. With the toggle off the user lands on the existing "Password reset — Continue to sign in" card.
 
 = 1.0.4 - 2026-05-14 =
 

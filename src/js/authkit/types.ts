@@ -52,6 +52,7 @@ export interface Profile {
 	signup: ProfileSignup;
 	invite_flow: boolean;
 	password_reset_flow: boolean;
+	auto_login_after_reset: boolean;
 	mfa: ProfileMfa;
 	branding: ProfileBranding;
 	post_login_redirect: string;

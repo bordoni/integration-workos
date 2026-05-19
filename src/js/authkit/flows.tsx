@@ -878,6 +878,18 @@ interface ResetConfirmProps {
 	profile: Profile;
 	token: string;
 	onDone: () => void;
+	/**
+	 * Invoked when the reset succeeded AND the server auto-signed the
+	 * user in (profile has `auto_login_after_reset` on, no MFA needed).
+	 * Receives the validated redirect URL to navigate to.
+	 */
+	onSignedIn?: ( redirectTo: string ) => void;
+	/**
+	 * Invoked when the auto-login attempt surfaced an MFA challenge.
+	 * Hands the standard MFA payload back to App.tsx so the existing
+	 * `mfa` step takes over from here.
+	 */
+	onMfa?: ( data: MfaRequired ) => void;
 }
 
 /**
@@ -887,10 +899,23 @@ interface ResetConfirmProps {
  * navigate the user to a post-reset destination without re-running the
  * same-host validation client-side. An absent or empty value means
  * "fall back to the existing onDone behavior" (return to sign-in).
+ *
+ * When the profile's `auto_login_after_reset` toggle is enabled the
+ * server additionally runs the new password through `LoginCompleter`
+ * and merges its result onto the payload — so `signed_in` flips true,
+ * `user` carries the freshly authenticated WP user, and `redirect_to`
+ * carries the post-login destination. If MFA kicks in, `mfa_required`
+ * is set instead and the parent App takes over the challenge step.
  */
 interface ResetConfirmResponse {
 	ok: boolean;
 	redirect_url?: string;
+	signed_in?: boolean;
+	user?: LoginSuccess[ 'user' ];
+	redirect_to?: string;
+	mfa_required?: true;
+	pending_authentication_token?: string;
+	factors?: MfaRequired[ 'factors' ];
 }
 
 /**
@@ -981,7 +1006,14 @@ function strengthVariant( score: number ): string {
 	return 'strong';
 }
 
-export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmProps ) {
+export function ResetConfirm( {
+	client,
+	profile,
+	token,
+	onDone,
+	onSignedIn,
+	onMfa,
+}: ResetConfirmProps ) {
 	const [ password, setPassword ] = useState( '' );
 	const [ confirmPassword, setConfirmPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
@@ -1054,6 +1086,36 @@ export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmPr
 			return;
 		}
 		const payload = data as ResetConfirmResponse;
+
+		// Auto-login path: profile.auto_login_after_reset is on AND no MFA.
+		// LoginCompleter already set the WP auth cookie server-side; just
+		// navigate to the validated destination.
+		if ( payload.signed_in && onSignedIn ) {
+			const dest =
+				payload.redirect_to || payload.redirect_url || '/';
+			onSignedIn( dest );
+			return;
+		}
+
+		// Auto-login path with MFA challenge: hand off to the App's existing
+		// MFA flow so the user enrolls / verifies and lands on the same
+		// redirect as a normal sign-in.
+		if (
+			payload.mfa_required &&
+			payload.pending_authentication_token &&
+			onMfa
+		) {
+			onMfa( {
+				mfa_required: true,
+				pending_authentication_token: payload.pending_authentication_token,
+				factors: payload.factors ?? [],
+			} );
+			return;
+		}
+
+		// Either auto-login is off, or the server fell back to "reset done,
+		// please sign in" because the auto-login attempt failed. Surface the
+		// success card and let the user click through.
 		setRedirectUrl( payload?.redirect_url ?? '' );
 		setSuccess( true );
 	};

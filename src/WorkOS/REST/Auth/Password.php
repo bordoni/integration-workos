@@ -319,13 +319,84 @@ class Password extends BaseEndpoint {
 			$profile
 		);
 
-		return new WP_REST_Response(
-			[
-				'ok'           => true,
-				'redirect_url' => $redirect_url,
-			],
-			200
-		);
+		// Default response shape — the "reset finished, please sign in" path.
+		$response_body = [
+			'ok'           => true,
+			'redirect_url' => $redirect_url,
+		];
+
+		// Auto-login path. Profile toggle controls whether the reset confirm
+		// drops the user back at the sign-in screen or signs them in
+		// straight away. We feed the new password back into the password
+		// authenticate call and reuse LoginCompleter so MFA / org selection
+		// / entitlement gates behave the same as a normal sign-in.
+		if ( $profile->is_auto_login_after_reset_enabled() ) {
+			$email = $this->extract_email( $workos_response );
+			if ( '' !== $email ) {
+				$auth_response = workos()->api()->authenticate_with_password(
+					$email,
+					$new_password,
+					$this->get_radar_token( $request )
+				);
+
+				$result = $this->login_completer->complete(
+					$auth_response,
+					$profile,
+					$redirect_url
+				);
+
+				if ( ! is_wp_error( $result ) ) {
+					// Either a finished login (with `user` + `redirect_to`) or
+					// an MFA challenge — both shapes are useful to the React
+					// shell. Surface the validated post-reset URL as the
+					// authoritative `redirect_to` when LoginCompleter didn't
+					// emit one of its own.
+					if ( isset( $result['redirect_to'] ) && '' === $result['redirect_to'] ) {
+						$result['redirect_to'] = $redirect_url;
+					}
+					$response_body = array_merge(
+						$response_body,
+						$result,
+						[ 'signed_in' => empty( $result['mfa_required'] ) ]
+					);
+				}
+				// On WP_Error from authenticate or LoginCompleter, fall through
+				// to the plain "reset finished" response. The password change
+				// still succeeded — the user can sign in manually.
+			}
+		}
+
+		return new WP_REST_Response( $response_body, 200 );
+	}
+
+	/**
+	 * Pull the user's email out of a WorkOS API response.
+	 *
+	 * `reset_password` and `authenticate_with_password` both nest the user
+	 * object under `user`; older shapes occasionally surfaced fields at the
+	 * top level, so check both before giving up.
+	 *
+	 * @param mixed $workos_response Parsed WorkOS response body.
+	 *
+	 * @return string Lowercased email, or empty if absent / unparseable.
+	 */
+	private function extract_email( $workos_response ): string {
+		if ( ! is_array( $workos_response ) ) {
+			return '';
+		}
+
+		$candidates = [
+			$workos_response['user']['email'] ?? null,
+			$workos_response['email'] ?? null,
+		];
+
+		foreach ( $candidates as $candidate ) {
+			if ( is_string( $candidate ) && '' !== $candidate ) {
+				return strtolower( trim( $candidate ) );
+			}
+		}
+
+		return '';
 	}
 
 	/**

@@ -28,6 +28,7 @@ function parseConfig( root: HTMLElement ): AppProps {
 		signup: rawProfile.signup ?? { enabled: false, require_invite: false },
 		invite_flow: rawProfile.invite_flow ?? true,
 		password_reset_flow: rawProfile.password_reset_flow ?? true,
+		auto_login_after_reset: rawProfile.auto_login_after_reset ?? true,
 		mfa: rawProfile.mfa ?? { enforce: 'if_required', factors: [ 'totp' ] },
 		branding: rawProfile.branding ?? {
 			logo_mode: 'default',

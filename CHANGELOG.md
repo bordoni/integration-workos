@@ -40,6 +40,18 @@
   dependency of the AuthKit bundle by `Renderer::enqueue()`; when
   zxcvbn is still loading the meter reports "Checking strength…"
   rather than gating on a transient.
+- **Auto-login after password reset** — new per-profile toggle
+  `auto_login_after_reset` (default: on). When enabled, a
+  successful reset_confirm authenticates the user with the new
+  password, runs it through the same `LoginCompleter` the rest of
+  the auth surfaces use (so MFA, organization selection, and the
+  entitlement gate all behave the same as a regular sign-in), sets
+  the WP auth cookie, and sends them to the validated post-reset
+  redirect. If MFA is required the React shell hands off to the
+  existing `mfa` step. With the toggle off the prior behaviour is
+  preserved — the user lands on the "Password reset / Continue to
+  sign in" card. Surfaced in the Login Profile editor under
+  "Flows".
 
 ## [1.0.4] - 2026-05-14
 
