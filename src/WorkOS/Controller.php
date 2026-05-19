@@ -11,6 +11,7 @@ use WorkOS\Contracts\Controller as BaseController;
 use WorkOS\Admin\AdminBar;
 use WorkOS\Admin\Controller as AdminController;
 use WorkOS\Admin\LoginProfiles\Controller as LoginProfilesAdminController;
+use WorkOS\Admin\Users\Controller as UsersAdminController;
 use WorkOS\Auth\AuthKit\Controller as AuthKitController;
 use WorkOS\Auth\Controller as AuthController;
 use WorkOS\REST\Controller as RESTController;
@@ -35,6 +36,7 @@ class Controller extends BaseController {
 		$this->container->register( AdminController::class );
 		$this->container->register( AuthKitController::class );
 		$this->container->register( LoginProfilesAdminController::class );
+		$this->container->register( UsersAdminController::class );
 		$this->container->register( AuthController::class );
 		$this->container->register( RESTController::class );
 		$this->container->register( WebhookController::class );

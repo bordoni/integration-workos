@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.5] - 2026-05-18
+
+### Added
+
+- **WorkOS → Users admin page** ([CONS-273](https://linear.app/nexcess/issue/CONS-273/re-enable-workos-emails-for-affected-portal-users))
+  — new submenu under WorkOS that mounts a paginated, searchable React
+  list of WorkOS users for the active environment. Each row exposes an
+  "Open in WorkOS" deep-link that takes the admin straight to the user's
+  Dashboard page (`https://dashboard.workos.com/{env}/users/{id}/details`),
+  where the per-user "Re-enable email" action lives. Gated by
+  `manage_options`. Backed by `GET /wp-json/workos/v1/admin/users`, which
+  proxies `Api\Client::list_users()` with sanitized `limit` (1..100),
+  cursor (`after`/`before`), `email` substring, and `organization_id`
+  pass-through, and enriches each user record with a server-computed
+  `dashboard_url` so the React side doesn't reconstruct it.
+
+  **Why list-only:** WorkOS exposes the "Re-enable email" action only
+  through the Dashboard — there is no public REST endpoint or webhook
+  event for email suppression / bounce state as of this release
+  (verified against the WorkOS API reference, the User schema, the
+  Events catalogue, and the public workos-node / -python / -ruby / -go
+  SDK sources). This page builds the foundation; once WorkOS ships an
+  API, a row + bulk action can be wired in without reworking the UI.
+
 ## [1.0.4] - 2026-05-14
 
 ### Fixed
