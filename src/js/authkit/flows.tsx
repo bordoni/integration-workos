@@ -903,15 +903,141 @@ interface ResetConfirmResponse {
  * user to the method picker so they can sign in with their new
  * password).
  */
+/**
+ * Score buckets returned by `window.wp.passwordStrength.meter`.
+ *
+ * The function exists once `password-strength-meter` is enqueued (we
+ * declare it as a hard dependency of the AuthKit bundle in
+ * {@see \WorkOS\Auth\AuthKit\Renderer::enqueue()}). zxcvbn loads
+ * asynchronously, so the meter returns `LOADING` until the library
+ * lands — treat that bucket as "still measuring" rather than "weak"
+ * so an early submit isn't blocked by a transient.
+ */
+const STRENGTH_LOADING = -1;
+const STRENGTH_MISMATCH = 5;
+/** Minimum zxcvbn score (0-4) we require before allowing submit. */
+const STRENGTH_MIN_REQUIRED = 3;
+
+interface PasswordStrengthGlobal {
+	meter: ( password1: string, disallowedList: string[], password2: string ) => number;
+}
+
+/**
+ * Read the WP password-strength helper off the `wp` global.
+ *
+ * Returns null when the bundle was loaded without `password-strength-meter`
+ * — surfaces can then degrade to "match-only" gating instead of crashing.
+ */
+function getPasswordStrength(): PasswordStrengthGlobal | null {
+	const wp = ( window as unknown as { wp?: { passwordStrength?: PasswordStrengthGlobal } } ).wp;
+	return wp?.passwordStrength ?? null;
+}
+
+/**
+ * Translate a `wp.passwordStrength.meter` score into a UI label.
+ *
+ * Mirrors the buckets WP uses in its own profile editor (Very weak →
+ * Weak → Medium → Strong) so users see familiar terminology.
+ */
+function strengthLabel( score: number ): string {
+	if ( score === STRENGTH_MISMATCH ) {
+		return __( 'Passwords do not match', 'integration-workos' );
+	}
+	if ( score === STRENGTH_LOADING ) {
+		return __( 'Checking strength…', 'integration-workos' );
+	}
+	switch ( score ) {
+		case 0:
+			return __( 'Very weak', 'integration-workos' );
+		case 1:
+			return __( 'Weak', 'integration-workos' );
+		case 2:
+			return __( 'Medium', 'integration-workos' );
+		case 3:
+			return __( 'Strong', 'integration-workos' );
+		case 4:
+			return __( 'Very strong', 'integration-workos' );
+		default:
+			return '';
+	}
+}
+
+/**
+ * CSS-ready strength bucket name for styling the meter dot/bar.
+ */
+function strengthVariant( score: number ): string {
+	if ( score === STRENGTH_MISMATCH ) {
+		return 'mismatch';
+	}
+	if ( score === STRENGTH_LOADING ) {
+		return 'loading';
+	}
+	if ( score <= 1 ) {
+		return 'weak';
+	}
+	if ( score === 2 ) {
+		return 'medium';
+	}
+	return 'strong';
+}
+
 export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmProps ) {
 	const [ password, setPassword ] = useState( '' );
+	const [ confirmPassword, setConfirmPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
 	const [ success, setSuccess ] = useState( false );
 	const [ redirectUrl, setRedirectUrl ] = useState( '' );
 
+	// The disallowed list seeds zxcvbn's dictionary so common
+	// site-specific guesses (the site name) lose strength points.
+	// We deliberately don't include the user's email here — the reset
+	// flow only knows the opaque WorkOS token, not the recipient.
+	const disallowedList = [ profile.siteName, 'wordpress', 'admin' ].filter(
+		( value ) => value && value.length > 0
+	);
+
+	const strength = getPasswordStrength();
+	const score = ( () => {
+		if ( ! password ) {
+			return STRENGTH_LOADING;
+		}
+		if ( ! strength ) {
+			// Meter wasn't loaded — fall back to match-only gating.
+			return confirmPassword && password !== confirmPassword
+				? STRENGTH_MISMATCH
+				: STRENGTH_MIN_REQUIRED;
+		}
+		return strength.meter( password, disallowedList, confirmPassword );
+	} )();
+
+	const matches = password.length > 0 && password === confirmPassword;
+	const strongEnough =
+		score !== STRENGTH_MISMATCH &&
+		score !== STRENGTH_LOADING &&
+		score >= STRENGTH_MIN_REQUIRED;
+	const canSubmit = matches && strongEnough && ! loading;
+
 	const submit = async ( event: FormEvent ) => {
 		event.preventDefault();
+		if ( ! canSubmit ) {
+			if ( ! matches ) {
+				setError(
+					__(
+						'The two passwords don’t match. Re-enter them and try again.',
+						'integration-workos'
+					)
+				);
+			} else if ( ! strongEnough ) {
+				setError(
+					__(
+						'Please choose a stronger password before continuing.',
+						'integration-workos'
+					)
+				);
+			}
+			return;
+		}
 		setLoading( true );
 		setError( '' );
 		const { ok, data } = await client.json< ResetConfirmResponse >(
@@ -1010,8 +1136,34 @@ export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmPr
 						required={ true }
 					/>
 				</Field>
+				<Field
+					label={ __( 'Confirm new password', 'integration-workos' ) }
+					htmlFor="wa-new-pw-confirm"
+				>
+					<Input
+						id="wa-new-pw-confirm"
+						type="password"
+						value={ confirmPassword }
+						onChange={ setConfirmPassword }
+						autoComplete="new-password"
+						required={ true }
+					/>
+				</Field>
+				{ password.length > 0 && (
+					<p
+						className={ `wa-password-strength wa-password-strength--${ strengthVariant(
+							score
+						) }` }
+						aria-live="polite"
+					>
+						<span className="wa-password-strength__label">
+							{ __( 'Password strength:', 'integration-workos' ) }
+						</span>{ ' ' }
+						<strong>{ strengthLabel( score ) }</strong>
+					</p>
+				) }
 				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
-				<Button type="submit" disabled={ loading }>
+				<Button type="submit" disabled={ ! canSubmit }>
 					{ loading ? <Spinner /> : __( 'Save new password', 'integration-workos' ) }
 				</Button>
 				<AuthKitSlot

@@ -329,3 +329,40 @@ body.workos-authkit-body #workos-authkit-root {
 @keyframes wa-spin {
 	to { transform: rotate( 360deg ); }
 }
+
+/*
+ * Password strength indicator (reset-confirm step).
+ *
+ * The variant suffix is set from `strengthVariant()` in flows.tsx so the
+ * color follows the score bucket. A neutral fallback covers the loading
+ * state while zxcvbn is still streaming in.
+ */
+#workos-authkit-root .wa-password-strength {
+	margin: -8px 0 12px;
+	font-size: 13px;
+	color: var( --wa-muted, #50575e );
+}
+
+#workos-authkit-root .wa-password-strength__label {
+	color: var( --wa-muted, #50575e );
+}
+
+#workos-authkit-root .wa-password-strength--loading strong {
+	color: var( --wa-muted, #50575e );
+}
+
+#workos-authkit-root .wa-password-strength--weak strong {
+	color: #d63638;
+}
+
+#workos-authkit-root .wa-password-strength--medium strong {
+	color: #dba617;
+}
+
+#workos-authkit-root .wa-password-strength--strong strong {
+	color: #00a32a;
+}
+
+#workos-authkit-root .wa-password-strength--mismatch strong {
+	color: #d63638;
+}

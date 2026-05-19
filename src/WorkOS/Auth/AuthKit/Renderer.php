@@ -72,10 +72,18 @@ class Renderer {
 					'version'      => WORKOS_VERSION,
 				];
 
+			// WP's `password-strength-meter` registers `window.wp.passwordStrength`
+			// (zxcvbn-async backed). Stapled onto the bundle so the reset-confirm
+			// flow can score the new password in real time and reject anything
+			// weak before we ask WorkOS to accept it.
+			$dependencies   = (array) ( $asset['dependencies'] ?? [ 'wp-element' ] );
+			$dependencies[] = 'password-strength-meter';
+			$dependencies   = array_values( array_unique( $dependencies ) );
+
 			wp_enqueue_script(
 				self::SCRIPT_HANDLE,
 				$this->assets_url . 'authkit.js',
-				$asset['dependencies'] ?? [ 'wp-element' ],
+				$dependencies,
 				$asset['version'] ?? WORKOS_VERSION,
 				true
 			);

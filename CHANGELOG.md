@@ -29,6 +29,17 @@
   on success. The old `wp-login.php?workos_action=reset-password`
   URL still resolves cleanly via `LoginTakeover`, so any reset
   emails already in users' inboxes continue to work.
+- **Password strength + confirmation on reset** — the
+  `ResetConfirm` step now requires the user to enter the new
+  password twice and runs it through WordPress's
+  `wp.passwordStrength.meter` (zxcvbn-backed) in real time. The
+  submit button stays disabled until the two fields match and the
+  score reaches `Strong` (zxcvbn ≥ 3). Site name and common words
+  are passed as the zxcvbn disallowed list so they lose strength
+  points. The `password-strength-meter` script is wired in as a
+  dependency of the AuthKit bundle by `Renderer::enqueue()`; when
+  zxcvbn is still loading the meter reports "Checking strength…"
+  rather than gating on a transient.
 
 ## [1.0.4] - 2026-05-14
 
