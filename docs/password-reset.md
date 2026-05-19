@@ -23,40 +23,44 @@ All three converge on the same WorkOS API call (`POST /user_management/password_
 
 ## End-to-end flow
 
-```
-┌─────────────┐    1. POST /reset/start (or admin/users/{id}/password-reset)
-│  caller     │───────────────────────────────────────────────────────────────┐
-└─────────────┘                                                               ▼
-                                                                  ┌─────────────────────┐
-                                                                  │ integration-workos  │
-                                                                  │ validates redirect, │
-                                                                  │ rate-limits, calls  │
-                                                                  │ WorkOS              │
-                                                                  └─────────┬───────────┘
-                                                                            │
-                                                                            ▼
-                                                                  ┌──────────────────────┐
-                                                                  │ WorkOS sends an      │
-                                                                  │ email containing     │
-                                                                  │ /workos/login/{slug} │
-                                                                  │ ?token=…             │
-                                                                  │ &redirect_to=…       │
-                                                                  └─────────┬────────────┘
-                                                                            │
-                                  2. user clicks email link                 │
-   ┌─────────────────────────────────────────────────────────────────────────┘
-   ▼
-┌──────────────────────────┐   3. POST /reset/confirm   ┌─────────────────────────┐
-│ /workos/login/{slug}     │──────────────────────────▶│ integration-workos      │
-│ React shell mounts in    │                            │ resets WorkOS pwd, then │
-│ ResetConfirm step        │                            │   - mirrors password to │
-└──────────────────────────┘                            │     linked WP user      │
-                                                        │   - (optional) signs    │
-                                                        │     them in via         │
-                                                        │     LoginCompleter      │
-                                                        └────────┬────────────────┘
-                                                                 ▼
-                                              4. Browser navigates to redirect_to
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Caller as Caller<br/>(user form / admin)
+    participant Plugin as integration-workos
+    participant WorkOS as WorkOS API
+    actor User as End user
+    participant Shell as AuthKit React shell<br/>(/workos/login/{slug})
+
+    Caller->>Plugin: POST /reset/start<br/>or /admin/users/{id}/password-reset
+    activate Plugin
+    Plugin->>Plugin: Validate redirect_url<br/>(same-host or fallback)
+    Plugin->>Plugin: Rate-limit (per IP + per target)
+    Plugin->>WorkOS: send_password_reset(email, reset_url)
+    WorkOS-->>Plugin: 200 OK
+    Plugin-->>Caller: 200 { ok: true, ... }
+    deactivate Plugin
+
+    WorkOS->>User: Email link<br/>/workos/login/{slug}?token=…&redirect_to=…
+    User->>Shell: Click link
+
+    Shell->>Plugin: POST /reset/confirm<br/>{ token, new_password, redirect_url }
+    activate Plugin
+    Plugin->>WorkOS: reset_password(token, new_password)
+    WorkOS-->>Plugin: 200 { user: { id, email } }
+    Plugin->>Plugin: Mirror password to linked WP user<br/>(wp_set_password)
+
+    alt auto_login_after_reset = true
+        Plugin->>WorkOS: authenticate_with_password
+        WorkOS-->>Plugin: tokens (or pending MFA)
+        Plugin->>Plugin: LoginCompleter sets WP auth cookie
+        Plugin-->>Shell: { ok, signed_in, redirect_to }
+    else auto_login_after_reset = false
+        Plugin-->>Shell: { ok, redirect_url }
+    end
+    deactivate Plugin
+
+    Shell->>User: window.location.assign(redirect_to)
 ```
 
 ---
