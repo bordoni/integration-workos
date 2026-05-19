@@ -4,22 +4,42 @@
 
 ### Added
 
-- **Admin-triggered WorkOS password reset** (#20, CONS-287) — A
-  privileged WP user can now send a WorkOS password-reset email on
-  behalf of any linked user via `POST /wp-json/workos/v1/admin/users/
-  {id}/password-reset`. The endpoint is gated by `edit_user($id)`
-  (so the same route also covers self-service from the shortcode),
-  rate-limited per-IP and per-target, and writes a
-  `password_reset.admin_sent` event to the activity log. Triggered
-  from three surfaces: a `Send WorkOS password reset` inline row
-  action on `wp-admin/users.php`, a `Password Reset` panel on the
-  user-edit screen, and a `[workos:password-reset]` shortcode that
-  toggles between admin-of-other (`user="…"`) and self-service
-  modes based on its attributes. Companion `redirect_url` parameter
-  threads through every layer: the value is validated same-host
-  against `home_url()`, baked into the URL handed to WorkOS for the
-  email, and passed back to the React shell so the user lands on
-  the chosen page after a successful reset. Fixes the long-standing
+- **WorkOS → Users admin page** ([CONS-273](https://linear.app/nexcess/issue/CONS-273/re-enable-workos-emails-for-affected-portal-users))
+  — new submenu under WorkOS that mounts a paginated, searchable React
+  list of WorkOS users for the active environment. Each row exposes an
+  "Open in WorkOS" deep-link that takes the admin straight to the user's
+  Dashboard page (`https://dashboard.workos.com/{env}/users/{id}/details`),
+  where the per-user "Re-enable email" action lives. Gated by
+  `manage_options`. Backed by `GET /wp-json/workos/v1/admin/users`, which
+  proxies `Api\Client::list_users()` with sanitized `limit` (1..100),
+  cursor (`after`/`before`), `email` substring, and `organization_id`
+  pass-through, and enriches each user record with a server-computed
+  `dashboard_url` so the React side doesn't reconstruct it.
+
+  **Why list-only:** WorkOS exposes the "Re-enable email" action only
+  through the Dashboard — there is no public REST endpoint or webhook
+  event for email suppression / bounce state as of this release
+  (verified against the WorkOS API reference, the User schema, the
+  Events catalogue, and the public workos-node / -python / -ruby / -go
+  SDK sources). This page builds the foundation; once WorkOS ships an
+  API, a row + bulk action can be wired in without reworking the UI.
+- **Admin-triggered WorkOS password reset** (#21, [CONS-287](https://linear.app/nexcess/issue/CONS-287/reset-password-redirects-users-to-kadence-central))
+  — A privileged WP user can now send a WorkOS password-reset email
+  on behalf of any linked user via
+  `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. The
+  endpoint is gated by `edit_user($id)` (so the same route also
+  covers self-service from the shortcode), rate-limited per-IP and
+  per-target, and writes a `password_reset.admin_sent` event to the
+  activity log. Triggered from three surfaces: a `Send WorkOS
+  password reset` inline row action on `wp-admin/users.php`, a
+  `Password Reset` panel on the user-edit screen, and a
+  `[workos:password-reset]` shortcode that toggles between
+  admin-of-other (`user="…"`) and self-service modes based on its
+  attributes. Companion `redirect_url` parameter threads through
+  every layer: the value is validated same-host against
+  `home_url()`, baked into the URL handed to WorkOS for the email,
+  and passed back to the React shell so the user lands on the
+  chosen page after a successful reset. Fixes the long-standing
   CONS-287 ("reset password redirects users to Kadence Central")
   where the post-reset URL was unconfigurable.
 - **In-site React reset page** — reset emails now point at

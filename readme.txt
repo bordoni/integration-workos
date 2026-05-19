@@ -177,7 +177,8 @@ WorkOS is provided by WorkOS, Inc.
 
 = 1.0.5 - 2026-05-18 =
 
-* New: Admin-triggered WorkOS password reset. A user with `edit_user` capability on a linked target (which includes self-service, since WP grants `edit_user` on one's own ID) can send a WorkOS reset email via three surfaces — a row action on `wp-admin/users.php`, a "Password Reset" panel on the user-edit screen, and the new `[workos:password-reset]` shortcode. The shortcode supports both admin-of-other (`user="…"`) and self-service (no `user` attr) modes. (#20)
+* New: WorkOS → Users admin page. Paginated, searchable React list of WorkOS users for the active environment, with a per-row "Open in WorkOS" deep-link straight to the user's Dashboard page. Lets admins triage WorkOS users (including re-enabling a suppressed email under the Dashboard's Emails tab) without bouncing through the Dashboard's own user picker. Requires `manage_options`. No bulk re-enable yet — WorkOS does not expose a public REST endpoint for the "Re-enable email" action. ([CONS-273](https://linear.app/nexcess/issue/CONS-273/re-enable-workos-emails-for-affected-portal-users))
+* New: Admin-triggered WorkOS password reset. A user with `edit_user` capability on a linked target (which includes self-service, since WP grants `edit_user` on one's own ID) can send a WorkOS reset email via three surfaces — a row action on `wp-admin/users.php`, a "Password Reset" panel on the user-edit screen, and the new `[workos:password-reset]` shortcode. The shortcode supports both admin-of-other (`user="…"`) and self-service (no `user` attr) modes. (#21)
 * New: `redirect_url` parameter on the admin REST endpoint and on the existing public reset endpoints. The value is validated against `home_url()` host, threaded through the WorkOS-hosted email link, and used by the AuthKit React shell to send the user to the chosen page after a successful reset. Fixes the CONS-287 regression where the post-reset URL was unconfigurable.
 * New: WorkOS reset emails now point at the in-site React reset page (`/workos/login/{slug}?token=…&redirect_to=…`) instead of `wp-login.php`. The old `wp-login.php?workos_action=reset-password` URL still resolves cleanly so any reset emails already in users' inboxes keep working.
 * New: Password strength + confirmation on the reset-confirm step. Users must enter the new password twice; the value is scored in real time via WordPress's `wp.passwordStrength.meter` (zxcvbn) and the submit button stays disabled until the fields match and the score reaches Strong. Site name and common words are passed as the zxcvbn disallowed list.
@@ -254,7 +255,7 @@ Base platform:
 == Upgrade Notice ==
 
 = 1.0.5 =
-Adds admin-triggered WorkOS password resets (Users list row action, user-edit panel, and `[workos:password-reset]` shortcode) and a `redirect_url` parameter that lands users on the chosen page after they finish resetting. WorkOS reset emails now point at the in-site React reset page instead of `wp-login.php`.
+Adds the WorkOS → Users admin page (read-only, paginated, searchable, with deep-links into the WorkOS Dashboard for re-enabling a user's suppressed email), admin-triggered WorkOS password resets (Users list row action, user-edit panel, and `[workos:password-reset]` shortcode), and a `redirect_url` parameter that lands users on the chosen page after they finish resetting. WorkOS reset emails now point at the in-site React reset page instead of `wp-login.php`.
 
 = 1.0.4 =
 Fixes the "you have been logged out" screen leaking the native wp-login form, password-reset emails arriving with HTML-encoded `&amp;` in the link, an infinite redirect loop caused by cached redirect responses, and a Login Profile editor bug where unchecking an auth method or MFA factor did not persist on save.

@@ -4,7 +4,7 @@
 
 Enterprise identity management for WordPress powered by WorkOS. SSO, directory sync, MFA, and user management.
 
-- **Version:** 1.0.4
+- **Version:** 1.0.5
 - **Namespace:** `WorkOS\`
 - **PHP Requirement:** 7.4+
 - **WordPress Requirement:** 5.9+
@@ -80,6 +80,11 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Admin/DiagnosticsPage.php` | System diagnostics page |
 | `src/WorkOS/Admin/OnboardingPage.php` | Onboarding wizard UI |
 | `src/WorkOS/Admin/OnboardingAjax.php` | Onboarding wizard AJAX handlers |
+| **Admin — Users** | |
+| `src/WorkOS/Admin/Users/Controller.php` | Wires the WorkOS Users admin submenu + REST endpoint |
+| `src/WorkOS/Admin/Users/AdminPage.php` | Admin submenu (WorkOS → Users) that mounts the React user list |
+| `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters and a server-computed `dashboard_url` per row |
+| `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link) |
 | **Admin — Login Profiles (Custom AuthKit)** | |
 | `src/WorkOS/Admin/LoginProfiles/Controller.php` | Wires Login Profile admin page + CRUD REST |
 | `src/WorkOS/Admin/LoginProfiles/AdminPage.php` | Admin submenu that mounts the React editor |
