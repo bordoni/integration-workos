@@ -74,7 +74,7 @@ Per-environment constants (take priority over generic):
 | **Admin** | |
 | `src/WorkOS/Admin/Controller.php` | Admin controller, registers settings/user list/onboarding/diagnostics |
 | `src/WorkOS/Admin/Settings.php` | Admin settings page (tabs: Settings, Organization, Users) |
-| `src/WorkOS/Admin/UserList.php` | Admin user list integration (WorkOS columns) |
+| `src/WorkOS/Admin/UserList.php` | Admin user list integration (WorkOS column). Exposes `workos_user_list_column_actions` filter so subsystems can add per-row WorkOS actions (slug-keyed; joined with pipe separators) — see PasswordResetAdmin `RowActions`. |
 | `src/WorkOS/Admin/UserProfile.php` | User profile page WorkOS metadata |
 | `src/WorkOS/Admin/AdminBar.php` | Admin bar environment badge |
 | `src/WorkOS/Admin/DiagnosticsPage.php` | System diagnostics page |
@@ -82,9 +82,9 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Admin/OnboardingAjax.php` | Onboarding wizard AJAX handlers |
 | **Admin — Users** | |
 | `src/WorkOS/Admin/Users/Controller.php` | Wires the WorkOS Users admin submenu + REST endpoint |
-| `src/WorkOS/Admin/Users/AdminPage.php` | Admin submenu (WorkOS → Users) that mounts the React user list |
-| `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters and a server-computed `dashboard_url` per row |
-| `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link) |
+| `src/WorkOS/Admin/Users/AdminPage.php` | Admin submenu (WorkOS → Users) that mounts the React user list and enqueues the shared `workos-admin-password-reset` JS/CSS so the per-row trigger button works. |
+| `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters, a server-computed `dashboard_url` per row, and a `wp_user_id` resolved via `_workos_user_id` meta so the React side can show the "Send password reset" trigger only for linked rows. |
+| `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link + per-row Send-password-reset button when `wp_user_id > 0`) |
 | **Admin — Login Profiles (Custom AuthKit)** | |
 | `src/WorkOS/Admin/LoginProfiles/Controller.php` | Wires Login Profile admin page + CRUD REST |
 | `src/WorkOS/Admin/LoginProfiles/AdminPage.php` | Admin submenu that mounts the React editor |
@@ -94,20 +94,29 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/Login.php` | SSO login flow (redirect + headless modes) |
 | `src/WorkOS/Auth/LoginBypass.php` | Login bypass (`?fallback=1`) when WorkOS is unavailable |
 | `src/WorkOS/Auth/Registration.php` | User registration redirect |
-| `src/WorkOS/Auth/PasswordReset.php` | Password reset flow |
+| `src/WorkOS/Auth/PasswordReset.php` | Legacy guard — blocks WP's native password-reset flow for WorkOS-linked users so they're funneled to the WorkOS-backed reset (`PasswordResetAdmin/*`) instead. |
+| **Auth — Password Reset Admin** ([`docs/password-reset.md`](docs/password-reset.md)) | |
+| `src/WorkOS/Auth/PasswordResetAdmin/Controller.php` | DI controller — wires the REST endpoint, JS/CSS assets, WP user-row trigger, user-edit panel, and the `[workos:password-reset]` shortcode. |
+| `src/WorkOS/Auth/PasswordResetAdmin/RestApi.php` | `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. Gated by `current_user_can('edit_user', $id)` — the same route covers admin-of-other and self-service (WP grants `edit_user($self)` to any logged-in user). Per-IP (10/min) and per-target (5/min) rate limits via `Auth\AuthKit\RateLimiter`. Writes `password_reset.admin_sent` to the activity log. Builds the email URL via `FrontendRoute::url_for_profile()` so reset emails land on the React shell. |
+| `src/WorkOS/Auth/PasswordResetAdmin/RedirectValidator.php` | Same-host validator for `redirect_url`. Rejects cross-origin, protocol-relative (`//host`), and non-`http(s)` schemes. Falls back to `Profile::get_post_login_redirect()` then `home_url('/')`. |
+| `src/WorkOS/Auth/PasswordResetAdmin/RowActions.php` | "Send password reset" row action under the **WorkOS column** on `wp-admin/users.php` (hooks `workos_user_list_column_actions` filter exposed by `Admin\UserList`). |
+| `src/WorkOS/Auth/PasswordResetAdmin/UserProfilePanel.php` | "Password Reset" panel + trigger button on the WP user-edit screen (`edit_user_profile` / `show_user_profile` at priority 20 so it renders after the existing read-only WorkOS panel). |
+| `src/WorkOS/Auth/PasswordResetAdmin/Shortcode.php` | `[workos:password-reset]` — toggles between admin-of-other (`user="id-or-email"`) and self-service (no `user`) modes based on its attributes. |
+| `src/WorkOS/Auth/PasswordResetAdmin/Assets.php` | Registers `workos-admin-password-reset` JS/CSS handles + localizes `workosPasswordReset` (REST URL, `wp_rest` nonce, masked-email-aware UI strings). Auto-enqueues on `users.php` / `user-edit.php` / `profile.php`. |
+| `src/js/admin-password-reset/index.ts` | Delegated `.workos-pwreset-trigger` click handler — POSTs to the admin endpoint and surfaces a transient admin notice. Same handler powers every trigger surface (WP Users row, user-edit panel, shortcode, WorkOS Users admin page row). |
 | `src/WorkOS/Auth/Redirect.php` | Role-based login redirects |
 | `src/WorkOS/Auth/LogoutRedirect.php` | Role-based logout redirects |
 | **Auth — Custom AuthKit (React shell)** | |
 | `src/WorkOS/Auth/AuthKit/Controller.php` | Wires Login Profile CPT + takeover + shortcode + route |
-| `src/WorkOS/Auth/AuthKit/Profile.php` | Immutable Login Profile value object |
+| `src/WorkOS/Auth/AuthKit/Profile.php` | Immutable Login Profile value object. Carries the `password_reset_flow` and `auto_login_after_reset` toggles consumed by the password-reset endpoints. |
 | `src/WorkOS/Auth/AuthKit/ProfileRepository.php` | CPT-backed CRUD + default seeding |
 | `src/WorkOS/Auth/AuthKit/ProfileRouter.php` | Rule-based profile resolution |
 | `src/WorkOS/Auth/AuthKit/LoginCompleter.php` | Post-auth finalizer (EntitlementGate + MFA policy) |
 | `src/WorkOS/Auth/AuthKit/LoginTakeover.php` | wp-login.php `action=login` takeover, default-profile custom-path bounce, already-signed-in 302 |
 | `src/WorkOS/Auth/AuthKit/LoginRedirector.php` | `for_visitor( Profile )` precedence (post_login_redirect → validated redirect_to → admin_url) + `forward_query_args` filter; mirrors `src/js/authkit/redirect.ts` allowlist |
-| `src/WorkOS/Auth/AuthKit/FrontendRoute.php` | `/workos/login/{profile}` canonical rewrite + per-profile `custom_path` rewrites (signature-gated flush) + already-signed-in guard |
+| `src/WorkOS/Auth/AuthKit/FrontendRoute.php` | `/workos/login/{profile}` canonical rewrite + per-profile `custom_path` rewrites (signature-gated flush) + already-signed-in guard. Exposes `FrontendRoute::url_for_profile( Profile, $args )` so password-reset emails (and any future caller) build the same URL the rewrite resolves. |
 | `src/WorkOS/Auth/AuthKit/Shortcode.php` | `[workos:login]` shortcode |
-| `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue. Fires `workos_authkit_enqueue_assets` action and applies `workos_authkit_branding` / `workos_authkit_profile_data` / `workos_authkit_body_classes` filters — see `docs/extending-the-login-ui.md` |
+| `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue. Stapled to `password-strength-meter` (zxcvbn) so `wp.passwordStrength.meter` is available for the reset-confirm form. Emits a pre-hydration skeleton inside the mount `<div>` mirroring the React `FlowSkeleton` shape (1- or 2-input variant chosen from `initial_step` / `reset_token` / `invitation_token`) so the page never paints blank. Fires `workos_authkit_enqueue_assets` action and applies `workos_authkit_branding` / `workos_authkit_profile_data` / `workos_authkit_body_classes` filters — see `docs/extending-the-login-ui.md`. |
 | `src/WorkOS/Auth/AuthKit/Nonce.php` | Profile-scoped CSRF nonces |
 | `src/WorkOS/Auth/AuthKit/RateLimiter.php` | Per-IP / per-email transient buckets |
 | `src/WorkOS/Auth/AuthKit/Radar.php` | WorkOS Radar site-key + request-header extraction |
@@ -146,7 +155,7 @@ Per-environment constants (take priority over generic):
 | **REST — Public Auth (Custom AuthKit)** | |
 | `src/WorkOS/REST/Auth/Controller.php` | Wires all public `/wp-json/workos/v1/auth/*` endpoints |
 | `src/WorkOS/REST/Auth/BaseEndpoint.php` | Shared profile + nonce + rate-limit + Radar helpers |
-| `src/WorkOS/REST/Auth/Password.php` | `password/authenticate`, `password/reset/{start,confirm}` |
+| `src/WorkOS/REST/Auth/Password.php` | `password/authenticate`, `password/reset/{start,confirm}`. `reset_confirm` mirrors the new password into the linked WP user (`wp_set_password`) and, when `Profile::is_auto_login_after_reset_enabled()` is on, re-authenticates via WorkOS and runs the result through `LoginCompleter` so MFA / org-selection / entitlement gates still apply. `build_password_reset_url()` builds the email URL via `FrontendRoute::url_for_profile()` and `html_entity_decode()`s the final URL (the legacy regression `home_url` filters that escape `&` to `&amp;`). |
 | `src/WorkOS/REST/Auth/MagicCode.php` | `magic/{send,verify}` |
 | `src/WorkOS/REST/Auth/Session.php` | `nonce`, `session/{refresh,logout}` |
 | `src/WorkOS/REST/Auth/Signup.php` | `signup/{create,verify}` |
@@ -168,10 +177,10 @@ Per-environment constants (take priority over generic):
 | `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User` |
 | **Browser — Custom AuthKit (TypeScript + TSX)** | |
 | `src/js/authkit/index.tsx` | Entry + data-* hydration |
-| `src/js/authkit/App.tsx` | Top-level step machine |
+| `src/js/authkit/App.tsx` | Top-level step machine. Renders `FlowSkeleton` while `client.bootstrap()` is in-flight (replaces the prior `return null;` blank window). The `reset_confirm` step receives the `onSignedIn` + `onMfa` callbacks so the auto-login-after-reset path can navigate to the validated redirect or hand off to the MFA challenge step. |
 | `src/js/authkit/api.ts` | Fetch client w/ nonce + 401 refresh + Radar header |
-| `src/js/authkit/flows.tsx` | 11 flow components (password, magic, signup, reset, mfa, invitation, complete) |
-| `src/js/authkit/ui.tsx` | 11 primitives (Button, Input, Card, …) |
+| `src/js/authkit/flows.tsx` | 11 flow components (password, magic, signup, reset, mfa, invitation, complete). `ResetConfirm` renders two password fields (new + confirm), scores via `window.wp.passwordStrength.meter` (zxcvbn ≥ 3 required), and disables submit until both match. On success it dispatches based on the response shape: `signed_in` → navigate to `redirect_to`; `mfa_required` → bubble to App's MFA step; otherwise → success card with manual continue. |
+| `src/js/authkit/ui.tsx` | 11 primitives + `FlowSkeleton` placeholder card with shimmering rows (heights match the hydrated card one-to-one — heading 24px / label 16px / input 44px / button 40px). Used by App during the boot window and mirrored shape-for-shape in `Renderer::build_skeleton_markup()` for the pre-hydration window. |
 | `src/js/authkit/radar.ts` | WorkOS Radar SDK loader (+ `window.WorkOSRadar` augmentation) |
 | `src/js/authkit/redirect.ts` | `forwardQueryArgs( destination, originalQuery )` — strips internals (`redirect_to`, `_wpnonce`, `loggedout`, `wp_lang`, `workos_*`, …) and appends safe args; mirrors PHP `LoginRedirector::INTERNAL_QUERY_ARGS` |
 | `src/js/authkit/slots.tsx` | SlotFill slot name constants (10 slots, including `workos.authkit.belowCard`) |
@@ -184,7 +193,7 @@ Per-environment constants (take priority over generic):
 | `package.json` | JS dependencies (bun; uses `@wordpress/scripts` v30 + TypeScript strict) |
 | `bun.lock` | Locked dependency graph (committed) |
 | `tsconfig.json` | TypeScript config (strict, `jsx: react-jsx`, `noEmit: true`) |
-| `webpack.config.js` | Extends `@wordpress/scripts` default config with authkit + admin-profiles entries |
+| `webpack.config.js` | Extends `@wordpress/scripts` default config with `authkit`, `admin-profiles`, `admin-users`, and `admin-password-reset` entries |
 | `phpstan.neon.dist` | PHPStan config (level 5, scans `src/` + `integration-workos.php` + `uninstall.php`, `phpVersion: 70400`, Strauss vendor resolved via `vendor/autoload.php` in `scanFiles`) |
 | `phpstan/stubs.php` | Symbol stubs for `WORKOS_*` runtime-defined constants so PHPStan can resolve them statically — never executed |
 
@@ -278,7 +287,10 @@ tests/
     ├── OnboardingSyncTest.php                      # Onboarding sync tests
     ├── OptionsTest.php                             # Options classes tests
     ├── OrganizationManagerTest.php                 # Organization manager tests
-    ├── PasswordResetTest.php                       # Password reset tests
+    ├── PasswordResetTest.php                       # Legacy WP-side password reset guard tests
+    ├── PasswordResetAdminRedirectValidatorTest.php  # Same-host redirect validator: accept absolute/relative same-host; reject cross-origin/protocol-relative/non-http; profile-default fallback chain
+    ├── PasswordResetAdminRestApiTest.php            # `POST /admin/users/{id}/password-reset` — capability matrix, missing user, unlinked user, masked-email response, redirect_url validation, rate limit, activity-log row content
+    ├── PasswordResetAdminRowActionsTest.php         # `workos_user_list_column_actions` filter + RowActions injection (capability check, self-service, defensive empty-workos_id)
     ├── PluginTest.php                              # Plugin singleton + constants tests
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests

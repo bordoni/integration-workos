@@ -98,6 +98,7 @@ interface Profile {
 	signup: { enabled: boolean; require_invite: boolean };
 	invite_flow: boolean;
 	password_reset_flow: boolean;
+	auto_login_after_reset: boolean;
 	mfa: { enforce: MfaEnforce; factors: MfaFactor[] };
 	branding: {
 		logo_mode: LogoMode;
@@ -695,6 +696,7 @@ function emptyProfile(): Profile {
 		signup: { enabled: false, require_invite: false },
 		invite_flow: true,
 		password_reset_flow: true,
+		auto_login_after_reset: true,
 		mfa: { enforce: 'if_required', factors: [ 'totp' ] },
 		branding: {
 			logo_mode: 'default',
@@ -910,6 +912,26 @@ function Editor( {
 						}
 					/>
 					{ __( 'Password reset', 'integration-workos' ) }
+				</label>
+				<label className="wpa-check">
+					<input
+						type="checkbox"
+						checked={ data.auto_login_after_reset }
+						disabled={ ! data.password_reset_flow }
+						onChange={ ( e: ChangeEvent< HTMLInputElement > ) =>
+							set( { auto_login_after_reset: e.target.checked } )
+						}
+					/>
+					{ __(
+						'Sign user in automatically after password reset',
+						'integration-workos'
+					) }
+					<span className="wpa-check__hint">
+						{ __(
+							'When enabled, a successful reset creates a session and sends the user to the post-reset redirect URL instead of showing the “sign in” card.',
+							'integration-workos'
+						) }
+					</span>
 				</label>
 			</fieldset>
 

@@ -70,6 +70,37 @@ class FrontendRoute {
 	}
 
 	/**
+	 * Build the canonical frontend URL for a given profile.
+	 *
+	 * Always returns the /workos/login/{slug} canonical URL — custom paths
+	 * are an inbound alias only, so callers that need a stable outbound URL
+	 * (emails, redirects, admin links) get the canonical one. Extra query
+	 * args (e.g. `redirect_to`, `token`) are appended verbatim; they should
+	 * already be validated by the caller.
+	 *
+	 * @param Profile              $profile Active profile.
+	 * @param array<string,string> $args    Optional query args to append.
+	 *
+	 * @return string Absolute URL.
+	 */
+	public static function url_for_profile( Profile $profile, array $args = [] ): string {
+		$base = home_url( '/workos/login/' . $profile->get_slug() . '/' );
+		if ( empty( $args ) ) {
+			return $base;
+		}
+
+		$filtered = [];
+		foreach ( $args as $key => $value ) {
+			if ( null === $value || '' === $value ) {
+				continue;
+			}
+			$filtered[ $key ] = (string) $value;
+		}
+
+		return $filtered ? add_query_arg( $filtered, $base ) : $base;
+	}
+
+	/**
 	 * Register the /workos/login/{profile} rewrite rule.
 	 *
 	 * Static so Plugin::activate() can call it before the DI container is

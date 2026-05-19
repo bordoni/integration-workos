@@ -435,28 +435,42 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	}
 
 	/**
-	 * URLs sent to WorkOS use literal `&`, even when an upstream filter
-	 * HTML-escapes `wp_login_url()` — WorkOS emails the URL verbatim.
+	 * URLs sent to WorkOS use literal `&`, even when an upstream `home_url`
+	 * filter HTML-escapes ampersands — WorkOS emails the URL verbatim, so
+	 * the entity-decoded form is what reaches the inbox.
+	 *
+	 * Reset emails now point at the AuthKit React route
+	 * (`/workos/login/{slug}/`), so the regression scenario is a
+	 * `home_url` filter (not `login_url`) inserting HTML entities into the
+	 * URL before we tack on `redirect_to` via `add_query_arg()`.
 	 *
 	 * @dataProvider escaped_ampersand_provider
 	 */
 	public function test_reset_start_sends_url_with_unescaped_ampersands( string $escaped_amp ): void {
-		$escape_login_url = static function () use ( $escaped_amp ): string {
-			return 'https://example.test/wp-login.php?reauth=1' . $escaped_amp . 'redirect_to=https%3A%2F%2Fexample.test%2Fdashboard';
+		// Simulate a host-site home_url filter that runs the URL through
+		// esc_url() / esc_attr(). The literal `&` that `add_query_arg()`
+		// emits is what gets escaped, so we splice the entity in directly.
+		$escape_home_url = static function ( $url ) use ( $escaped_amp ): string {
+			// Add a pre-existing query arg with an HTML-escaped separator so
+			// the next add_query_arg() call has to navigate past the entity.
+			$url = (string) $url;
+			$sep = false === strpos( $url, '?' ) ? '?' : $escaped_amp;
+			return $url . $sep . 'foo=1' . $escaped_amp . 'bar=2';
 		};
-		add_filter( 'login_url', $escape_login_url );
+		add_filter( 'home_url', $escape_home_url );
 
 		try {
 			$response = $this->dispatch_with_nonce(
 				'POST',
 				'/workos/v1/auth/password/reset/start',
 				[
-					'profile' => 'members',
-					'email'   => 'someone@example.com',
+					'profile'      => 'members',
+					'email'        => 'someone@example.com',
+					'redirect_url' => home_url( '/welcome' ),
 				]
 			);
 		} finally {
-			remove_filter( 'login_url', $escape_login_url );
+			remove_filter( 'home_url', $escape_home_url );
 		}
 
 		$this->assertSame( 200, $response->get_status() );
@@ -477,9 +491,8 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		$reset_url = $body['password_reset_url'];
 		$this->assertStringNotContainsString( '&amp;', $reset_url, 'URL must not contain HTML-escaped ampersands.' );
 		$this->assertStringNotContainsString( '&#038;', $reset_url, 'URL must not contain numeric-entity ampersands.' );
-		$this->assertStringContainsString( 'reauth=1&redirect_to=', $reset_url, 'Upstream-filter separator must be a literal &.' );
-		$this->assertStringContainsString( 'workos_action=reset-password', $reset_url );
-		$this->assertStringContainsString( 'profile=members', $reset_url );
+		$this->assertStringContainsString( '/workos/login/members/', $reset_url, 'Reset URL must point at the AuthKit frontend route for the profile.' );
+		$this->assertStringContainsString( 'redirect_to=', $reset_url, 'Validated redirect_to must be appended to the URL.' );
 	}
 
 	/**
@@ -719,6 +732,389 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		);
 		$this->assertEmpty( $update_calls, 'Password must not be synced in email-confirmation mode.' );
 	}
+
+	// -------------------------------------------------------------------------
+	// reset_confirm auto-login tests
+	// -------------------------------------------------------------------------
+
+	/**
+	 * When `auto_login_after_reset` is on (the default), a successful
+	 * confirm runs through LoginCompleter, signs the user in, and returns
+	 * `signed_in => true` with the resolved redirect destination.
+	 *
+	 * Two upstream calls: WorkOS `reset_password` then
+	 * `authenticate_with_password` to mint a session.
+	 */
+	public function test_reset_confirm_auto_signs_user_in_when_toggle_on(): void {
+		// reset_password response (carries the user object).
+		$reset_body = wp_json_encode(
+			[
+				'user' => [
+					'id'             => 'user_wos_reset',
+					'email'          => 'reset_user@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+		// authenticate_with_password response that LoginCompleter consumes.
+		$auth_body = wp_json_encode(
+			[
+				'access_token'  => 'access_xyz',
+				'refresh_token' => 'refresh_xyz',
+				'user'          => [
+					'id'             => 'user_wos_reset',
+					'email'          => 'reset_user@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $reset_body ],
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $auth_body ],
+		];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_abc',
+				'new_password' => 'CorrectHorseBatteryStaple!',
+				'redirect_url' => home_url( '/dashboard' ),
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['ok'] ?? false );
+		$this->assertTrue( $data['signed_in'] ?? false, 'signed_in flag must be true on the auto-login path.' );
+		$this->assertSame( home_url( '/dashboard' ), $data['redirect_to'] ?? null );
+		$this->assertSame( 'reset_user@example.com', $data['user']['email'] ?? null );
+
+		// Both upstream calls fired.
+		$reset_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/password_reset/confirm' )
+		);
+		$auth_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertCount( 1, $reset_calls );
+		$this->assertCount( 1, $auth_calls );
+
+		// WP cookie was set.
+		$this->assertGreaterThan( 0, get_current_user_id(), 'A WP session must exist after auto-login.' );
+	}
+
+	/**
+	 * With `auto_login_after_reset` disabled the endpoint returns the
+	 * plain "reset finished" payload, makes no second upstream call, and
+	 * leaves the visitor logged out.
+	 */
+	public function test_reset_confirm_skips_auto_login_when_toggle_off(): void {
+		// Replace the profile with one that has the toggle off.
+		$this->repository->save(
+			Profile::from_array(
+				[
+					'id'                     => $this->profile->get_id(),
+					'slug'                   => 'members',
+					'title'                  => 'Members',
+					'methods'                => [ Profile::METHOD_PASSWORD ],
+					'password_reset_flow'    => true,
+					'auto_login_after_reset' => false,
+				]
+			)
+		);
+
+		$reset_body = wp_json_encode(
+			[
+				'user' => [
+					'id'             => 'user_wos_reset2',
+					'email'          => 'reset2@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $reset_body ],
+		];
+
+		wp_set_current_user( 0 );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_def',
+				'new_password' => 'AnotherSecurePass!42',
+				'redirect_url' => home_url( '/welcome' ),
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['ok'] ?? false );
+		$this->assertArrayNotHasKey( 'signed_in', $data, 'signed_in must not surface when the toggle is off.' );
+		$this->assertArrayNotHasKey( 'user', $data );
+		$this->assertSame( home_url( '/welcome' ), $data['redirect_url'] ?? null );
+
+		// Only the reset call fired — no second authenticate.
+		$auth_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertEmpty( $auth_calls );
+
+		// Visitor remains logged out.
+		$this->assertSame( 0, get_current_user_id() );
+	}
+
+	/**
+	 * If the post-reset authenticate call surfaces an MFA challenge, the
+	 * confirm response carries the standard MFA payload so the React shell
+	 * hands off to the existing `mfa` step instead of treating the user as
+	 * signed in.
+	 */
+	public function test_reset_confirm_surfaces_mfa_challenge(): void {
+		$reset_body = wp_json_encode(
+			[
+				'user' => [
+					'id'    => 'user_wos_mfa',
+					'email' => 'mfa@example.com',
+				],
+			]
+		);
+		$mfa_body = wp_json_encode(
+			[
+				'pending_authentication_token' => 'pending_xyz',
+				'authentication_factors'       => [
+					[ 'id' => 'auth_factor_1', 'type' => 'totp' ],
+				],
+			]
+		);
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $reset_body ],
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $mfa_body ],
+		];
+
+		wp_set_current_user( 0 );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_mfa',
+				'new_password' => 'StrongPassword4MFA!',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['mfa_required'] ?? false );
+		$this->assertSame( 'pending_xyz', $data['pending_authentication_token'] ?? '' );
+		$this->assertFalse( $data['signed_in'] ?? null, 'signed_in must NOT be true on the MFA path.' );
+		// User is not yet signed in — MFA verify will complete the session.
+		$this->assertSame( 0, get_current_user_id() );
+	}
+
+	/**
+	 * After a successful reset the WP user row's `user_pass` is updated to
+	 * match the new password. Keeps `?fallback=1` / `wp_authenticate` /
+	 * REST app passwords from drifting away from what the user typed in
+	 * the React shell.
+	 */
+	public function test_reset_confirm_mirrors_new_password_to_wp_user(): void {
+		// Link the existing fallback WP user to a deterministic WorkOS id
+		// so the mirror lookup resolves to a row we can assert against.
+		$workos_id = 'user_wos_mirror';
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', $workos_id );
+
+		$reset_body = wp_json_encode(
+			[
+				'user' => [
+					'id'             => $workos_id,
+					'email'          => 'fallback@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+		$auth_body = wp_json_encode(
+			[
+				'access_token' => 'access_xyz',
+				'user'         => [
+					'id'             => $workos_id,
+					'email'          => 'fallback@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $reset_body ],
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => $auth_body ],
+		];
+
+		$new_password = 'BrandNewPassword4Mirror!';
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_mirror',
+				'new_password' => $new_password,
+			]
+		);
+		$this->assertSame( 200, $response->get_status() );
+
+		// The WP user can now authenticate with the new plaintext password.
+		$auth = wp_authenticate( 'fallback_user', $new_password );
+		$this->assertInstanceOf( \WP_User::class, $auth );
+		$this->assertSame( $this->wp_fallback_user_id, $auth->ID );
+
+		// And the *old* WP password no longer works.
+		$failed = wp_authenticate( 'fallback_user', 'wp_password_123' );
+		$this->assertInstanceOf( \WP_Error::class, $failed );
+	}
+
+	/**
+	 * Password mirror also runs when `auto_login_after_reset` is off — the
+	 * WP password must follow the WorkOS one regardless of session policy.
+	 */
+	public function test_reset_confirm_mirrors_password_even_without_auto_login(): void {
+		// Auto-login OFF.
+		$this->repository->save(
+			Profile::from_array(
+				[
+					'id'                     => $this->profile->get_id(),
+					'slug'                   => 'members',
+					'methods'                => [ Profile::METHOD_PASSWORD ],
+					'password_reset_flow'    => true,
+					'auto_login_after_reset' => false,
+				]
+			)
+		);
+
+		$workos_id = 'user_wos_mirror_no_auto';
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', $workos_id );
+
+		$this->response_queue = [
+			[
+				'response' => [ 'code' => 200, 'message' => 'OK' ],
+				'body'     => wp_json_encode(
+					[ 'user' => [ 'id' => $workos_id, 'email' => 'fallback@example.com' ] ]
+				),
+			],
+		];
+
+		$new_password = 'AnotherStrong1MirrorPass!';
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_mirror_no_auto',
+				'new_password' => $new_password,
+			]
+		);
+		$this->assertSame( 200, $response->get_status() );
+
+		$auth = wp_authenticate( 'fallback_user', $new_password );
+		$this->assertInstanceOf( \WP_User::class, $auth );
+	}
+
+	/**
+	 * When the WorkOS user is not linked to a WP user the mirror silently
+	 * no-ops — the reset still returns 200 and the call to authenticate
+	 * still fires (auto-login on by default).
+	 */
+	public function test_reset_confirm_skips_mirror_when_user_not_linked(): void {
+		// Make sure the fallback user is NOT linked.
+		delete_user_meta( $this->wp_fallback_user_id, '_workos_user_id' );
+
+		$workos_id = 'user_wos_no_link';
+
+		$this->response_queue = [
+			[
+				'response' => [ 'code' => 200, 'message' => 'OK' ],
+				'body'     => wp_json_encode(
+					[ 'user' => [ 'id' => $workos_id, 'email' => 'stranger@example.com' ] ]
+				),
+			],
+			// auto_login attempt — return an MFA-shaped result so LoginCompleter
+			// hands back early without trying to mint a session for a user it
+			// can't resolve.
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ],
+		];
+
+		$old_hash = get_userdata( $this->wp_fallback_user_id )->user_pass;
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_no_link',
+				'new_password' => 'WhateverPassword!42',
+			]
+		);
+		$this->assertSame( 200, $response->get_status() );
+
+		// fallback user's password hash is unchanged.
+		$this->assertSame(
+			$old_hash,
+			get_userdata( $this->wp_fallback_user_id )->user_pass,
+			'Unlinked users must NOT have their WP password touched.'
+		);
+	}
+
+	/**
+	 * Off-site redirect_url is rejected (validated against home_url) on the
+	 * confirm endpoint too — same policy as start.
+	 */
+	public function test_reset_confirm_rejects_off_site_redirect_url(): void {
+		// Disable auto-login so the redirect_url surfaces as `redirect_url`
+		// in the plain response (vs being merged into LoginCompleter's
+		// `redirect_to`).
+		$this->repository->save(
+			Profile::from_array(
+				[
+					'id'                     => $this->profile->get_id(),
+					'slug'                   => 'members',
+					'methods'                => [ Profile::METHOD_PASSWORD ],
+					'password_reset_flow'    => true,
+					'auto_login_after_reset' => false,
+				]
+			)
+		);
+
+		$this->response_queue = [
+			[ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{"user":{"id":"u","email":"e@example.com"}}' ],
+		];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/confirm',
+			[
+				'profile'      => 'members',
+				'token'        => 'reset_token_evil',
+				'new_password' => 'StillAStrongPassword!1',
+				'redirect_url' => 'https://evil.example/landing',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertSame( home_url( '/' ), $data['redirect_url'] ?? null );
+	}
+
+	// -------------------------------------------------------------------------
 
 	/**
 	 * Rate limiter: 11th attempt from the same IP returns 429.

@@ -676,4 +676,64 @@ class AuthKitRendererTest extends WPTestCase {
 
 		$this->assertSame( '/dashboard', $captured );
 	}
+
+	/**
+	 * render_mount embeds pre-hydration skeleton markup inside the mount
+	 * div so the user sees the card silhouette before React loads.
+	 */
+	public function test_render_mount_embeds_skeleton_placeholder(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'    => 'members',
+				'title'   => 'Members',
+				'methods' => [ Profile::METHOD_PASSWORD ],
+			]
+		);
+
+		$html = $this->renderer->render_mount( $profile );
+
+		$this->assertStringContainsString( 'wa-skeleton wa-skeleton--heading', $html );
+		$this->assertStringContainsString( 'wa-skeleton wa-skeleton--input', $html );
+		$this->assertStringContainsString( 'wa-skeleton wa-skeleton--button', $html );
+		$this->assertStringContainsString( 'role="status"', $html );
+	}
+
+	/**
+	 * The reset-confirm context renders two input placeholders (new
+	 * password + confirm password) so the skeleton height matches the
+	 * hydrated form one-to-one.
+	 */
+	public function test_render_mount_skeleton_uses_two_inputs_for_reset_confirm(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'    => 'members',
+				'methods' => [ Profile::METHOD_PASSWORD ],
+			]
+		);
+
+		$html = $this->renderer->render_mount(
+			$profile,
+			[ 'reset_token' => 'rt_abc' ]
+		);
+
+		$inputs = substr_count( $html, 'wa-skeleton--input' );
+		$this->assertSame( 2, $inputs, 'Reset-confirm skeleton should render two input rows.' );
+	}
+
+	/**
+	 * Default `pick` step has no back-link in the real card, so the
+	 * skeleton suppresses the footer placeholder too.
+	 */
+	public function test_render_mount_skeleton_omits_footer_on_pick(): void {
+		$profile = Profile::from_array(
+			[
+				'slug'    => 'members',
+				'methods' => [ Profile::METHOD_PASSWORD ],
+			]
+		);
+
+		$html = $this->renderer->render_mount( $profile );
+
+		$this->assertStringNotContainsString( 'wa-skeleton--footer', $html );
+	}
 }

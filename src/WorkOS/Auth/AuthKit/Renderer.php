@@ -72,10 +72,18 @@ class Renderer {
 					'version'      => WORKOS_VERSION,
 				];
 
+			// WP's `password-strength-meter` registers `window.wp.passwordStrength`
+			// (zxcvbn-async backed). Stapled onto the bundle so the reset-confirm
+			// flow can score the new password in real time and reject anything
+			// weak before we ask WorkOS to accept it.
+			$dependencies   = (array) ( $asset['dependencies'] ?? [ 'wp-element' ] );
+			$dependencies[] = 'password-strength-meter';
+			$dependencies   = array_values( array_unique( $dependencies ) );
+
 			wp_enqueue_script(
 				self::SCRIPT_HANDLE,
 				$this->assets_url . 'authkit.js',
-				$asset['dependencies'] ?? [ 'wp-element' ],
+				$dependencies,
 				$asset['version'] ?? WORKOS_VERSION,
 				true
 			);
@@ -167,8 +175,9 @@ class Renderer {
 		];
 
 		$style_tag = $this->branding_style_tag( $profile_data['branding'] );
+		$skeleton  = $this->build_skeleton_markup( $context, $profile_data['branding'] );
 
-		return $style_tag . '<div ' . $this->stringify_attrs( $attrs ) . '></div>';
+		return $style_tag . '<div ' . $this->stringify_attrs( $attrs ) . '>' . $skeleton . '</div>';
 	}
 
 	/**
@@ -250,6 +259,69 @@ class Renderer {
 </html>
 		<?php
 		exit;
+	}
+
+	/**
+	 * Emit pre-hydration skeleton markup that mirrors the React
+	 * {@see FlowSkeleton} component shape-for-shape.
+	 *
+	 * React's createRoot() replaces the contents of the mount node on
+	 * hydration, so the markup we plant here is visible from page paint
+	 * until React runs (the "broken-looking" window before JS executes).
+	 * Heights match the hydrated form one-for-one so the swap is a
+	 * flicker, not a layout jump.
+	 *
+	 * @param array $context  Render context (see render_mount()).
+	 * @param array $branding Resolved branding.
+	 *
+	 * @return string Safe HTML for direct embedding inside the mount div.
+	 */
+	private function build_skeleton_markup( array $context, array $branding ): string {
+		$initial_step = sanitize_key( $context['initial_step'] ?? 'pick' );
+		if ( '' !== ( $context['invitation_token'] ?? '' ) ) {
+			$initial_step = 'invitation';
+		} elseif ( '' !== ( $context['reset_token'] ?? '' ) ) {
+			$initial_step = 'reset_confirm';
+		}
+
+		// Reset_confirm renders two password fields; everything else one.
+		$field_count = 'reset_confirm' === $initial_step ? 2 : 1;
+		$with_footer = 'pick' !== $initial_step;
+		$logo_url    = (string) ( $branding['logo_url'] ?? '' );
+		$logo_alt    = (string) ( $branding['heading'] ?? '' );
+		if ( '' === $logo_alt ) {
+			$logo_alt = __( 'Sign in', 'integration-workos' );
+		}
+
+		$fields_html = '';
+		for ( $i = 0; $i < $field_count; $i++ ) {
+			$fields_html .= '<div class="wa-skeleton-field">'
+				. '<div class="wa-skeleton wa-skeleton--label" aria-hidden="true"></div>'
+				. '<div class="wa-skeleton wa-skeleton--input" aria-hidden="true"></div>'
+				. '</div>';
+		}
+
+		$logo_html = '' !== $logo_url
+			? sprintf(
+				'<img class="wa-logo" src="%s" alt="%s" />',
+				esc_url( $logo_url ),
+				esc_attr( $logo_alt )
+			)
+			: '';
+
+		$footer_html = $with_footer
+			? '<div class="wa-skeleton wa-skeleton--footer" aria-hidden="true"></div>'
+			: '';
+
+		return $logo_html
+			. '<div class="wa-card">'
+			. '<div class="wa-skeleton wa-skeleton--heading" aria-hidden="true"></div>'
+			. '<div class="wa-skeleton wa-skeleton--subheading" aria-hidden="true"></div>'
+			. $fields_html
+			. '<div class="wa-skeleton wa-skeleton--button" aria-hidden="true"></div>'
+			. $footer_html
+			. '<span class="wa-sr-only" role="status">' . esc_html__( 'Loading…', 'integration-workos' ) . '</span>'
+			. '</div>';
 	}
 
 	/**

@@ -14,6 +14,7 @@ use WorkOS\Admin\LoginProfiles\Controller as LoginProfilesAdminController;
 use WorkOS\Admin\Users\Controller as UsersAdminController;
 use WorkOS\Auth\AuthKit\Controller as AuthKitController;
 use WorkOS\Auth\Controller as AuthController;
+use WorkOS\Auth\PasswordResetAdmin\Controller as PasswordResetAdminController;
 use WorkOS\REST\Controller as RESTController;
 use WorkOS\Webhook\Controller as WebhookController;
 use WorkOS\Sync\Controller as SyncController;
@@ -38,6 +39,7 @@ class Controller extends BaseController {
 		$this->container->register( LoginProfilesAdminController::class );
 		$this->container->register( UsersAdminController::class );
 		$this->container->register( AuthController::class );
+		$this->container->register( PasswordResetAdminController::class );
 		$this->container->register( RESTController::class );
 		$this->container->register( WebhookController::class );
 		$this->container->register( SyncController::class );

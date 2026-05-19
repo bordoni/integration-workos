@@ -36,6 +36,8 @@ declare global {
 
 interface WorkosUser {
 	id: string;
+	/** Linked WP user id, or 0 if this WorkOS user has no WP counterpart. */
+	wp_user_id: number;
 	email: string;
 	email_verified: boolean;
 	first_name: string;
@@ -385,6 +387,19 @@ function App(): JSX.Element {
 										<span className="workos-users-no-link">
 											{ __( '—', 'integration-workos' ) }
 										</span>
+									) }
+									{ user.wp_user_id > 0 && (
+										<button
+											type="button"
+											className="button button-small workos-pwreset-trigger"
+											data-user-id={ user.wp_user_id }
+											title={ __(
+												'Send this user a WorkOS password reset email.',
+												'integration-workos'
+											) }
+										>
+											{ __( 'Send password reset', 'integration-workos' ) }
+										</button>
 									) }
 								</td>
 							</tr>

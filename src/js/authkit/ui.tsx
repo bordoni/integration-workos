@@ -210,6 +210,81 @@ export function Spinner() {
 	return <span className="wa-spinner" aria-hidden={ true } />;
 }
 
+interface FlowSkeletonProps {
+	logoUrl?: string;
+	logoAlt: string;
+	/**
+	 * How many input "rows" to render. Defaults to 1 (the common
+	 * email-or-code single-field case). Use 2 for the reset_confirm
+	 * step which renders new password + confirm password.
+	 */
+	fieldCount?: number;
+	/**
+	 * Whether to render a footer-row placeholder (used in invitation /
+	 * reset / signup flows that carry a back link).
+	 */
+	withFooter?: boolean;
+}
+
+/**
+ * Placeholder card that mirrors the FlowCard layout while data is in
+ * flight (App.tsx bootstrap, MFA challenge fetch, invitation lookup).
+ *
+ * Same logo placement, same card chrome, and the same approximate
+ * heights as the real flows so the swap to a hydrated form doesn't
+ * shift the page. Shimmer is animated via `background-position` only
+ * (no transforms) so no element ever resizes or moves.
+ */
+export function FlowSkeleton( {
+	logoUrl,
+	logoAlt,
+	fieldCount = 1,
+	withFooter = false,
+}: FlowSkeletonProps ) {
+	return (
+		<>
+			<Logo url={ logoUrl } alt={ logoAlt } />
+			<Card>
+				<div
+					className="wa-skeleton wa-skeleton--heading"
+					aria-hidden={ true }
+				/>
+				<div
+					className="wa-skeleton wa-skeleton--subheading"
+					aria-hidden={ true }
+				/>
+				{ Array.from( { length: Math.max( 1, fieldCount ) } ).map(
+					( _, index ) => (
+						<div className="wa-skeleton-field" key={ index }>
+							<div
+								className="wa-skeleton wa-skeleton--label"
+								aria-hidden={ true }
+							/>
+							<div
+								className="wa-skeleton wa-skeleton--input"
+								aria-hidden={ true }
+							/>
+						</div>
+					)
+				) }
+				<div
+					className="wa-skeleton wa-skeleton--button"
+					aria-hidden={ true }
+				/>
+				{ withFooter && (
+					<div
+						className="wa-skeleton wa-skeleton--footer"
+						aria-hidden={ true }
+					/>
+				) }
+				<span className="wa-sr-only" role="status">
+					{ __( 'Loading…', 'integration-workos' ) }
+				</span>
+			</Card>
+		</>
+	);
+}
+
 interface LinkButtonProps {
 	onClick?: () => void;
 	children?: ReactNode;

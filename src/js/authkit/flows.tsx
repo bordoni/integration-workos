@@ -803,6 +803,7 @@ export function ResetRequest( { client, profile, onSent, onBack }: ResetRequestP
 		setError( '' );
 		const { ok, data } = await client.json( '/password/reset/start', {
 			email,
+			redirect_url: profile.redirectTo,
 		} );
 		setLoading( false );
 		if ( ! ok ) {
@@ -877,27 +878,245 @@ interface ResetConfirmProps {
 	profile: Profile;
 	token: string;
 	onDone: () => void;
+	/**
+	 * Invoked when the reset succeeded AND the server auto-signed the
+	 * user in (profile has `auto_login_after_reset` on, no MFA needed).
+	 * Receives the validated redirect URL to navigate to.
+	 */
+	onSignedIn?: ( redirectTo: string ) => void;
+	/**
+	 * Invoked when the auto-login attempt surfaced an MFA challenge.
+	 * Hands the standard MFA payload back to App.tsx so the existing
+	 * `mfa` step takes over from here.
+	 */
+	onMfa?: ( data: MfaRequired ) => void;
 }
 
-export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmProps ) {
+/**
+ * Successful body shape for `POST /password/reset/confirm`.
+ *
+ * The server validates and echoes `redirect_url` so the React shell can
+ * navigate the user to a post-reset destination without re-running the
+ * same-host validation client-side. An absent or empty value means
+ * "fall back to the existing onDone behavior" (return to sign-in).
+ *
+ * When the profile's `auto_login_after_reset` toggle is enabled the
+ * server additionally runs the new password through `LoginCompleter`
+ * and merges its result onto the payload — so `signed_in` flips true,
+ * `user` carries the freshly authenticated WP user, and `redirect_to`
+ * carries the post-login destination. If MFA kicks in, `mfa_required`
+ * is set instead and the parent App takes over the challenge step.
+ */
+interface ResetConfirmResponse {
+	ok: boolean;
+	redirect_url?: string;
+	signed_in?: boolean;
+	user?: LoginSuccess[ 'user' ];
+	redirect_to?: string;
+	mfa_required?: true;
+	pending_authentication_token?: string;
+	factors?: MfaRequired[ 'factors' ];
+}
+
+/**
+ * Reset-confirm step — user submits a new password with the token that
+ * came in via the email link (`?token=…` on `/workos/login/{profile}`).
+ *
+ * On success we read the server-validated `redirect_url` from the
+ * response payload; the success card's "Continue" button uses that URL
+ * if present, falling back to the parent's `onDone` (which returns the
+ * user to the method picker so they can sign in with their new
+ * password).
+ */
+/**
+ * Score buckets returned by `window.wp.passwordStrength.meter`.
+ *
+ * The function exists once `password-strength-meter` is enqueued (we
+ * declare it as a hard dependency of the AuthKit bundle in
+ * {@see \WorkOS\Auth\AuthKit\Renderer::enqueue()}). zxcvbn loads
+ * asynchronously, so the meter returns `LOADING` until the library
+ * lands — treat that bucket as "still measuring" rather than "weak"
+ * so an early submit isn't blocked by a transient.
+ */
+const STRENGTH_LOADING = -1;
+const STRENGTH_MISMATCH = 5;
+/** Minimum zxcvbn score (0-4) we require before allowing submit. */
+const STRENGTH_MIN_REQUIRED = 3;
+
+interface PasswordStrengthGlobal {
+	meter: ( password1: string, disallowedList: string[], password2: string ) => number;
+}
+
+/**
+ * Read the WP password-strength helper off the `wp` global.
+ *
+ * Returns null when the bundle was loaded without `password-strength-meter`
+ * — surfaces can then degrade to "match-only" gating instead of crashing.
+ */
+function getPasswordStrength(): PasswordStrengthGlobal | null {
+	const wp = ( window as unknown as { wp?: { passwordStrength?: PasswordStrengthGlobal } } ).wp;
+	return wp?.passwordStrength ?? null;
+}
+
+/**
+ * Translate a `wp.passwordStrength.meter` score into a UI label.
+ *
+ * Mirrors the buckets WP uses in its own profile editor (Very weak →
+ * Weak → Medium → Strong) so users see familiar terminology.
+ */
+function strengthLabel( score: number ): string {
+	if ( score === STRENGTH_MISMATCH ) {
+		return __( 'Passwords do not match', 'integration-workos' );
+	}
+	if ( score === STRENGTH_LOADING ) {
+		return __( 'Checking strength…', 'integration-workos' );
+	}
+	switch ( score ) {
+		case 0:
+			return __( 'Very weak', 'integration-workos' );
+		case 1:
+			return __( 'Weak', 'integration-workos' );
+		case 2:
+			return __( 'Medium', 'integration-workos' );
+		case 3:
+			return __( 'Strong', 'integration-workos' );
+		case 4:
+			return __( 'Very strong', 'integration-workos' );
+		default:
+			return '';
+	}
+}
+
+/**
+ * CSS-ready strength bucket name for styling the meter dot/bar.
+ */
+function strengthVariant( score: number ): string {
+	if ( score === STRENGTH_MISMATCH ) {
+		return 'mismatch';
+	}
+	if ( score === STRENGTH_LOADING ) {
+		return 'loading';
+	}
+	if ( score <= 1 ) {
+		return 'weak';
+	}
+	if ( score === 2 ) {
+		return 'medium';
+	}
+	return 'strong';
+}
+
+export function ResetConfirm( {
+	client,
+	profile,
+	token,
+	onDone,
+	onSignedIn,
+	onMfa,
+}: ResetConfirmProps ) {
 	const [ password, setPassword ] = useState( '' );
+	const [ confirmPassword, setConfirmPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
 	const [ success, setSuccess ] = useState( false );
+	const [ redirectUrl, setRedirectUrl ] = useState( '' );
+
+	// The disallowed list seeds zxcvbn's dictionary so common
+	// site-specific guesses (the site name) lose strength points.
+	// We deliberately don't include the user's email here — the reset
+	// flow only knows the opaque WorkOS token, not the recipient.
+	const disallowedList = [ profile.siteName, 'wordpress', 'admin' ].filter(
+		( value ) => value && value.length > 0
+	);
+
+	const strength = getPasswordStrength();
+	const score = ( () => {
+		if ( ! password ) {
+			return STRENGTH_LOADING;
+		}
+		if ( ! strength ) {
+			// Meter wasn't loaded — fall back to match-only gating.
+			return confirmPassword && password !== confirmPassword
+				? STRENGTH_MISMATCH
+				: STRENGTH_MIN_REQUIRED;
+		}
+		return strength.meter( password, disallowedList, confirmPassword );
+	} )();
+
+	const matches = password.length > 0 && password === confirmPassword;
+	const strongEnough =
+		score !== STRENGTH_MISMATCH &&
+		score !== STRENGTH_LOADING &&
+		score >= STRENGTH_MIN_REQUIRED;
+	const canSubmit = matches && strongEnough && ! loading;
 
 	const submit = async ( event: FormEvent ) => {
 		event.preventDefault();
+		if ( ! canSubmit ) {
+			if ( ! matches ) {
+				setError(
+					__(
+						'The two passwords don’t match. Re-enter them and try again.',
+						'integration-workos'
+					)
+				);
+			} else if ( ! strongEnough ) {
+				setError(
+					__(
+						'Please choose a stronger password before continuing.',
+						'integration-workos'
+					)
+				);
+			}
+			return;
+		}
 		setLoading( true );
 		setError( '' );
-		const { ok, data } = await client.json( '/password/reset/confirm', {
-			token,
-			new_password: password,
-		} );
+		const { ok, data } = await client.json< ResetConfirmResponse >(
+			'/password/reset/confirm',
+			{
+				token,
+				new_password: password,
+				redirect_url: profile.redirectTo,
+			}
+		);
 		setLoading( false );
 		if ( ! ok ) {
 			setError( errorMessage( data ) );
 			return;
 		}
+		const payload = data as ResetConfirmResponse;
+
+		// Auto-login path: profile.auto_login_after_reset is on AND no MFA.
+		// LoginCompleter already set the WP auth cookie server-side; just
+		// navigate to the validated destination.
+		if ( payload.signed_in && onSignedIn ) {
+			const dest =
+				payload.redirect_to || payload.redirect_url || '/';
+			onSignedIn( dest );
+			return;
+		}
+
+		// Auto-login path with MFA challenge: hand off to the App's existing
+		// MFA flow so the user enrolls / verifies and lands on the same
+		// redirect as a normal sign-in.
+		if (
+			payload.mfa_required &&
+			payload.pending_authentication_token &&
+			onMfa
+		) {
+			onMfa( {
+				mfa_required: true,
+				pending_authentication_token: payload.pending_authentication_token,
+				factors: payload.factors ?? [],
+			} );
+			return;
+		}
+
+		// Either auto-login is off, or the server fell back to "reset done,
+		// please sign in" because the auto-login attempt failed. Surface the
+		// success card and let the user click through.
+		setRedirectUrl( payload?.redirect_url ?? '' );
 		setSuccess( true );
 	};
 
@@ -906,6 +1125,14 @@ export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmPr
 		profile.branding.heading || __( 'Sign in', 'integration-workos' );
 
 	if ( success ) {
+		const handleContinue = (): void => {
+			if ( redirectUrl ) {
+				window.location.assign( redirectUrl );
+				return;
+			}
+			onDone();
+		};
+
 		return (
 			<FlowCard
 				logoUrl={ profile.branding.logo_url }
@@ -917,16 +1144,23 @@ export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmPr
 							{ __( 'Password reset', 'integration-workos' ) }
 						</Heading>
 						<Subheading>
-							{ __(
-								'You can now sign in with your new password.',
-								'integration-workos'
-							) }
+							{ redirectUrl
+								? __(
+										'You can now sign in with your new password. Continuing…',
+										'integration-workos'
+								  )
+								: __(
+										'You can now sign in with your new password.',
+										'integration-workos'
+								  ) }
 						</Subheading>
 					</>
 				}
 			>
-				<Button onClick={ onDone }>
-					{ __( 'Continue to sign in', 'integration-workos' ) }
+				<Button onClick={ handleContinue }>
+					{ redirectUrl
+						? __( 'Continue', 'integration-workos' )
+						: __( 'Continue to sign in', 'integration-workos' ) }
 				</Button>
 				<AuthKitSlot
 					name={ SLOT_AFTER_PRIMARY_ACTION }
@@ -964,8 +1198,34 @@ export function ResetConfirm( { client, profile, token, onDone }: ResetConfirmPr
 						required={ true }
 					/>
 				</Field>
+				<Field
+					label={ __( 'Confirm new password', 'integration-workos' ) }
+					htmlFor="wa-new-pw-confirm"
+				>
+					<Input
+						id="wa-new-pw-confirm"
+						type="password"
+						value={ confirmPassword }
+						onChange={ setConfirmPassword }
+						autoComplete="new-password"
+						required={ true }
+					/>
+				</Field>
+				{ password.length > 0 && (
+					<p
+						className={ `wa-password-strength wa-password-strength--${ strengthVariant(
+							score
+						) }` }
+						aria-live="polite"
+					>
+						<span className="wa-password-strength__label">
+							{ __( 'Password strength:', 'integration-workos' ) }
+						</span>{ ' ' }
+						<strong>{ strengthLabel( score ) }</strong>
+					</p>
+				) }
 				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
-				<Button type="submit" disabled={ loading }>
+				<Button type="submit" disabled={ ! canSubmit }>
 					{ loading ? <Spinner /> : __( 'Save new password', 'integration-workos' ) }
 				</Button>
 				<AuthKitSlot

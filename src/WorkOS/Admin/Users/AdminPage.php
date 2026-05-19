@@ -122,5 +122,12 @@ class AdminPage {
 				'pluginEnabled'    => workos()->is_enabled(),
 			]
 		);
+
+		// Wire the shared password-reset trigger so the per-row button can
+		// fire `POST /workos/v1/admin/users/{wp_user_id}/password-reset`.
+		// The handles are registered by PasswordResetAdmin\Assets on `init`;
+		// this page only needs to enqueue them.
+		wp_enqueue_script( \WorkOS\Auth\PasswordResetAdmin\Assets::SCRIPT_HANDLE );
+		wp_enqueue_style( \WorkOS\Auth\PasswordResetAdmin\Assets::STYLE_HANDLE );
 	}
 }

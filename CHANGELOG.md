@@ -23,6 +23,83 @@
   Events catalogue, and the public workos-node / -python / -ruby / -go
   SDK sources). This page builds the foundation; once WorkOS ships an
   API, a row + bulk action can be wired in without reworking the UI.
+- **Admin-triggered WorkOS password reset** (#21, [CONS-287](https://linear.app/nexcess/issue/CONS-287/reset-password-redirects-users-to-kadence-central))
+  — A privileged WP user can now send a WorkOS password-reset email
+  on behalf of any linked user via
+  `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. The
+  endpoint is gated by `edit_user($id)` (so the same route also
+  covers self-service from the shortcode), rate-limited per-IP and
+  per-target, and writes a `password_reset.admin_sent` event to the
+  activity log. Triggered from three surfaces: a `Send password
+  reset` row action under the WorkOS column on
+  `wp-admin/users.php` (next to "View in WorkOS" and "Re-sync", so
+  all WorkOS-specific per-row actions cluster together via the
+  new `workos_user_list_column_actions` filter), a `Password
+  Reset` panel on the user-edit screen, and a
+  `[workos:password-reset]` shortcode that toggles between
+  admin-of-other (`user="…"`) and self-service modes based on its
+  attributes. Companion `redirect_url` parameter threads through
+  every layer: the value is validated same-host against
+  `home_url()`, baked into the URL handed to WorkOS for the email,
+  and passed back to the React shell so the user lands on the
+  chosen page after a successful reset. Fixes the long-standing
+  CONS-287 ("reset password redirects users to Kadence Central")
+  where the post-reset URL was unconfigurable.
+- **In-site React reset page** — reset emails now point at
+  `/workos/login/{profile}?token=…&redirect_to=…` instead of
+  `wp-login.php`. The existing AuthKit `ResetConfirm` step picks the
+  token off the URL and navigates the user to the validated redirect
+  on success. The old `wp-login.php?workos_action=reset-password`
+  URL still resolves cleanly via `LoginTakeover`, so any reset
+  emails already in users' inboxes continue to work.
+- **Password strength + confirmation on reset** — the
+  `ResetConfirm` step now requires the user to enter the new
+  password twice and runs it through WordPress's
+  `wp.passwordStrength.meter` (zxcvbn-backed) in real time. The
+  submit button stays disabled until the two fields match and the
+  score reaches `Strong` (zxcvbn ≥ 3). Site name and common words
+  are passed as the zxcvbn disallowed list so they lose strength
+  points. The `password-strength-meter` script is wired in as a
+  dependency of the AuthKit bundle by `Renderer::enqueue()`; when
+  zxcvbn is still loading the meter reports "Checking strength…"
+  rather than gating on a transient.
+- **Skeleton placeholders on every AuthKit surface** — wp-login.php
+  takeover, `/workos/login/{profile}`, and `[workos:login]` shortcode
+  now paint a card-shaped skeleton with shimmering placeholder rows
+  the moment the page lands, instead of a blank gap while the React
+  bundle downloads and `client.bootstrap()` resolves. The skeleton
+  comes from two places that mirror each other shape-for-shape: PHP
+  embeds it inside the mount `<div>` so it's visible from first paint
+  (Renderer emits 1-input or 2-input variants based on context —
+  reset_confirm gets two, pick gets one with no footer); React's new
+  `FlowSkeleton` ui component takes over from the `booted=false`
+  branch in App.tsx during the bootstrap RTT. Heights match the
+  hydrated form exactly (heading 24px, subheading 20px, label 16px,
+  input 44px, button 40px) so the swap is a flicker, not a layout
+  jump. Shimmer animates only `background-position` (no transforms,
+  no opacity) and is disabled under `prefers-reduced-motion`.
+- **Password mirror to the WP user on reset** — when a WorkOS reset
+  succeeds and the WorkOS user is linked to a WP user (via
+  `_workos_user_id` meta), the plugin now also runs
+  `wp_set_password()` on the linked WP user with the new plaintext.
+  Keeps the WordPress password fallback paths (`?fallback=1` on
+  wp-login.php, the `wp_authenticate` filter, REST app passwords) in
+  sync with what the user just typed in the React shell — without it
+  the old WP password would silently keep working after the WorkOS
+  rotation. Best-effort: unlinked users no-op cleanly; a write
+  failure never fails the reset response.
+- **Auto-login after password reset** — new per-profile toggle
+  `auto_login_after_reset` (default: on). When enabled, a
+  successful reset_confirm authenticates the user with the new
+  password, runs it through the same `LoginCompleter` the rest of
+  the auth surfaces use (so MFA, organization selection, and the
+  entitlement gate all behave the same as a regular sign-in), sets
+  the WP auth cookie, and sends them to the validated post-reset
+  redirect. If MFA is required the React shell hands off to the
+  existing `mfa` step. With the toggle off the prior behaviour is
+  preserved — the user lands on the "Password reset / Continue to
+  sign in" card. Surfaced in the Login Profile editor under
+  "Flows".
 
 ## [1.0.4] - 2026-05-14
 

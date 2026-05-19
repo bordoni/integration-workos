@@ -1,0 +1,8 @@
+.workos-pwreset-trigger.is-busy {
+	cursor: progress;
+	opacity: 0.7;
+}
+
+.workos-pwreset-notice {
+	margin: 10px 0 15px;
+}

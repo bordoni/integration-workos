@@ -82,28 +82,33 @@ class UserList {
 	 * @return string Column HTML.
 	 */
 	private function render_linked_column( int $user_id, string $workos_id, string $environment_id ): string {
-		if ( ! $environment_id ) {
-			return '<code>' . esc_html( $workos_id ) . '</code>';
+		$dashboard_url = '' !== $environment_id
+			? sprintf(
+				'https://dashboard.workos.com/%s/users/%s/details',
+				rawurlencode( $environment_id ),
+				rawurlencode( $workos_id )
+			)
+			: '';
+
+		if ( '' !== $dashboard_url ) {
+			$html = sprintf(
+				'<code><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></code>',
+				esc_url( $dashboard_url ),
+				esc_html( $workos_id )
+			);
+		} else {
+			$html = '<code>' . esc_html( $workos_id ) . '</code>';
 		}
 
-		$dashboard_url = sprintf(
-			'https://dashboard.workos.com/%s/users/%s/details',
-			rawurlencode( $environment_id ),
-			rawurlencode( $workos_id )
-		);
+		$actions = [];
 
-		$html = sprintf(
-			'<code><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></code>',
-			esc_url( $dashboard_url ),
-			esc_html( $workos_id )
-		);
-
-		$html .= '<div class="row-actions">';
-		$html .= sprintf(
-			'<span class="view"><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></span>',
-			esc_url( $dashboard_url ),
-			esc_html__( 'View in WorkOS', 'integration-workos' )
-		);
+		if ( '' !== $dashboard_url ) {
+			$actions['view'] = sprintf(
+				'<span class="view"><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></span>',
+				esc_url( $dashboard_url ),
+				esc_html__( 'View in WorkOS', 'integration-workos' )
+			);
+		}
 
 		if ( workos()->is_enabled() && current_user_can( 'edit_users' ) ) {
 			$resync_url = wp_nonce_url(
@@ -117,14 +122,35 @@ class UserList {
 				'workos_resync_user_' . $user_id
 			);
 
-			$html .= sprintf(
-				' | <span class="resync"><a href="%s">%s</a></span>',
+			$actions['resync'] = sprintf(
+				'<span class="resync"><a href="%s">%s</a></span>',
 				esc_url( $resync_url ),
 				esc_html__( 'Re-sync', 'integration-workos' )
 			);
 		}
 
-		$html .= '</div>';
+		/**
+		 * Filters the row-action links rendered under the WorkOS column on
+		 * `wp-admin/users.php` for a linked user.
+		 *
+		 * Each entry is a fully-formed `<span class="…"><a …>Label</a></span>`
+		 * string keyed by action slug; the keys exist so extenders can
+		 * replace or reorder a specific action without rebuilding the list.
+		 * Entries are joined with ` | ` separators on render — same visual
+		 * style as `user_row_actions`.
+		 *
+		 * @param array<string,string> $actions   Map of action slug => HTML.
+		 * @param int                  $user_id   WordPress user ID.
+		 * @param string               $workos_id Linked WorkOS user ID.
+		 */
+		$actions = (array) apply_filters( 'workos_user_list_column_actions', $actions, $user_id, $workos_id );
+
+		$rendered = array_filter(
+			array_map( 'strval', $actions ),
+			static fn( string $action ): bool => '' !== $action
+		);
+
+		$html .= '<div class="row-actions">' . implode( ' | ', $rendered ) . '</div>';
 
 		// Role mismatch indicator.
 		$html .= $this->render_role_mismatch_indicator( $user_id );

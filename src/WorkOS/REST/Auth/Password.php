@@ -7,7 +7,9 @@
 
 namespace WorkOS\REST\Auth;
 
+use WorkOS\Auth\AuthKit\FrontendRoute;
 use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -225,6 +227,11 @@ class Password extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		$redirect_url = ( new RedirectValidator() )->validate(
+			(string) $request->get_param( 'redirect_url' ),
+			$profile
+		);
+
 		// Fire the WorkOS send call but *always* return 200 to prevent email
 		// enumeration (an attacker cannot tell whether an account exists).
 		// Also normalize response time: WorkOS answers valid + unknown
@@ -235,7 +242,7 @@ class Password extends BaseEndpoint {
 
 		workos()->api()->send_password_reset(
 			$email,
-			$this->build_password_reset_url( $profile ),
+			$this->build_password_reset_url( $profile, $redirect_url ),
 			$this->get_radar_token( $request )
 		);
 
@@ -307,10 +314,134 @@ class Password extends BaseEndpoint {
 			return $workos_response;
 		}
 
-		return new WP_REST_Response(
-			[ 'ok' => true ],
-			200
+		$redirect_url = ( new RedirectValidator() )->validate(
+			(string) $request->get_param( 'redirect_url' ),
+			$profile
 		);
+
+		// Mirror the new password into the linked WP user so the WordPress
+		// password-fallback path (e.g. `?fallback=1` on wp-login.php, the
+		// `wp_authenticate` filter, REST app passwords) stays in sync with
+		// what the user just chose in the React shell. Runs *before*
+		// LoginCompleter so the auth cookie minted below survives the
+		// session invalidation `wp_set_password()` performs.
+		$this->mirror_password_to_wp_user( $workos_response, $new_password );
+
+		// Default response shape — the "reset finished, please sign in" path.
+		$response_body = [
+			'ok'           => true,
+			'redirect_url' => $redirect_url,
+		];
+
+		// Auto-login path. Profile toggle controls whether the reset confirm
+		// drops the user back at the sign-in screen or signs them in
+		// straight away. We feed the new password back into the password
+		// authenticate call and reuse LoginCompleter so MFA / org selection
+		// / entitlement gates behave the same as a normal sign-in.
+		if ( $profile->is_auto_login_after_reset_enabled() ) {
+			$email = $this->extract_email( $workos_response );
+			if ( '' !== $email ) {
+				$auth_response = workos()->api()->authenticate_with_password(
+					$email,
+					$new_password,
+					$this->get_radar_token( $request )
+				);
+
+				$result = $this->login_completer->complete(
+					$auth_response,
+					$profile,
+					$redirect_url
+				);
+
+				if ( ! is_wp_error( $result ) ) {
+					// Either a finished login (with `user` + `redirect_to`) or
+					// an MFA challenge — both shapes are useful to the React
+					// shell. Surface the validated post-reset URL as the
+					// authoritative `redirect_to` when LoginCompleter didn't
+					// emit one of its own.
+					if ( isset( $result['redirect_to'] ) && '' === $result['redirect_to'] ) {
+						$result['redirect_to'] = $redirect_url;
+					}
+					$response_body = array_merge(
+						$response_body,
+						$result,
+						[ 'signed_in' => empty( $result['mfa_required'] ) ]
+					);
+				}
+				// On WP_Error from authenticate or LoginCompleter, fall through
+				// to the plain "reset finished" response. The password change
+				// still succeeded — the user can sign in manually.
+			}
+		}
+
+		return new WP_REST_Response( $response_body, 200 );
+	}
+
+	/**
+	 * Mirror a freshly-reset WorkOS password into the linked WP user row.
+	 *
+	 * The WP password fallback (`?fallback=1`, `wp_authenticate`, REST app
+	 * passwords) sits outside WorkOS. If we let it drift, a user who reset
+	 * their WorkOS password could still log in via `wp_authenticate` using
+	 * the old credential — confusing at best, a security regression at worst.
+	 * Best-effort: a missing link, a WP user without the meta, or a WP error
+	 * never fails the reset itself; the password change against WorkOS has
+	 * already succeeded by the time we get here.
+	 *
+	 * @param mixed  $workos_response Parsed reset_password response (carries
+	 *                                the `user` object with the WorkOS id).
+	 * @param string $new_password    Plaintext password the user just set.
+	 *
+	 * @return void
+	 */
+	private function mirror_password_to_wp_user( $workos_response, string $new_password ): void {
+		if ( ! is_array( $workos_response ) ) {
+			return;
+		}
+
+		$workos_user_id = (string) ( $workos_response['user']['id'] ?? '' );
+		if ( '' === $workos_user_id ) {
+			return;
+		}
+
+		$wp_user_id = \WorkOS\Sync\UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
+		if ( $wp_user_id <= 0 ) {
+			return;
+		}
+
+		// `wp_set_password()` hashes the password and invalidates all
+		// existing sessions for the user — exactly what we want here.
+		wp_set_password( $new_password, $wp_user_id );
+	}
+
+	/**
+	 * Pull the user's email out of a WorkOS API response.
+	 *
+	 * `reset_password` and `authenticate_with_password` both nest the user
+	 * object under `user`; older shapes occasionally surfaced fields at the
+	 * top level, so check both before giving up.
+	 *
+	 * @param mixed $workos_response Parsed WorkOS response body.
+	 *
+	 * @return string Lowercased email, or empty if absent / unparseable.
+	 */
+	private function extract_email( $workos_response ): string {
+		if ( ! is_array( $workos_response ) ) {
+			return '';
+		}
+
+		$candidates = [
+			$workos_response['user']['email'] ?? null,
+			$workos_response['email'] ?? null,
+		];
+
+		foreach ( $candidates as $candidate ) {
+			if ( is_string( $candidate ) && '' !== $candidate ) {
+				return strtolower( trim( $candidate ) );
+			}
+		}
+
+		return '';
 	}
 
 	/**
@@ -344,25 +475,37 @@ class Password extends BaseEndpoint {
 	/**
 	 * Build the URL emailed to users for completing a password reset.
 	 *
-	 * @param Profile $profile Active profile.
+	 * Points at the AuthKit React shell at /workos/login/{slug}, which
+	 * already mounts directly into the `reset_confirm` step when `token`
+	 * is present in the URL (FrontendRoute::maybe_render). WorkOS appends
+	 * its generated reset token as `&token=…` before sending the email.
+	 *
+	 * @param Profile $profile      Active profile.
+	 * @param string  $redirect_url Optional same-host URL to send the user to
+	 *                              after they finish resetting.
 	 *
 	 * @return string
 	 */
-	private function build_password_reset_url( Profile $profile ): string {
-		// `wp_login_url()` runs through the `login_url`/`home_url` filters,
-		// which a host-site filter escapes (`&` → `&amp;` or `&#038;`).
-		// Decode before `add_query_arg()`, not after: `add_query_arg()`
-		// reads the `#` in `&#038;` as a fragment delimiter and shears the
-		// rest of the query off the URL. WorkOS emails the URL verbatim.
-		$login_url = html_entity_decode( wp_login_url(), ENT_QUOTES | ENT_HTML5 );
-
-		return add_query_arg(
-			[
-				'workos_action' => 'reset-password',
-				'profile'       => $profile->get_slug(),
-			],
-			$login_url
+	private function build_password_reset_url( Profile $profile, string $redirect_url = '' ): string {
+		// `home_url()` runs through filters that may HTML-encode `&`. Decode
+		// the base before `add_query_arg()` so `&#038;` doesn't shear the
+		// query off (see prior fix: commits 750dfa5 / f040ac4), AND decode
+		// the final URL — a same-host `redirect_to` may carry its own
+		// escaped ampersands through, and WorkOS emails the URL verbatim,
+		// so any entity left in == a broken link out.
+		$base = html_entity_decode(
+			FrontendRoute::url_for_profile( $profile ),
+			ENT_QUOTES | ENT_HTML5
 		);
+
+		$args = [];
+		if ( '' !== $redirect_url ) {
+			$args['redirect_to'] = $redirect_url;
+		}
+
+		$url = $args ? add_query_arg( $args, $base ) : $base;
+
+		return html_entity_decode( $url, ENT_QUOTES | ENT_HTML5 );
 	}
 
 	/**
