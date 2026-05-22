@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.5
+Stable tag: 1.0.6
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,8 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.6 - Unreleased =
+
 = 1.0.5 - 2026-05-18 =
 
 * New: WorkOS → Users admin page. Paginated, searchable React list of WorkOS users for the active environment, with a per-row "Open in WorkOS" deep-link straight to the user's Dashboard page. Lets admins triage WorkOS users (including re-enabling a suppressed email under the Dashboard's Emails tab) without bouncing through the Dashboard's own user picker. Requires `manage_options`. No bulk re-enable yet — WorkOS does not expose a public REST endpoint for the "Re-enable email" action. ([CONS-273](https://linear.app/nexcess/issue/CONS-273/re-enable-workos-emails-for-affected-portal-users))
@@ -255,6 +257,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.6 =
+Maintenance release.
 
 = 1.0.5 =
 Adds the WorkOS → Users admin page (read-only, paginated, searchable, with deep-links into the WorkOS Dashboard for re-enabling a user's suppressed email), admin-triggered WorkOS password resets (Users list row action, user-edit panel, and `[workos:password-reset]` shortcode), and a `redirect_url` parameter that lands users on the chosen page after they finish resetting. WorkOS reset emails now point at the in-site React reset page instead of `wp-login.php`.
