@@ -344,6 +344,17 @@ class UserSync {
 			return;
 		}
 
+		// Race guard for the WP-side email-change flow: while our confirm
+		// handler is mid-commit it writes to WorkOS first and then mirrors
+		// the change into WP. The webhook fan-back from that WorkOS write
+		// would otherwise race the local wp_update_user() and could
+		// re-trigger the very mutation that already happened. The transient
+		// is set in ChangeEmail\RestApi::confirm() and cleared once the
+		// local write succeeds (or on rollback).
+		if ( get_transient( \WorkOS\Auth\ChangeEmail\RestApi::TRANSIENT_PREFIX . $wp_user_id ) ) {
+			return;
+		}
+
 		// Check if profile actually changed.
 		$current_hash = get_user_meta( $wp_user_id, '_workos_profile_hash', true );
 		$new_hash     = self::hash_profile( $workos_user );
