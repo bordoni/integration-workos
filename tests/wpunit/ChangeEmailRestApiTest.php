@@ -14,7 +14,6 @@ use WorkOS\Auth\ChangeEmail\Notifier;
 use WorkOS\Auth\ChangeEmail\PendingChange;
 use WorkOS\Auth\ChangeEmail\RestApi;
 use WorkOS\Auth\ChangeEmail\TokenFactory;
-use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WorkOS\Email\Mailer;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -80,7 +79,6 @@ class ChangeEmailRestApiTest extends WPTestCase {
 
 		$rest = new RestApi(
 			new RateLimiter(),
-			new RedirectValidator(),
 			$tokens,
 			$pending,
 			new ConflictResolver(),

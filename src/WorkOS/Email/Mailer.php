@@ -51,7 +51,7 @@ class Mailer {
 		 * @param string $template Template basename.
 		 * @param array  $context  Template context.
 		 */
-		$body = (string) apply_filters( 'workos/email/body', $body, $template, $context );
+		$body = (string) apply_filters( 'workos_email_body', $body, $template, $context );
 
 		/**
 		 * Filter the email subject line before sending.
@@ -60,7 +60,7 @@ class Mailer {
 		 * @param string $template Template basename.
 		 * @param array  $context  Template context.
 		 */
-		$subject = (string) apply_filters( 'workos/email/subject', $subject, $template, $context );
+		$subject = (string) apply_filters( 'workos_email_subject', $subject, $template, $context );
 
 		return (bool) wp_mail( $to, $subject, $body, $headers );
 	}
@@ -141,7 +141,7 @@ class Mailer {
 		 * @param string $template Template basename.
 		 * @param array  $context  Template context.
 		 */
-		return (array) apply_filters( 'workos/email/headers', $headers, $template, $context );
+		return (array) apply_filters( 'workos_email_headers', $headers, $template, $context );
 	}
 
 	/**
@@ -153,7 +153,13 @@ class Mailer {
 	 * @return string
 	 */
 	private function from_address(): string {
-		$default = get_option( 'admin_email', 'wordpress@' . ( wp_parse_url( home_url(), PHP_URL_HOST ) ?: 'localhost' ) );
+		$host    = (string) wp_parse_url( home_url(), PHP_URL_HOST );
+		$default = (string) get_option( 'admin_email', 'wordpress@' . ( '' !== $host ? $host : 'localhost' ) );
+
+		// `wp_mail_from` is a WP core filter — we honor it so existing
+		// transport plugins continue to work. PHPCS doesn't recognize core
+		// filter names as "allowed unprefixed" because they aren't.
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		return (string) apply_filters( 'wp_mail_from', $default );
 	}
 }

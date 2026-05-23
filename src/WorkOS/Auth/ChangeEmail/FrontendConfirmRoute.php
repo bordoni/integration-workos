@@ -52,7 +52,7 @@ class FrontendConfirmRoute {
 	 * @return void
 	 */
 	public function register_rewrite(): void {
-		$path = $this->path();
+		$path  = $this->path();
 		$regex = '^' . preg_quote( $path, '#' ) . '/?$';
 
 		add_rewrite_rule(

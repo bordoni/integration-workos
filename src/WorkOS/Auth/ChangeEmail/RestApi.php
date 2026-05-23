@@ -9,7 +9,6 @@ namespace WorkOS\Auth\ChangeEmail;
 
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\RateLimiter;
-use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -48,12 +47,12 @@ defined( 'ABSPATH' ) || exit;
  */
 class RestApi {
 
-	public const NAMESPACE                 = 'workos/v1';
-	public const TRANSIENT_PREFIX          = '_workos_email_change_in_progress_';
-	public const TRANSIENT_TTL             = 60;
-	private const RATE_LIMIT_DEFAULT_USER  = 3;
-	private const RATE_LIMIT_DEFAULT_IP    = 10;
-	private const RATE_LIMIT_DEFAULT_WIN   = 3600;
+	public const NAMESPACE                = 'workos/v1';
+	public const TRANSIENT_PREFIX         = '_workos_email_change_in_progress_';
+	public const TRANSIENT_TTL            = 60;
+	private const RATE_LIMIT_DEFAULT_USER = 3;
+	private const RATE_LIMIT_DEFAULT_IP   = 10;
+	private const RATE_LIMIT_DEFAULT_WIN  = 3600;
 
 	/**
 	 * Rate limiter.
@@ -61,13 +60,6 @@ class RestApi {
 	 * @var RateLimiter
 	 */
 	private RateLimiter $rate_limiter;
-
-	/**
-	 * Redirect validator.
-	 *
-	 * @var RedirectValidator
-	 */
-	private RedirectValidator $redirect_validator;
 
 	/**
 	 * Token factory.
@@ -100,27 +92,29 @@ class RestApi {
 	/**
 	 * Constructor.
 	 *
-	 * @param RateLimiter       $rate_limiter       Rate limiter.
-	 * @param RedirectValidator $redirect_validator Redirect validator.
-	 * @param TokenFactory      $tokens             Token factory.
-	 * @param PendingChange     $pending            Pending-change storage.
-	 * @param ConflictResolver  $conflicts          Conflict resolver.
-	 * @param Notifier          $notifier           Email notifier.
+	 * Redirect-URL validation is done inline in {@see validate_redirect()}
+	 * rather than via the PasswordResetAdmin `RedirectValidator` because
+	 * that helper requires a `Profile` (which doesn't apply to the
+	 * change-email flow). The same same-host policy is enforced.
+	 *
+	 * @param RateLimiter      $rate_limiter Rate limiter.
+	 * @param TokenFactory     $tokens       Token factory.
+	 * @param PendingChange    $pending      Pending-change storage.
+	 * @param ConflictResolver $conflicts    Conflict resolver.
+	 * @param Notifier         $notifier     Email notifier.
 	 */
 	public function __construct(
 		RateLimiter $rate_limiter,
-		RedirectValidator $redirect_validator,
 		TokenFactory $tokens,
 		PendingChange $pending,
 		ConflictResolver $conflicts,
 		Notifier $notifier
 	) {
-		$this->rate_limiter       = $rate_limiter;
-		$this->redirect_validator = $redirect_validator;
-		$this->tokens             = $tokens;
-		$this->pending            = $pending;
-		$this->conflicts          = $conflicts;
-		$this->notifier           = $notifier;
+		$this->rate_limiter = $rate_limiter;
+		$this->tokens       = $tokens;
+		$this->pending      = $pending;
+		$this->conflicts    = $conflicts;
+		$this->notifier     = $notifier;
 	}
 
 	/**
@@ -220,7 +214,7 @@ class RestApi {
 		 * @param int  $initiator_id  Current user ID (0 for unauthenticated).
 		 */
 		$allowed = (bool) apply_filters(
-			'workos/change_email/can_initiate',
+			'workos_change_email_can_initiate',
 			true,
 			$target_id,
 			get_current_user_id()
@@ -285,9 +279,9 @@ class RestApi {
 		if ( strcasecmp( $new_email, (string) $user->user_email ) === 0 ) {
 			return new WP_REST_Response(
 				[
-					'ok'              => true,
+					'ok'               => true,
 					'masked_new_email' => $this->mask_email( $new_email ),
-					'no_op'           => true,
+					'no_op'            => true,
 				],
 				200
 			);
@@ -311,7 +305,7 @@ class RestApi {
 			// surfaced in the activity log, not in the response.
 			return new WP_REST_Response(
 				[
-					'ok'              => true,
+					'ok'               => true,
 					'masked_new_email' => $this->mask_email( $new_email ),
 				],
 				200
@@ -360,7 +354,7 @@ class RestApi {
 		 * @param string $new_email    Requested new address.
 		 * @param int    $initiated_by Current user ID (0 for system).
 		 */
-		do_action( 'workos/change_email/initiated', (int) $user->ID, $new_email, get_current_user_id() );
+		do_action( 'workos_change_email_initiated', (int) $user->ID, $new_email, get_current_user_id() );
 
 		return new WP_REST_Response(
 			[
@@ -541,7 +535,7 @@ class RestApi {
 		 * @param string $old_email Previous email.
 		 * @param string $new_email New email.
 		 */
-		do_action( 'workos/change_email/confirmed', $target_id, $old_email, $new_email );
+		do_action( 'workos_change_email_confirmed', $target_id, $old_email, $new_email );
 
 		$redirect_url = $this->validate_redirect( (string) $request->get_param( 'redirect_url' ) );
 
@@ -579,8 +573,8 @@ class RestApi {
 			return new WP_REST_Response( [ 'ok' => true ], 200 );
 		}
 
-		$token        = (string) $request->get_param( 'token' );
-		$by_token     = '' !== $token && $this->pending->verify_cancel( $record, $token );
+		$token         = (string) $request->get_param( 'token' );
+		$by_token      = '' !== $token && $this->pending->verify_cancel( $record, $token );
 		$by_capability = current_user_can( 'edit_user', $user->ID );
 
 		if ( ! $by_token && ! $by_capability ) {
@@ -610,7 +604,7 @@ class RestApi {
 		 * @param int    $user_id Target WP user ID.
 		 * @param string $reason  'token' or 'capability'.
 		 */
-		do_action( 'workos/change_email/cancelled', (int) $user->ID, $by_token ? 'token' : 'capability' );
+		do_action( 'workos_change_email_cancelled', (int) $user->ID, $by_token ? 'token' : 'capability' );
 
 		return new WP_REST_Response( [ 'ok' => true ], 200 );
 	}
@@ -628,7 +622,7 @@ class RestApi {
 		 *
 		 * @param int $lifetime Lifetime in seconds.
 		 */
-		$lifetime = (int) apply_filters( 'workos/change_email/token_lifetime', $lifetime );
+		$lifetime = (int) apply_filters( 'workos_change_email_token_lifetime', $lifetime );
 
 		// Defensive clamp so a misconfiguration can't issue infinite or
 		// 1-second tokens.
@@ -728,8 +722,8 @@ class RestApi {
 		$local  = substr( $email, 0, $at );
 		$domain = substr( $email, $at + 1 );
 
-		$local_mask = ( $local[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $local ) - 1 ) );
-		$dot        = strrpos( $domain, '.' );
+		$local_mask  = ( $local[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $local ) - 1 ) );
+		$dot         = strrpos( $domain, '.' );
 		$domain_mask = false === $dot
 			? ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $domain ) - 1 ) )
 			: ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, $dot - 1 ) ) . substr( $domain, $dot );

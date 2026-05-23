@@ -85,7 +85,7 @@ Stored under the active environment (`workos()->option(...)`); defaults are list
 
 | Option | Default | Purpose |
 |---|---|---|
-| `change_email_enabled` | `true` | Master switch. Also filterable: `workos/change_email/enabled`. |
+| `change_email_enabled` | `true` | Master switch. Also filterable: `workos_change_email_enabled`. |
 | `change_email_conflict_policy` | `'block'` | `block` \| `allow_orphan` \| `merge_request`. |
 | `change_email_token_lifetime` | `3600` | Seconds. Clamped to `[300, 86400]`. |
 | `change_email_rate_limit_user_count` | `3` | Initiate attempts per user. |
@@ -100,28 +100,28 @@ Stored under the active environment (`workos()->option(...)`); defaults are list
 ## Conflict policies
 
 - **`block`** (default): a hard reject. The user-facing message is intentionally vague ("That email cannot be used for this account.") so the response can't be used to enumerate which addresses are taken. Logged as `email_change.conflict_blocked`.
-- **`allow_orphan`**: permits the change when the conflicting WP user is unlinked from WorkOS (no `_workos_user_id`), has authored no posts, has authored no comments, and has been inactive for at least `workos/change_email/orphan_max_inactive_days` days (default 90, filterable). Audit-logged as a takeover. The conflicting account is not deleted — the email is simply reassigned.
-- **`merge_request`**: rejects today (until Issue 2's merge flow ships), but fires `workos/change_email/merge_requested` so the future merge feature can observe.
+- **`allow_orphan`**: permits the change when the conflicting WP user is unlinked from WorkOS (no `_workos_user_id`), has authored no posts, has authored no comments, and has been inactive for at least `workos_change_email_orphan_max_inactive_days` days (default 90, filterable). Audit-logged as a takeover. The conflicting account is not deleted — the email is simply reassigned.
+- **`merge_request`**: rejects today (until Issue 2's merge flow ships), but fires `workos_change_email_merge_requested` so the future merge feature can observe.
 
 ## Hooks
 
 ### Filters
 
-- `workos/change_email/enabled` — master switch.
-- `workos/change_email/conflict_policy` — request-time policy override (e.g. force `block` for HIPAA-tagged users).
-- `workos/change_email/token_lifetime` — seconds, clamped to `[300, 86400]`.
-- `workos/change_email/can_initiate` — `( bool $allowed, int $target_id, int $initiator_id )`.
-- `workos/change_email/notify_old_address` — bool override for the opt-out gate.
-- `workos/change_email/orphan_max_inactive_days` — inactivity threshold for `allow_orphan`.
-- `workos/email/subject`, `workos/email/body`, `workos/email/headers` — shared email customization (used by all three change-email templates).
+- `workos_change_email_enabled` — master switch.
+- `workos_change_email_conflict_policy` — request-time policy override (e.g. force `block` for HIPAA-tagged users).
+- `workos_change_email_token_lifetime` — seconds, clamped to `[300, 86400]`.
+- `workos_change_email_can_initiate` — `( bool $allowed, int $target_id, int $initiator_id )`.
+- `workos_change_email_notify_old_address` — bool override for the opt-out gate.
+- `workos_change_email_orphan_max_inactive_days` — inactivity threshold for `allow_orphan`.
+- `workos_email_subject`, `workos_email_body`, `workos_email_headers` — shared email customization (used by all three change-email templates).
 
 ### Actions
 
-- `workos/change_email/initiated` — `( int $user_id, string $new_email, int $initiated_by )`.
-- `workos/change_email/confirmed` — `( int $user_id, string $old_email, string $new_email )`.
-- `workos/change_email/cancelled` — `( int $user_id, string $reason )` where `$reason` is `'token'` or `'capability'`.
-- `workos/change_email/conflict_detected` — `( int $target_user_id, string $new_email, int $conflicting_user_id, string $policy )`.
-- `workos/change_email/merge_requested` — `( int $target_user_id, string $new_email, int $conflicting_user_id )`.
+- `workos_change_email_initiated` — `( int $user_id, string $new_email, int $initiated_by )`.
+- `workos_change_email_confirmed` — `( int $user_id, string $old_email, string $new_email )`.
+- `workos_change_email_cancelled` — `( int $user_id, string $reason )` where `$reason` is `'token'` or `'capability'`.
+- `workos_change_email_conflict_detected` — `( int $target_user_id, string $new_email, int $conflicting_user_id, string $policy )`.
+- `workos_change_email_merge_requested` — `( int $target_user_id, string $new_email, int $conflicting_user_id )`.
 
 ## Activity log events
 

@@ -108,12 +108,12 @@ class Assets {
 				'restUrl' => esc_url_raw( rest_url( RestApi::NAMESPACE . '/users/' ) ),
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'strings' => [
-					'prompt'        => __( 'Enter the new email address for this user:', 'integration-workos' ),
-					'sending'       => __( 'Sending verification…', 'integration-workos' ),
+					'prompt'       => __( 'Enter the new email address for this user:', 'integration-workos' ),
+					'sending'      => __( 'Sending verification…', 'integration-workos' ),
 					/* translators: %s: masked email (e.g. "j•••@e•••.com"). */
-					'success'       => __( 'Verification email sent to %s.', 'integration-workos' ),
-					'errorGeneric'  => __( 'Could not start the email change. Please try again.', 'integration-workos' ),
-					'invalidEmail'  => __( 'Please enter a valid email address.', 'integration-workos' ),
+					'success'      => __( 'Verification email sent to %s.', 'integration-workos' ),
+					'errorGeneric' => __( 'Could not start the email change. Please try again.', 'integration-workos' ),
+					'invalidEmail' => __( 'Please enter a valid email address.', 'integration-workos' ),
 				],
 			]
 		);

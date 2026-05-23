@@ -9,11 +9,11 @@
   - Admin "Change email" row action under the **WorkOS column** on `wp-admin/users.php`; "Change Email" panel on the user-edit / profile screen.
   - WP-side verification: hashed (HMAC-SHA256 + `wp_salt('auth')`) confirm + cancel tokens stored as `_workos_pending_email_change` user_meta, validated with `hash_equals`, single-use, expiry-bounded. (WorkOS's `email_verification` endpoints can't verify a *pending* address.)
   - Three new REST endpoints: `POST /workos/v1/users/{id}/email-change` (initiate, capability-gated, per-IP + per-user rate-limited, enumeration-safe conflict response), `…/email-change/confirm` (race re-checked, transient-guarded WorkOS + WP commit, rollback on partial failure), `…/email-change/cancel` (cancel-token or `edit_user` cap).
-  - Configurable conflict policy: `block` (default), `allow_orphan` (gated by `_workos_user_id`, posts, comments, last-login window), `merge_request` (rejects today, fires `workos/change_email/merge_requested` for the future merge feature).
+  - Configurable conflict policy: `block` (default), `allow_orphan` (gated by `_workos_user_id`, posts, comments, last-login window), `merge_request` (rejects today, fires `workos_change_email_merge_requested` for the future merge feature).
   - `wp_mail()`-backed verification, old-address cancel-link notice (opt-out via `change_email_notify_old_address`), and post-commit confirmation. Templates under `templates/change-email/` and overridable from a theme.
   - Frontend confirm route under a configurable path (default `/workos/change-email/`, settable via `change_email_confirm_path`).
   - UserSync race guard: `_workos_email_change_in_progress_<user_id>` transient short-circuits `handle_user_updated()` while the confirm handler is mid-commit.
-  - 8 new filters (`workos/change_email/enabled`, `…/conflict_policy`, `…/token_lifetime`, `…/can_initiate`, `…/notify_old_address`, `…/orphan_max_inactive_days`, plus `workos/email/subject|body|headers`) and 5 actions (`…/initiated`, `…/confirmed`, `…/cancelled`, `…/conflict_detected`, `…/merge_requested`).
+  - 8 new filters (`workos_change_email_enabled`, `…/conflict_policy`, `…/token_lifetime`, `…/can_initiate`, `…/notify_old_address`, `…/orphan_max_inactive_days`, plus `workos_email_subject|body|headers`) and 5 actions (`…/initiated`, `…/confirmed`, `…/cancelled`, `…/conflict_detected`, `…/merge_requested`).
   - 7 new activity-log event types: `email_change.initiated|confirmed|cancelled|expired|conflict_blocked|commit_failed|admin_bypass`.
   - 40 new WPUnit tests across 6 suites under `tests/wpunit/ChangeEmail*Test.php`.
   - See [`docs/change-email.md`](docs/change-email.md).

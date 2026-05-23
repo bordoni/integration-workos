@@ -7,7 +7,6 @@
 
 namespace WorkOS\Auth\ChangeEmail;
 
-use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WorkOS\Contracts\Controller as BaseController;
 use WorkOS\Email\Mailer;
 
@@ -36,7 +35,6 @@ class Controller extends BaseController {
 		$this->container->singleton( ConflictResolver::class );
 		$this->container->singleton( Mailer::class );
 		$this->container->singleton( Notifier::class );
-		$this->container->singleton( RedirectValidator::class );
 		$this->container->singleton( RestApi::class );
 		$this->container->singleton( Assets::class );
 		$this->container->singleton( RowActions::class );
@@ -62,7 +60,7 @@ class Controller extends BaseController {
 
 	/**
 	 * Master feature switch — applies the `change_email_enabled` option
-	 * filtered through `workos/change_email/enabled`.
+	 * filtered through `workos_change_email_enabled`.
 	 *
 	 * @return bool
 	 */
@@ -74,6 +72,6 @@ class Controller extends BaseController {
 		 *
 		 * @param bool $enabled Whether the change-email feature is active.
 		 */
-		return (bool) apply_filters( 'workos/change_email/enabled', $enabled );
+		return (bool) apply_filters( 'workos_change_email_enabled', $enabled );
 	}
 }

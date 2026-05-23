@@ -73,7 +73,7 @@ class ConflictResolver {
 		 * @param string $policy              Resolved policy slug.
 		 */
 		do_action(
-			'workos/change_email/conflict_detected',
+			'workos_change_email_conflict_detected',
 			(int) $target->ID,
 			$new_email,
 			(int) $existing->ID,
@@ -98,7 +98,7 @@ class ConflictResolver {
 				 * @param int    $conflicting_user_id Existing WP user that owns the address.
 				 */
 				do_action(
-					'workos/change_email/merge_requested',
+					'workos_change_email_merge_requested',
 					(int) $target->ID,
 					$new_email,
 					(int) $existing->ID
@@ -126,7 +126,7 @@ class ConflictResolver {
 		 *
 		 * @param string $policy One of block | allow_orphan | merge_request.
 		 */
-		$policy = (string) apply_filters( 'workos/change_email/conflict_policy', $option );
+		$policy = (string) apply_filters( 'workos_change_email_conflict_policy', $option );
 
 		$valid = [ self::POLICY_BLOCK, self::POLICY_ALLOW_ORPHAN, self::POLICY_MERGE_REQUEST ];
 		return in_array( $policy, $valid, true ) ? $policy : self::POLICY_BLOCK;
@@ -138,7 +138,7 @@ class ConflictResolver {
 	 * Conservative on purpose: any signal of activity (posts, comments,
 	 * a WorkOS link, a recent login record) disqualifies the user. The
 	 * inactivity threshold defaults to 90 days; tune via the
-	 * `workos/change_email/orphan_max_inactive_days` filter.
+	 * `workos_change_email_orphan_max_inactive_days` filter.
 	 *
 	 * @param WP_User $user Candidate user to check.
 	 *
@@ -170,7 +170,7 @@ class ConflictResolver {
 		}
 
 		$days = (int) apply_filters(
-			'workos/change_email/orphan_max_inactive_days',
+			'workos_change_email_orphan_max_inactive_days',
 			self::DEFAULT_ORPHAN_MAX_INACTIVE_DAYS
 		);
 		$days = max( 1, $days );

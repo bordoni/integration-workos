@@ -149,13 +149,13 @@ class ChangeEmailConflictResolverTest extends WPTestCase {
 		$cb = static function () use ( &$fired ) {
 			++$fired;
 		};
-		add_action( 'workos/change_email/merge_requested', $cb );
+		add_action( 'workos_change_email_merge_requested', $cb );
 
 		$resolver = new ConflictResolver();
 		$existing = get_userdata( $this->conflicting_id );
 		$result   = $resolver->check( $existing->user_email, get_userdata( $this->target_id ) );
 
-		remove_action( 'workos/change_email/merge_requested', $cb );
+		remove_action( 'workos_change_email_merge_requested', $cb );
 
 		$this->assertInstanceOf( \WP_Error::class, $result );
 		$this->assertSame( 1, $fired );
@@ -169,13 +169,13 @@ class ChangeEmailConflictResolverTest extends WPTestCase {
 		$cb = static function () use ( &$fired ) {
 			++$fired;
 		};
-		add_action( 'workos/change_email/conflict_detected', $cb );
+		add_action( 'workos_change_email_conflict_detected', $cb );
 
 		$resolver = new ConflictResolver();
 		$existing = get_userdata( $this->conflicting_id );
 		$resolver->check( $existing->user_email, get_userdata( $this->target_id ) );
 
-		remove_action( 'workos/change_email/conflict_detected', $cb );
+		remove_action( 'workos_change_email_conflict_detected', $cb );
 
 		$this->assertSame( 1, $fired );
 	}
@@ -191,11 +191,11 @@ class ChangeEmailConflictResolverTest extends WPTestCase {
 		$cb = static function () {
 			return 'block';
 		};
-		add_filter( 'workos/change_email/conflict_policy', $cb );
+		add_filter( 'workos_change_email_conflict_policy', $cb );
 
 		$resolver = new ConflictResolver();
 		$this->assertSame( 'block', $resolver->resolve_policy() );
 
-		remove_filter( 'workos/change_email/conflict_policy', $cb );
+		remove_filter( 'workos_change_email_conflict_policy', $cb );
 	}
 }

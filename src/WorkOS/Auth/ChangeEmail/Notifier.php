@@ -106,14 +106,14 @@ class Notifier {
 			$subject,
 			'change-email/old-address-notice',
 			[
-				'user'              => $user,
-				'old_email'         => $old_email,
-				'new_email'         => $new_email,
-				'masked_new_email'  => $this->mask_email( $new_email ),
-				'cancel_url'        => $cancel_url,
-				'expires_at'        => $expires_at,
-				'site_name'         => $site_name,
-				'site_url'          => home_url( '/' ),
+				'user'             => $user,
+				'old_email'        => $old_email,
+				'new_email'        => $new_email,
+				'masked_new_email' => $this->mask_email( $new_email ),
+				'cancel_url'       => $cancel_url,
+				'expires_at'       => $expires_at,
+				'site_name'        => $site_name,
+				'site_url'         => home_url( '/' ),
 			]
 		);
 	}
@@ -170,7 +170,7 @@ class Notifier {
 		 *
 		 * @param bool $enabled
 		 */
-		return (bool) apply_filters( 'workos/change_email/notify_old_address', $enabled );
+		return (bool) apply_filters( 'workos_change_email_notify_old_address', $enabled );
 	}
 
 	/**
@@ -192,8 +192,8 @@ class Notifier {
 		$local  = substr( $email, 0, $at );
 		$domain = substr( $email, $at + 1 );
 
-		$local_mask = ( $local[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $local ) - 1 ) );
-		$dot        = strrpos( $domain, '.' );
+		$local_mask  = ( $local[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $local ) - 1 ) );
+		$dot         = strrpos( $domain, '.' );
 		$domain_mask = false === $dot
 			? ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $domain ) - 1 ) )
 			: ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, $dot - 1 ) ) . substr( $domain, $dot );
