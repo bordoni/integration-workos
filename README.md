@@ -15,6 +15,7 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **Sign-in methods**: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey
 - **In-app flows**: self-serve sign-up with email verification, invitation acceptance, password reset (two-field new-password form with `wp.passwordStrength.meter` gating, optional auto-login on success, post-reset `redirect_url` validated same-host)
 - **Admin-triggered password reset** — send a WorkOS reset email on behalf of any linked user via `POST /wp-json/workos/v1/admin/users/{id}/password-reset` (gated by `edit_user($id)` so the same route covers self-service). Surfaced as a row action under the **WorkOS column** on `wp-admin/users.php`, a button on the user-edit screen, a per-row button on the WorkOS Users admin page, and a `[workos:password-reset]` shortcode. Successful sends are audited as `password_reset.admin_sent` in the activity log; emails point at the in-site React shell (`/workos/login/{slug}?token=…&redirect_to=…`) and the new password is mirrored to the linked WP user so `?fallback=1` / `wp_authenticate` / REST app passwords stay in sync. See [`docs/password-reset.md`](docs/password-reset.md).
+- **Change email** — WorkOS-verified, conflict-guarded email-change flow. Self-service via `[workos:change-email]` shortcode; admin via a row action under the **WorkOS column** on `wp-admin/users.php` and a panel on the user-edit screen. WP-side hashed token sent to the new address; cancel-link notice sent to the old address; configurable conflict policy (`block`, `allow_orphan`, `merge_request`) keeps the new email from silently overwriting another local WP user. Confirm commits to WorkOS first (via `update_user`) and then mirrors into WP, with a 60-second in-progress transient that short-circuits the webhook fan-back. See [`docs/change-email.md`](docs/change-email.md).
 - **Skeleton placeholders** on every AuthKit surface (wp-login.php takeover, `/workos/login/{profile}`, shortcode) — pre-hydration markup from PHP plus a React `FlowSkeleton` during bootstrap, mirroring the real card heights so swap-in is a flicker not a jump.
 - **MFA** — TOTP, SMS, WebAuthn/passkey with full enrollment + challenge UI; profile-level `mfa.enforce` (`never` / `if_required` / `always`) and factor allowlist
 - **Profile routing rules** — ordered `redirect_to` glob / `referrer_host` / `user_role` matchers pick the right profile per request
@@ -177,7 +178,11 @@ full developer guide on injecting React elements (SlotFill), enqueuing
 per-profile CSS/JS, and the available PHP filters. For password-reset
 integrations (admin-triggered, self-service, shortcode, redirect_url
 policy, what-not-to-do), see
-[`docs/password-reset.md`](docs/password-reset.md).
+[`docs/password-reset.md`](docs/password-reset.md). For the
+WorkOS-verified change-email flow (self-service + admin row action +
+configurable conflict policy + WP-side token verification + cancel
+link to old address), see
+[`docs/change-email.md`](docs/change-email.md).
 
 ### Custom paths
 

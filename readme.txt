@@ -177,6 +177,8 @@ WorkOS is provided by WorkOS, Inc.
 
 = 1.0.6 - Unreleased =
 
+* New: WorkOS-verified change-email flow. Self-service `[workos:change-email]` shortcode + admin row action on `wp-admin/users.php` + panel on the user-edit screen. The new address must be confirmed via a hashed token emailed by the plugin (because WorkOS's `email_verification` endpoints can't verify a *pending* change); the old address simultaneously receives a one-click cancel link. Configurable conflict policy (`block` default, `allow_orphan`, `merge_request`) keeps the new email from silently overwriting another local WP user. Commits to WorkOS first (`update_user`) and then mirrors into WordPress, with a 60-second in-progress transient that short-circuits the webhook fan-back. Eight new filters, five new actions, seven new activity-log events, and 40 new WPUnit tests. See `docs/change-email.md`. (#22)
+
 = 1.0.5 - 2026-05-18 =
 
 * New: WorkOS → Users admin page. Paginated, searchable React list of WorkOS users for the active environment, with a per-row "Open in WorkOS" deep-link straight to the user's Dashboard page. Lets admins triage WorkOS users (including re-enabling a suppressed email under the Dashboard's Emails tab) without bouncing through the Dashboard's own user picker. Requires `manage_options`. No bulk re-enable yet — WorkOS does not expose a public REST endpoint for the "Re-enable email" action. ([CONS-273](https://linear.app/nexcess/issue/CONS-273/re-enable-workos-emails-for-affected-portal-users))
