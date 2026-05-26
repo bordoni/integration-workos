@@ -425,22 +425,27 @@ class UserProfile {
 			/*
 			 * WorkOS Events API quirks (verified live 2026-05-26):
 			 *
-			 * - Requires millisecond precision + literal `Z`. Plain `…:ssZ`,
-			 *   `…:ss+00:00`, and `…:ss.000+00:00` all return "Invalid range.
-			 *   Start date is not a valid ISO 8601 date." — only `.000Z` is
-			 *   accepted.
+			 * - `range_start` requires millisecond precision + literal `Z`.
+			 *   Plain `…:ssZ`, `…:ss+00:00`, and `…:ss.000+00:00` all return
+			 *   "Invalid range. Start date is not a valid ISO 8601 date." —
+			 *   only `.000Z` is accepted.
 			 * - Max date range is 30 days. Anything wider returns "Date
 			 *   ranges cannot be longer than 30 days."
+			 * - `range_start` and `after` are mutually exclusive — sending
+			 *   both returns "Only one of range_start and after may be
+			 *   provided." Use `range_start` on the first page and switch to
+			 *   `after` (the cursor) on subsequent pages.
 			 */
 			$params = [
 				'organization_id' => $org_id,
 				'events'          => self::USER_EVENT_TYPES,
 				'limit'           => self::EVENTS_PER_PAGE,
-				'range_start'     => gmdate( 'Y-m-d\TH:i:s.000\Z', strtotime( '-30 days' ) ),
 			];
 
 			if ( $cursor ) {
 				$params['after'] = $cursor;
+			} else {
+				$params['range_start'] = gmdate( 'Y-m-d\TH:i:s.000\Z', strtotime( '-30 days' ) );
 			}
 
 			$result = workos()->api()->list_events( $params );
