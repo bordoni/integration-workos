@@ -5,12 +5,13 @@
  * Two entry shapes share one delegated handler:
  *
  *  - Standalone trigger button (admin row action / profile panel) — the
- *    handler prompts for the new email address via `window.prompt`.
+ *    handler opens a WP-styled modal asking for the new email address.
  *  - Form trigger inside a `.workos-change-email-form` — the handler
  *    pulls the new address from the form's `.workos-change-email-input`.
  */
 
 import { __, sprintf } from '@wordpress/i18n';
+import { promptModal } from '../shared/modal';
 import './styles.css';
 
 /**
@@ -25,7 +26,12 @@ interface ChangeEmailConfig {
 	nonce: string;
 	/** Pre-translated UI strings. */
 	strings: {
-		prompt: string;
+		modalTitle: string;
+		modalMessage: string;
+		modalInputLabel: string;
+		modalPlaceholder: string;
+		modalConfirm: string;
+		modalCancel: string;
 		sending: string;
 		success: string;
 		errorGeneric: string;
@@ -135,22 +141,34 @@ async function sendChange( trigger: HTMLElement ): Promise< void > {
 			'.workos-change-email-input'
 		);
 		newEmail = input?.value.trim() || '';
-	} else {
-		newEmail = window.prompt( config.strings.prompt ) || '';
-		newEmail = newEmail.trim();
-	}
 
-	if ( '' === newEmail ) {
-		return;
-	}
-
-	if ( ! isLikelyEmail( newEmail ) ) {
-		if ( form ) {
-			showInlineStatus( form, config.strings.invalidEmail, 'error' );
-		} else {
-			showNotice( config.strings.invalidEmail, 'error' );
+		if ( '' === newEmail ) {
+			return;
 		}
-		return;
+
+		if ( ! isLikelyEmail( newEmail ) ) {
+			showInlineStatus( form, config.strings.invalidEmail, 'error' );
+			return;
+		}
+	} else {
+		// Standalone-button mode: open a WP-styled modal. The modal
+		// runs the email-shape check internally and refuses to close
+		// on invalid input; a cancel resolves to null.
+		const result = await promptModal( {
+			title: config.strings.modalTitle,
+			message: config.strings.modalMessage,
+			inputLabel: config.strings.modalInputLabel,
+			inputType: 'email',
+			placeholder: config.strings.modalPlaceholder,
+			confirmLabel: config.strings.modalConfirm,
+			cancelLabel: config.strings.modalCancel,
+			validate: ( value: string ) =>
+				isLikelyEmail( value ) ? null : config.strings.invalidEmail,
+		} );
+		if ( null === result || '' === result ) {
+			return;
+		}
+		newEmail = result;
 	}
 
 	const original = trigger.innerHTML;

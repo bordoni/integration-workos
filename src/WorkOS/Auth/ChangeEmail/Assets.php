@@ -108,12 +108,17 @@ class Assets {
 				'restUrl' => esc_url_raw( rest_url( RestApi::NAMESPACE . '/users/' ) ),
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'strings' => [
-					'prompt'       => __( 'Enter the new email address for this user:', 'integration-workos' ),
-					'sending'      => __( 'Sending verification…', 'integration-workos' ),
+					'modalTitle'       => __( 'Change email address', 'integration-workos' ),
+					'modalMessage'     => __( 'A verification link will be sent to the new address. The change only commits once that link is clicked.', 'integration-workos' ),
+					'modalInputLabel'  => __( 'New email address', 'integration-workos' ),
+					'modalPlaceholder' => __( 'name@example.com', 'integration-workos' ),
+					'modalConfirm'     => __( 'Send verification', 'integration-workos' ),
+					'modalCancel'      => __( 'Cancel', 'integration-workos' ),
+					'sending'          => __( 'Sending verification…', 'integration-workos' ),
 					/* translators: %s: masked email (e.g. "j•••@e•••.com"). */
-					'success'      => __( 'Verification email sent to %s.', 'integration-workos' ),
-					'errorGeneric' => __( 'Could not start the email change. Please try again.', 'integration-workos' ),
-					'invalidEmail' => __( 'Please enter a valid email address.', 'integration-workos' ),
+					'success'          => __( 'Verification email sent to %s.', 'integration-workos' ),
+					'errorGeneric'     => __( 'Could not start the email change. Please try again.', 'integration-workos' ),
+					'invalidEmail'     => __( 'Please enter a valid email address.', 'integration-workos' ),
 				],
 			]
 		);
