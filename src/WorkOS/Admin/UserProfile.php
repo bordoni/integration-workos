@@ -426,7 +426,14 @@ class UserProfile {
 				'organization_id' => $org_id,
 				'events'          => self::USER_EVENT_TYPES,
 				'limit'           => self::EVENTS_PER_PAGE,
-				'range_start'     => gmdate( 'Y-m-d\TH:i:s\Z', strtotime( '-90 days' ) ),
+				// WorkOS Events API quirks (verified live 2026-05-26):
+				//  - Requires millisecond precision + literal `Z`. Plain
+				//    `…:ssZ`, `…:ss+00:00`, and `…:ss.000+00:00` all return
+				//    "Invalid range. Start date is not a valid ISO 8601
+				//    date." — only `.000Z` is accepted.
+				//  - Max date range is 30 days. Anything wider returns
+				//    "Date ranges cannot be longer than 30 days."
+				'range_start'     => gmdate( 'Y-m-d\TH:i:s.000\Z', strtotime( '-30 days' ) ),
 			];
 
 			if ( $cursor ) {
