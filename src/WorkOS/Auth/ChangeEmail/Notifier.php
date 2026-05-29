@@ -7,6 +7,7 @@
 
 namespace WorkOS\Auth\ChangeEmail;
 
+use WorkOS\Email\AddressMask;
 use WorkOS\Email\Mailer;
 use WP_User;
 
@@ -35,12 +36,21 @@ class Notifier {
 	private Mailer $mailer;
 
 	/**
+	 * Email-address masker.
+	 *
+	 * @var AddressMask
+	 */
+	private AddressMask $masker;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Mailer $mailer Mailer.
+	 * @param Mailer      $mailer Mailer.
+	 * @param AddressMask $masker Email-address masker.
 	 */
-	public function __construct( Mailer $mailer ) {
+	public function __construct( Mailer $mailer, AddressMask $masker ) {
 		$this->mailer = $mailer;
+		$this->masker = $masker;
 	}
 
 	/**
@@ -109,7 +119,7 @@ class Notifier {
 				'user'             => $user,
 				'old_email'        => $old_email,
 				'new_email'        => $new_email,
-				'masked_new_email' => $this->mask_email( $new_email ),
+				'masked_new_email' => $this->masker->mask( $new_email ),
 				'cancel_url'       => $cancel_url,
 				'expires_at'       => $expires_at,
 				'site_name'        => $site_name,
@@ -149,7 +159,7 @@ class Notifier {
 				'user'             => $user,
 				'old_email'        => $old_email,
 				'new_email'        => $new_email,
-				'masked_new_email' => $this->mask_email( $new_email ),
+				'masked_new_email' => $this->masker->mask( $new_email ),
 				'site_name'        => $site_name,
 				'site_url'         => home_url( '/' ),
 			]
@@ -171,33 +181,5 @@ class Notifier {
 		 * @param bool $enabled
 		 */
 		return (bool) apply_filters( 'workos_change_email_notify_old_address', $enabled );
-	}
-
-	/**
-	 * Mask an email for inclusion in user-visible bodies.
-	 *
-	 * Mirrors the masking used by PasswordResetAdmin so notices look
-	 * the same to end users (j•••@e•••.com).
-	 *
-	 * @param string $email Address.
-	 *
-	 * @return string Masked form.
-	 */
-	private function mask_email( string $email ): string {
-		$at = strpos( $email, '@' );
-		if ( false === $at || $at < 1 ) {
-			return '•••';
-		}
-
-		$local  = substr( $email, 0, $at );
-		$domain = substr( $email, $at + 1 );
-
-		$local_mask  = ( $local[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $local ) - 1 ) );
-		$dot         = strrpos( $domain, '.' );
-		$domain_mask = false === $dot
-			? ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $domain ) - 1 ) )
-			: ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, $dot - 1 ) ) . substr( $domain, $dot );
-
-		return $local_mask . '@' . $domain_mask;
 	}
 }

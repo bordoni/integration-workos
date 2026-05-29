@@ -12,6 +12,7 @@
  * @var string $site_name
  * @var string $token       The plaintext token from the URL (for the JS to pick up).
  * @var int    $user_id     The target user ID from the URL.
+ * @var string $redirect_to Optional post-confirm redirect target (re-validated server-side).
  *
  * @package WorkOS\Templates
  */
@@ -26,7 +27,7 @@ get_header();
 			<?php esc_html_e( 'Confirm your email change', 'integration-workos' ); ?>
 		</h1>
 
-		<div id="workos-change-email-confirm-status" data-token="<?php echo esc_attr( (string) $token ); ?>" data-user-id="<?php echo esc_attr( (string) (int) $user_id ); ?>">
+		<div id="workos-change-email-confirm-status" data-token="<?php echo esc_attr( (string) $token ); ?>" data-user-id="<?php echo esc_attr( (string) (int) $user_id ); ?>" data-redirect-url="<?php echo esc_attr( (string) ( $redirect_to ?? '' ) ); ?>">
 			<p>
 				<?php esc_html_e( 'Confirming…', 'integration-workos' ); ?>
 			</p>

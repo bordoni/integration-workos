@@ -14,6 +14,7 @@ use WorkOS\Auth\ChangeEmail\Notifier;
 use WorkOS\Auth\ChangeEmail\PendingChange;
 use WorkOS\Auth\ChangeEmail\RestApi;
 use WorkOS\Auth\ChangeEmail\TokenFactory;
+use WorkOS\Email\AddressMask;
 use WorkOS\Email\Mailer;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -75,14 +76,16 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$tokens   = new TokenFactory();
 		$pending  = new PendingChange( $tokens );
 		$mailer   = new Mailer();
-		$notifier = new Notifier( $mailer );
+		$masker   = new AddressMask();
+		$notifier = new Notifier( $mailer, $masker );
 
 		$rest = new RestApi(
 			new RateLimiter(),
 			$tokens,
 			$pending,
 			new ConflictResolver(),
-			$notifier
+			$notifier,
+			$masker
 		);
 
 		add_action( 'rest_api_init', [ $rest, 'register_routes' ] );
@@ -423,6 +426,64 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$this->assertSame( 409, $response->get_status() );
 		// And the pending meta is cleared so the user can start over.
 		$this->assertEmpty( get_user_meta( $this->linked_user_id, PendingChange::META_KEY, true ) );
+	}
+
+	public function test_confirm_honors_same_host_redirect(): void {
+		wp_set_current_user( $this->admin_user_id );
+
+		$factory = new TokenFactory();
+		$pending = new PendingChange( $factory );
+		$token   = $factory->generate();
+		$pending->store(
+			$this->linked_user_id,
+			'rd-' . uniqid() . '@example.test',
+			$token,
+			$factory->generate(),
+			time() + 600,
+			$this->admin_user_id
+		);
+
+		$target   = home_url( '/welcome' );
+		$response = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->linked_user_id . '/email-change/confirm',
+			[
+				'token'        => $token,
+				'redirect_url' => $target,
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( $target, $response->get_data()['redirect_url'] ?? '' );
+	}
+
+	public function test_confirm_rejects_cross_host_redirect(): void {
+		wp_set_current_user( $this->admin_user_id );
+
+		$factory = new TokenFactory();
+		$pending = new PendingChange( $factory );
+		$token   = $factory->generate();
+		$pending->store(
+			$this->linked_user_id,
+			'rd2-' . uniqid() . '@example.test',
+			$token,
+			$factory->generate(),
+			time() + 600,
+			$this->admin_user_id
+		);
+
+		$response = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->linked_user_id . '/email-change/confirm',
+			[
+				'token'        => $token,
+				'redirect_url' => 'https://evil.example/landing',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		// Cross-host targets fall back to home rather than redirecting off-site.
+		$this->assertSame( home_url( '/' ), $response->get_data()['redirect_url'] ?? '' );
 	}
 
 	// ----------------------------------------------------------------- cancel

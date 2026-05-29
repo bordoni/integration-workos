@@ -8,6 +8,7 @@
 namespace WorkOS\Auth\ChangeEmail;
 
 use WorkOS\Contracts\Controller as BaseController;
+use WorkOS\Email\AddressMask;
 use WorkOS\Email\Mailer;
 
 /**
@@ -30,6 +31,7 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
+		$this->container->singleton( AddressMask::class );
 		$this->container->singleton( TokenFactory::class );
 		$this->container->singleton( PendingChange::class );
 		$this->container->singleton( ConflictResolver::class );

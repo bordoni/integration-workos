@@ -94,6 +94,7 @@ async function run(): Promise< void > {
 
 	const token = host.getAttribute( 'data-token' ) || '';
 	const userId = Number( host.getAttribute( 'data-user-id' ) || '0' );
+	const redirectUrl = host.getAttribute( 'data-redirect-url' ) || '';
 
 	if ( '' === token || ! userId ) {
 		setStatus( host, config.strings.errorGeneric, 'error' );
@@ -111,6 +112,12 @@ async function run(): Promise< void > {
 
 	try {
 		const url = `${ config.restUrl }${ userId }/${ path }`;
+		// Forward the post-confirm redirect target (re-validated server-side).
+		// Irrelevant for the cancel path, which ignores it.
+		const payload: { token: string; redirect_url?: string } = { token };
+		if ( action !== 'cancel' && '' !== redirectUrl ) {
+			payload.redirect_url = redirectUrl;
+		}
 		const response = await fetch( url, {
 			method: 'POST',
 			credentials: 'same-origin',
@@ -118,7 +125,7 @@ async function run(): Promise< void > {
 				'Content-Type': 'application/json',
 				'X-WP-Nonce': config.nonce,
 			},
-			body: JSON.stringify( { token } ),
+			body: JSON.stringify( payload ),
 		} );
 
 		const data = ( await response.json() ) as

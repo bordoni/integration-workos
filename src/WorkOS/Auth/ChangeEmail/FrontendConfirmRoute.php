@@ -92,11 +92,13 @@ class FrontendConfirmRoute {
 			return;
 		}
 
-		// Pull token + user_id from the URL — they were appended by
-		// build_confirm_url() / build_cancel_url() in RestApi.
+		// Pull token + user_id (+ optional redirect target) from the URL —
+		// they were appended by build_confirm_url() / build_cancel_url() in
+		// RestApi. The redirect is re-validated server-side on confirm.
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended
-		$token   = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
-		$user_id = isset( $_GET['user_id'] ) ? absint( wp_unslash( $_GET['user_id'] ) ) : 0;
+		$token       = isset( $_GET['token'] ) ? sanitize_text_field( wp_unslash( $_GET['token'] ) ) : '';
+		$user_id     = isset( $_GET['user_id'] ) ? absint( wp_unslash( $_GET['user_id'] ) ) : 0;
+		$redirect_to = isset( $_GET['redirect_to'] ) ? esc_url_raw( wp_unslash( $_GET['redirect_to'] ) ) : '';
 		// phpcs:enable
 
 		$site_name = wp_specialchars_decode( (string) get_bloginfo( 'name' ), ENT_QUOTES );

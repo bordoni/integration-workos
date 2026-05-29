@@ -9,6 +9,7 @@ namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\ChangeEmail\Notifier;
+use WorkOS\Email\AddressMask;
 use WorkOS\Email\Mailer;
 
 /**
@@ -71,7 +72,7 @@ class ChangeEmailNotifierTest extends WPTestCase {
 	}
 
 	private function notifier(): Notifier {
-		return new Notifier( new Mailer() );
+		return new Notifier( new Mailer(), new AddressMask() );
 	}
 
 	public function test_verification_goes_to_new_address_with_confirm_url(): void {

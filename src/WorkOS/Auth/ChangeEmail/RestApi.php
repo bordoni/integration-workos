@@ -9,6 +9,7 @@ namespace WorkOS\Auth\ChangeEmail;
 
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Email\AddressMask;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -90,6 +91,13 @@ class RestApi {
 	private Notifier $notifier;
 
 	/**
+	 * Email-address masker.
+	 *
+	 * @var AddressMask
+	 */
+	private AddressMask $masker;
+
+	/**
 	 * Constructor.
 	 *
 	 * Redirect-URL validation is done inline in {@see validate_redirect()}
@@ -102,19 +110,22 @@ class RestApi {
 	 * @param PendingChange    $pending      Pending-change storage.
 	 * @param ConflictResolver $conflicts    Conflict resolver.
 	 * @param Notifier         $notifier     Email notifier.
+	 * @param AddressMask      $masker       Email-address masker.
 	 */
 	public function __construct(
 		RateLimiter $rate_limiter,
 		TokenFactory $tokens,
 		PendingChange $pending,
 		ConflictResolver $conflicts,
-		Notifier $notifier
+		Notifier $notifier,
+		AddressMask $masker
 	) {
 		$this->rate_limiter = $rate_limiter;
 		$this->tokens       = $tokens;
 		$this->pending      = $pending;
 		$this->conflicts    = $conflicts;
 		$this->notifier     = $notifier;
+		$this->masker       = $masker;
 	}
 
 	/**
@@ -157,8 +168,9 @@ class RestApi {
 				// the token-hash check inside is the real gatekeeper.
 				'permission_callback' => '__return_true',
 				'args'                => [
-					'id'    => [ 'sanitize_callback' => 'absint' ],
-					'token' => [ 'sanitize_callback' => 'sanitize_text_field' ],
+					'id'           => [ 'sanitize_callback' => 'absint' ],
+					'token'        => [ 'sanitize_callback' => 'sanitize_text_field' ],
+					'redirect_url' => [ 'sanitize_callback' => 'sanitize_text_field' ],
 				],
 			]
 		);
@@ -280,7 +292,7 @@ class RestApi {
 			return new WP_REST_Response(
 				[
 					'ok'               => true,
-					'masked_new_email' => $this->mask_email( $new_email ),
+					'masked_new_email' => $this->masker->mask( $new_email ),
 					'no_op'            => true,
 				],
 				200
@@ -294,7 +306,7 @@ class RestApi {
 				[
 					'user_id'  => $user->ID,
 					'metadata' => [
-						'masked_new_email' => $this->mask_email( $new_email ),
+						'masked_new_email' => $this->masker->mask( $new_email ),
 						'policy'           => $this->conflicts->resolve_policy(),
 						'initiator_id'     => get_current_user_id(),
 					],
@@ -306,7 +318,7 @@ class RestApi {
 			return new WP_REST_Response(
 				[
 					'ok'               => true,
-					'masked_new_email' => $this->mask_email( $new_email ),
+					'masked_new_email' => $this->masker->mask( $new_email ),
 				],
 				200
 			);
@@ -339,7 +351,7 @@ class RestApi {
 			[
 				'user_id'  => $user->ID,
 				'metadata' => [
-					'masked_new_email' => $this->mask_email( $new_email ),
+					'masked_new_email' => $this->masker->mask( $new_email ),
 					'initiator_id'     => get_current_user_id(),
 					'self_service'     => get_current_user_id() === (int) $user->ID,
 					'expires_at'       => $expires,
@@ -359,7 +371,7 @@ class RestApi {
 		return new WP_REST_Response(
 			[
 				'ok'               => true,
-				'masked_new_email' => $this->mask_email( $new_email ),
+				'masked_new_email' => $this->masker->mask( $new_email ),
 				'expires_at'       => $expires,
 			],
 			200
@@ -408,7 +420,7 @@ class RestApi {
 				'email_change.expired',
 				[
 					'user_id'  => $user->ID,
-					'metadata' => [ 'masked_new_email' => $this->mask_email( $record['new_email'] ) ],
+					'metadata' => [ 'masked_new_email' => $this->masker->mask( $record['new_email'] ) ],
 				]
 			);
 			return new WP_Error(
@@ -438,7 +450,7 @@ class RestApi {
 				[
 					'user_id'  => $user->ID,
 					'metadata' => [
-						'masked_new_email' => $this->mask_email( $new_email ),
+						'masked_new_email' => $this->masker->mask( $new_email ),
 						'phase'            => 'confirm',
 						'policy'           => $this->conflicts->resolve_policy(),
 					],
@@ -464,7 +476,7 @@ class RestApi {
 					[
 						'user_id'  => $user->ID,
 						'metadata' => [
-							'masked_new_email' => $this->mask_email( $new_email ),
+							'masked_new_email' => $this->masker->mask( $new_email ),
 							'reason'           => $workos_response->get_error_message(),
 						],
 					]
@@ -495,7 +507,7 @@ class RestApi {
 				[
 					'user_id'  => $user->ID,
 					'metadata' => [
-						'masked_new_email' => $this->mask_email( $new_email ),
+						'masked_new_email' => $this->masker->mask( $new_email ),
 						'reason'           => $wp_update->get_error_message(),
 						'rolled_back'      => true,
 					],
@@ -511,6 +523,11 @@ class RestApi {
 		$this->pending->clear( (int) $user->ID );
 		delete_transient( self::TRANSIENT_PREFIX . (int) $user->ID );
 
+		// Keep the sync change-detection hash in step with the new email so
+		// the next user.updated webhook doesn't see a phantom diff and
+		// re-mirror a change we already committed.
+		\WorkOS\Sync\UserSync::refresh_profile_hash( (int) $user->ID );
+
 		// Refresh user object now that the email is committed.
 		$user = get_userdata( (int) $user->ID );
 		if ( $user instanceof WP_User ) {
@@ -522,8 +539,8 @@ class RestApi {
 			[
 				'user_id'  => $target_id,
 				'metadata' => [
-					'masked_new_email' => $this->mask_email( $new_email ),
-					'masked_old_email' => $this->mask_email( $old_email ),
+					'masked_new_email' => $this->masker->mask( $new_email ),
+					'masked_old_email' => $this->masker->mask( $old_email ),
 				],
 			]
 		);
@@ -592,7 +609,7 @@ class RestApi {
 			[
 				'user_id'  => $user->ID,
 				'metadata' => [
-					'masked_new_email' => $this->mask_email( (string) $record['new_email'] ),
+					'masked_new_email' => $this->masker->mask( (string) $record['new_email'] ),
 					'reason'           => $by_token ? 'token' : 'capability',
 				],
 			]
@@ -704,30 +721,5 @@ class RestApi {
 		$site_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 
 		return $url_host === $site_host ? $candidate : home_url( '/' );
-	}
-
-	/**
-	 * Mask an email for activity-log + response surfacing.
-	 *
-	 * @param string $email Address.
-	 *
-	 * @return string
-	 */
-	private function mask_email( string $email ): string {
-		$at = strpos( $email, '@' );
-		if ( false === $at || $at < 1 ) {
-			return '•••';
-		}
-
-		$local  = substr( $email, 0, $at );
-		$domain = substr( $email, $at + 1 );
-
-		$local_mask  = ( $local[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $local ) - 1 ) );
-		$dot         = strrpos( $domain, '.' );
-		$domain_mask = false === $dot
-			? ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $domain ) - 1 ) )
-			: ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, $dot - 1 ) ) . substr( $domain, $dot );
-
-		return $local_mask . '@' . $domain_mask;
 	}
 }
