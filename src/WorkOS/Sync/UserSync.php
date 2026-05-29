@@ -165,6 +165,16 @@ class UserSync {
 			return;
 		}
 
+		// Race guard for the WP-side email-change flow. The confirm handler
+		// pushes to WorkOS itself and then mirrors with wp_update_user(),
+		// which fires `profile_update` and lands us here. Without this guard
+		// we'd issue a second, redundant update_user() to WorkOS on the
+		// latency-sensitive confirm path. Same transient the webhook handler
+		// checks; see ChangeEmail\RestApi::confirm().
+		if ( get_transient( \WorkOS\Auth\ChangeEmail\RestApi::TRANSIENT_PREFIX . $user_id ) ) {
+			return;
+		}
+
 		$update = [];
 
 		if ( isset( $userdata['first_name'] ) && $userdata['first_name'] !== $old_data->first_name ) {
@@ -344,6 +354,17 @@ class UserSync {
 			return;
 		}
 
+		// Race guard for the WP-side email-change flow: while our confirm
+		// handler is mid-commit it writes to WorkOS first and then mirrors
+		// the change into WP. The webhook fan-back from that WorkOS write
+		// would otherwise race the local wp_update_user() and could
+		// re-trigger the very mutation that already happened. The transient
+		// is set in ChangeEmail\RestApi::confirm() and cleared once the
+		// local write succeeds (or on rollback).
+		if ( get_transient( \WorkOS\Auth\ChangeEmail\RestApi::TRANSIENT_PREFIX . $wp_user_id ) ) {
+			return;
+		}
+
 		// Check if profile actually changed.
 		$current_hash = get_user_meta( $wp_user_id, '_workos_profile_hash', true );
 		$new_hash     = self::hash_profile( $workos_user );
@@ -504,6 +525,35 @@ class UserSync {
 
 		self::ensure_workos_org_membership( $workos_user_id );
 		self::update_platform_metadata( $workos_user_id, $wp_user_id );
+	}
+
+	/**
+	 * Recompute and store the profile-change hash for a user from their
+	 * current WordPress profile data.
+	 *
+	 * Used by flows that mutate the user outside the webhook path (e.g. the
+	 * email-change confirm handler) so the stored `_workos_profile_hash`
+	 * doesn't go stale and trigger a spurious reconciliation on the next
+	 * `user.updated` webhook.
+	 *
+	 * @param int $wp_user_id WP user ID.
+	 *
+	 * @return void
+	 */
+	public static function refresh_profile_hash( int $wp_user_id ): void {
+		$user = get_user_by( 'id', $wp_user_id );
+		if ( ! $user instanceof \WP_User ) {
+			return;
+		}
+
+		$profile = [
+			'email'      => $user->user_email,
+			'first_name' => $user->first_name,
+			'last_name'  => $user->last_name,
+		];
+
+		update_user_meta( $wp_user_id, '_workos_profile_hash', self::hash_profile( $profile ) );
+		update_user_meta( $wp_user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
 	}
 
 	/**

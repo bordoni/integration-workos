@@ -1,0 +1,103 @@
+/*
+ * Styles for the shared WP-admin-styled modal helper. See modal.ts.
+ *
+ * Targets the native <dialog> element. The ::backdrop pseudo provides
+ * the dimmed overlay for free in modern browsers.
+ */
+
+.workos-modal {
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 20px 24px 16px;
+	max-width: 480px;
+	width: calc(100vw - 32px);
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+	color: #1d2327;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.workos-modal::backdrop {
+	background: rgba(0, 0, 0, 0.45);
+}
+
+.workos-modal__title {
+	font-size: 18px;
+	font-weight: 600;
+	margin: 0 0 8px;
+	color: #1d2327;
+}
+
+.workos-modal__message {
+	margin: 0 0 16px;
+	color: #50575e;
+}
+
+.workos-modal__label {
+	display: block;
+	margin: 0 0 4px;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.workos-modal__input {
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0 0 8px;
+}
+
+.workos-modal__error {
+	margin: 0 0 12px;
+	min-height: 1.2em;
+	color: #b32d2e;
+	font-size: 13px;
+}
+
+.workos-modal__error:empty {
+	display: none;
+}
+
+.workos-modal__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px solid #f0f0f1;
+}
+
+/*
+ * Match the WordPress button-link-delete variant for destructive
+ * confirms (e.g. cancel-flow type interactions).
+ */
+.workos-modal__confirm.button-link-delete {
+	background: #b32d2e;
+	color: #fff;
+	border-color: #b32d2e;
+}
+
+.workos-modal__confirm.button-link-delete:hover,
+.workos-modal__confirm.button-link-delete:focus {
+	background: #a02525;
+	border-color: #a02525;
+	color: #fff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.workos-modal[open] {
+		animation: workos-modal-fade-in 0.12s ease-out;
+	}
+
+	@keyframes workos-modal-fade-in {
+		from {
+			opacity: 0;
+			transform: translateY(-4px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+}

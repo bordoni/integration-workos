@@ -10,6 +10,7 @@
  */
 
 import { __, sprintf } from '@wordpress/i18n';
+import { confirmModal } from '../shared/modal';
 import './styles.css';
 
 /**
@@ -24,7 +25,10 @@ interface PasswordResetConfig {
 	nonce: string;
 	/** Pre-translated UI strings (admin locale, server-side translated). */
 	strings: {
-		confirm: string;
+		modalTitle: string;
+		modalMessage: string;
+		modalConfirm: string;
+		modalCancel: string;
 		sending: string;
 		success: string;
 		errorGeneric: string;
@@ -125,7 +129,13 @@ async function sendReset( button: HTMLElement ): Promise< void > {
 	const redirectUrl = button.getAttribute( 'data-redirect-url' ) || '';
 	const profile = button.getAttribute( 'data-profile' ) || '';
 
-	if ( ! window.confirm( config.strings.confirm ) ) {
+	const confirmed = await confirmModal( {
+		title: config.strings.modalTitle,
+		message: config.strings.modalMessage,
+		confirmLabel: config.strings.modalConfirm,
+		cancelLabel: config.strings.modalCancel,
+	} );
+	if ( ! confirmed ) {
 		return;
 	}
 

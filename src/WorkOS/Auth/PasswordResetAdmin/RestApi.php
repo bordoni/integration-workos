@@ -11,6 +11,7 @@ use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Email\AddressMask;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -59,20 +60,30 @@ class RestApi {
 	private RedirectValidator $redirect_validator;
 
 	/**
+	 * Email-address masker.
+	 *
+	 * @var AddressMask
+	 */
+	private AddressMask $masker;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param ProfileRepository $profiles           Profile repository.
 	 * @param RateLimiter       $rate_limiter       Rate limiter.
 	 * @param RedirectValidator $redirect_validator Redirect validator.
+	 * @param AddressMask       $masker             Email-address masker.
 	 */
 	public function __construct(
 		ProfileRepository $profiles,
 		RateLimiter $rate_limiter,
-		RedirectValidator $redirect_validator
+		RedirectValidator $redirect_validator,
+		AddressMask $masker
 	) {
 		$this->profiles           = $profiles;
 		$this->rate_limiter       = $rate_limiter;
 		$this->redirect_validator = $redirect_validator;
+		$this->masker             = $masker;
 	}
 
 	/**
@@ -238,7 +249,7 @@ class RestApi {
 		return new WP_REST_Response(
 			[
 				'ok'           => true,
-				'email_hint'   => $this->mask_email( $email ),
+				'email_hint'   => $this->masker->mask( $email ),
 				'profile'      => $profile->get_slug(),
 				'redirect_url' => $redirect_url,
 			],
@@ -296,33 +307,5 @@ class RestApi {
 		$url = $args ? add_query_arg( $args, $base ) : $base;
 
 		return html_entity_decode( $url, ENT_QUOTES | ENT_HTML5 );
-	}
-
-	/**
-	 * Mask an email for display in admin notices.
-	 *
-	 * Preserves the first character of the local part and the TLD; the
-	 * rest is replaced with `•`. Example: jdoe@example.com → j•••@e•••.com.
-	 *
-	 * @param string $email Email address.
-	 *
-	 * @return string
-	 */
-	private function mask_email( string $email ): string {
-		$at = strpos( $email, '@' );
-		if ( false === $at || $at < 1 ) {
-			return '•••';
-		}
-
-		$local  = substr( $email, 0, $at );
-		$domain = substr( $email, $at + 1 );
-
-		$local_mask  = ( $local[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $local ) - 1 ) );
-		$dot         = strrpos( $domain, '.' );
-		$domain_mask = false === $dot
-			? ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, strlen( $domain ) - 1 ) )
-			: ( $domain[0] ?? '' ) . str_repeat( '•', max( 1, $dot - 1 ) ) . substr( $domain, $dot );
-
-		return $local_mask . '@' . $domain_mask;
 	}
 }
