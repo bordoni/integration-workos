@@ -220,8 +220,8 @@ class MagicCode extends BaseEndpoint {
 		$legacy_slug = (string) apply_filters( 'workos_legacy_profile_slug', 'legacy' );
 
 		$option = $profile->get_slug() === $legacy_slug
-			? 'allow_legacy_magic_code_registration' // legacy form toggle
-			: 'allow_magic_code_registration'; // default form toggle
+			? 'allow_legacy_magic_code_registration' // Legacy form toggle.
+			: 'allow_magic_code_registration'; // Default form toggle.
 
 		return (bool) workos()->option( $option, true );
 	}
