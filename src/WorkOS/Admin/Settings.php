@@ -679,7 +679,7 @@ class Settings {
 			'workos_auth',
 			[
 				'name'    => $this->env_option( 'allow_magic_code_registration' ),
-				'label'   => __( 'Allow creating a new account when someone signs in with an email code for an address that has no account. When off, unknown emails are prompted to sign up instead.', 'integration-workos' ),
+				'label'   => __( 'Allow creating a new account when someone signs in with an email code for an address that has no account. When off, unknown emails receive no code and no account is created.', 'integration-workos' ),
 				'default' => true,
 			]
 		);
@@ -692,7 +692,7 @@ class Settings {
 			'workos_auth',
 			[
 				'name'    => $this->env_option( 'allow_legacy_magic_code_registration' ),
-				'label'   => __( 'Allow creating a new account when a legacy customer signs in with an email code for an address that has no account. When off, unknown emails get no account and no code (and are not told the address is unrecognised).', 'integration-workos' ),
+				'label'   => __( 'Allow creating a new account when a legacy customer signs in with an email code for an address that has no account. When off, unknown emails receive no code and no account is created.', 'integration-workos' ),
 				'default' => true,
 			]
 		);
