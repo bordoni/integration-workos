@@ -97,12 +97,17 @@ class MagicCode extends BaseEndpoint {
 			return $rate_ok;
 		}
 
-		// Fire-and-forget: return 200 regardless so the client cannot enumerate
-		// registered accounts. Real errors land in the plugin log.
-		workos()->api()->send_magic_auth_code(
-			$email,
-			$this->get_radar_token( $request )
-		);
+		// If email registration is disabled, only known accounts get a code.
+		// For unknown emails, skip the WorkOS call but still return success
+		// so account existence isn't exposed.
+		if ( $this->registration_allowed( $profile ) || get_user_by( 'email', $email ) ) {
+			// Fire-and-forget on the WorkOS call: delivery errors land in the
+			// plugin log rather than being surfaced to the client.
+			workos()->api()->send_magic_auth_code(
+				$email,
+				$this->get_radar_token( $request )
+			);
+		}
 
 		return new WP_REST_Response(
 			[
@@ -162,6 +167,18 @@ class MagicCode extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// Ensure verify never creates accounts when registration is disabled.
+		// `send` skips unknown emails; this prevents race conditions or direct
+		// API calls from provisioning users. Return a generic invalid-code error
+		// to avoid account enumeration.
+		if ( ! $this->registration_allowed( $profile ) && ! get_user_by( 'email', $email ) ) {
+			return new WP_Error(
+				'workos_authkit_invalid_code',
+				__( 'That code is invalid or has expired.', 'integration-workos' ),
+				[ 'status' => 400 ]
+			);
+		}
+
 		$workos_response = workos()->api()->authenticate_with_magic_auth(
 			$email,
 			$code,
@@ -183,5 +200,29 @@ class MagicCode extends BaseEndpoint {
 		}
 
 		return new WP_REST_Response( $result, 200 );
+	}
+
+	/**
+	 * Whether email-code sign-in may create a new account for the given profile.
+	 *
+	 * Scoped per form: the legacy customer profile reads its own admin toggle
+	 * (`allow_legacy_magic_code_registration`) so it can be locked down without
+	 * affecting the default sign-in, which keeps creating accounts for new
+	 * customers (`allow_magic_code_registration`). Both default to true to
+	 * preserve historical behaviour. The legacy profile slug defaults to
+	 * `legacy` (matching the portal's /login/legacy/ form) and is filterable.
+	 *
+	 * @param Profile $profile Resolved login profile for the request.
+	 *
+	 * @return bool
+	 */
+	private function registration_allowed( Profile $profile ): bool {
+		$legacy_slug = (string) apply_filters( 'workos_legacy_profile_slug', 'legacy' );
+
+		$option = $profile->get_slug() === $legacy_slug
+			? 'allow_legacy_magic_code_registration' // legacy form toggle
+			: 'allow_magic_code_registration'; // default form toggle
+
+		return (bool) workos()->option( $option, true );
 	}
 }

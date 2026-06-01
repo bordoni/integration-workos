@@ -671,6 +671,32 @@ class Settings {
 			]
 		);
 
+		add_settings_field(
+			'workos_env_allow_magic_code_registration',
+			__( 'Email Code Registration', 'integration-workos' ),
+			[ $this, 'render_checkbox' ],
+			'workos',
+			'workos_auth',
+			[
+				'name'    => $this->env_option( 'allow_magic_code_registration' ),
+				'label'   => __( 'Allow creating a new account when someone signs in with an email code for an address that has no account. When off, unknown emails are prompted to sign up instead.', 'integration-workos' ),
+				'default' => true,
+			]
+		);
+
+		add_settings_field(
+			'workos_env_allow_legacy_magic_code_registration',
+			__( 'Legacy Email Code Registration', 'integration-workos' ),
+			[ $this, 'render_checkbox' ],
+			'workos',
+			'workos_auth',
+			[
+				'name'    => $this->env_option( 'allow_legacy_magic_code_registration' ),
+				'label'   => __( 'Allow creating a new account when a legacy customer signs in with an email code for an address that has no account. When off, unknown emails get no account and no code (and are not told the address is unrecognised).', 'integration-workos' ),
+				'default' => true,
+			]
+		);
+
 		// --- Audit Logging section ---
 		add_settings_section(
 			'workos_audit',
@@ -1261,10 +1287,16 @@ class Settings {
 	/**
 	 * Render a checkbox.
 	 *
-	 * @param array $args Field arguments.
+	 * @param array $args {
+	 *     Field arguments.
+	 *
+	 *     @type string $name    Option name (supports `group[key]` syntax).
+	 *     @type string $label   Checkbox label.
+	 *     @type bool   $default Value shown when the option has never been saved. Defaults to false.
+	 * }
 	 */
 	public function render_checkbox( array $args ): void {
-		$value = $this->get_field_value( $args['name'], false );
+		$value = $this->get_field_value( $args['name'], $args['default'] ?? false );
 		printf(
 			'<input type="hidden" name="%s" value="0" />',
 			esc_attr( $args['name'] )
@@ -2009,7 +2041,7 @@ class Settings {
 		}
 
 		// Boolean fields.
-		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation' ];
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation', 'allow_magic_code_registration', 'allow_legacy_magic_code_registration' ];
 		foreach ( $bool_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );

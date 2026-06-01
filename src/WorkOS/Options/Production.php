@@ -41,6 +41,8 @@ class Production extends Options {
 			'redirect_first_login_only'               => true,
 			'logout_redirect_urls'                    => [],
 			'audit_logging_enabled'                   => false,
+			'allow_magic_code_registration'           => true,
+			'allow_legacy_magic_code_registration'    => true,
 		];
 	}
 }
