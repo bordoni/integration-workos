@@ -60,13 +60,17 @@ jobs:
       # so Strauss generates the prefixed `WorkOS\Vendor\…` classes that
       # PHPStan needs to resolve types.
       - name: Install PHP dependencies (with Strauss)
-        run: composer install --no-interaction --prefer-dist
+        run: |
+          # Strauss boots its own Composer instance, which rejects the
+          # github-oauth token setup-php pre-configures from github.token
+          # ("contains invalid characters" when that value is empty/malformed).
+          # Clear it so Strauss runs unauthenticated — exactly like the
+          # slic-based PHP test jobs, which run Strauss without issue.
+          composer config --global --unset github-oauth.github.com 2>/dev/null || true
+          rm -f "$(composer config --global home 2>/dev/null)/auth.json" 2>/dev/null || true
+          composer install --no-interaction --prefer-dist
         env:
           COMPOSER_NO_AUDIT: 1
-          # Authenticate composer's GitHub downloads (Strauss pulls dist
-          # archives) so the step isn't rate-limited into a malformed-token
-          # fallback. The built-in token is always present and valid.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Build the JS bundles so the `build/*.asset.php` files exist —
       # PHPStan statically resolves the `include $asset_file` paths in
