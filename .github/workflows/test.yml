@@ -63,6 +63,10 @@ jobs:
         run: composer install --no-interaction --prefer-dist
         env:
           COMPOSER_NO_AUDIT: 1
+          # Authenticate composer's GitHub downloads (Strauss pulls dist
+          # archives) so the step isn't rate-limited into a malformed-token
+          # fallback. The built-in token is always present and valid.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Build the JS bundles so the `build/*.asset.php` files exist —
       # PHPStan statically resolves the `include $asset_file` paths in
@@ -145,8 +149,13 @@ jobs:
         with:
           node-version-file: '.nvmrc'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Verify build
-        run: echo "No JS build step configured yet."
+      # Use bun (with the committed lockfile) to match every other job and
+      # the local workflow — `npm install` resolves peer deps differently
+      # and breaks on upstream @wordpress/* drift.
+      - name: Install dependencies + build
+        run: |
+          bun install --frozen-lockfile
+          bun run build
