@@ -2,6 +2,20 @@
 
 ## [1.0.6] - Unreleased
 
+### Fixed
+
+- **WorkOS → Users settings would not save** — the "Sync Roles to
+  WorkOS" button rendered its own `<form>` inside the Settings API
+  `<form action="options.php">`. Browsers don't allow nested forms:
+  the inner `</form>` closed the outer settings form early, and since
+  Role Mapping is the last section, the "Save Settings" submit button
+  was left outside the form. Clicking Save did nothing and no changes
+  (logout redirects, deprovision action, role map, etc.) persisted.
+  The sync form is now deferred to `admin_footer` (body level, like
+  the Create Organization modal) and its button is wired back via the
+  HTML5 `form="workos-role-sync-form"` attribute, so the settings form
+  stays intact and saves normally.
+
 ## [1.0.5] - 2026-05-18
 
 ### Added

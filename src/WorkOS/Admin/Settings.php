@@ -44,6 +44,13 @@ class Settings {
 	private bool $create_org_modal_queued = false;
 
 	/**
+	 * Whether the role-sync form has been queued for footer render.
+	 *
+	 * @var bool
+	 */
+	private bool $role_sync_form_queued = false;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -1431,6 +1438,24 @@ class Settings {
 	}
 
 	/**
+	 * Render the hidden "Sync Roles to WorkOS" form.
+	 *
+	 * Hooked to admin_footer so its <form> sits at body level rather than nested
+	 * inside the settings form on the Users tab. The visible submit button stays
+	 * in the role-map actions row and is wired to this form via the HTML5 `form`
+	 * attribute.
+	 */
+	public function render_role_sync_form(): void {
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" id="workos-role-sync-form" style="display:none">
+			<?php wp_nonce_field( 'workos_sync_roles_to_workos' ); ?>
+			<input type="hidden" name="action" value="workos_sync_roles_to_workos" />
+			<input type="hidden" name="editing_env" value="<?php echo esc_attr( $this->get_editing_environment() ); ?>" />
+		</form>
+		<?php
+	}
+
+	/**
 	 * Flush the organizations transient cache.
 	 */
 	public function flush_organizations_cache(): void {
@@ -1650,16 +1675,19 @@ class Settings {
 		echo '</button>';
 
 		// Sync Roles to WorkOS button — only when plugin is enabled and org is configured.
+		// The actual <form> is deferred to admin_footer (see render_role_sync_form) so it is
+		// not nested inside the outer options.php settings form. A nested <form> closes the
+		// settings form early, orphaning the "Save Settings" button so nothing persists.
 		if ( workos()->is_enabled() && ! empty( Config::get_organization_id() ) ) {
-			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" id="workos-role-sync-form">';
-			wp_nonce_field( 'workos_sync_roles_to_workos' );
-			echo '<input type="hidden" name="action" value="workos_sync_roles_to_workos" />';
-			echo '<input type="hidden" name="editing_env" value="' . esc_attr( $this->get_editing_environment() ) . '" />';
-			echo '<button type="submit" class="button">';
+			echo '<button type="submit" form="workos-role-sync-form" class="button">';
 			echo '<span class="dashicons dashicons-update"></span> ';
 			echo esc_html__( 'Sync Roles to WorkOS', 'integration-workos' );
 			echo '</button>';
-			echo '</form>';
+
+			if ( ! $this->role_sync_form_queued ) {
+				add_action( 'admin_footer', [ $this, 'render_role_sync_form' ] );
+				$this->role_sync_form_queued = true;
+			}
 		}
 
 		echo '</div>';
