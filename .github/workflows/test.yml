@@ -60,7 +60,15 @@ jobs:
       # so Strauss generates the prefixed `WorkOS\Vendor\…` classes that
       # PHPStan needs to resolve types.
       - name: Install PHP dependencies (with Strauss)
-        run: composer install --no-interaction --prefer-dist
+        run: |
+          # Strauss boots its own Composer instance, which rejects the
+          # github-oauth token setup-php pre-configures from github.token
+          # ("contains invalid characters" when that value is empty/malformed).
+          # Clear it so Strauss runs unauthenticated — exactly like the
+          # slic-based PHP test jobs, which run Strauss without issue.
+          composer config --global --unset github-oauth.github.com 2>/dev/null || true
+          rm -f "$(composer config --global home 2>/dev/null)/auth.json" 2>/dev/null || true
+          composer install --no-interaction --prefer-dist
         env:
           COMPOSER_NO_AUDIT: 1
 
@@ -145,8 +153,13 @@ jobs:
         with:
           node-version-file: '.nvmrc'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Verify build
-        run: echo "No JS build step configured yet."
+      # Use bun (with the committed lockfile) to match every other job and
+      # the local workflow — `npm install` resolves peer deps differently
+      # and breaks on upstream @wordpress/* drift.
+      - name: Install dependencies + build
+        run: |
+          bun install --frozen-lockfile
+          bun run build
