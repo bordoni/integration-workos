@@ -95,7 +95,10 @@ class Assets {
 				'restUrl' => esc_url_raw( rest_url( RestApi::NAMESPACE . '/admin/users/' ) ),
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'strings' => [
-					'confirm'      => __( "Send a password reset email to this user?\n\nThey will receive a link from WorkOS to set a new password.", 'integration-workos' ),
+					'modalTitle'   => __( 'Send password reset?', 'integration-workos' ),
+					'modalMessage' => __( 'The user will receive a link from WorkOS to set a new password.', 'integration-workos' ),
+					'modalConfirm' => __( 'Send reset email', 'integration-workos' ),
+					'modalCancel'  => __( 'Cancel', 'integration-workos' ),
 					'sending'      => __( 'Sending…', 'integration-workos' ),
 					/* translators: %s: masked email address (e.g. "j•••@e•••.com"). */
 					'success'      => __( 'Password reset email sent to %s.', 'integration-workos' ),

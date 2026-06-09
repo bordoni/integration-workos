@@ -13,6 +13,7 @@ use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WorkOS\Auth\PasswordResetAdmin\RestApi;
+use WorkOS\Email\AddressMask;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -116,7 +117,8 @@ class PasswordResetAdminRestApiTest extends WPTestCase {
 		$rest_api = new RestApi(
 			$this->repository,
 			new RateLimiter(),
-			new RedirectValidator()
+			new RedirectValidator(),
+			new AddressMask()
 		);
 
 		add_action( 'rest_api_init', [ $rest_api, 'register_routes' ] );
