@@ -175,7 +175,7 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
-= 1.0.6 - Unreleased =
+= 1.0.6 - 2026-06-11 =
 
 * New: WorkOS-verified change-email flow. Self-service `[workos:change-email]` shortcode + admin row action on `wp-admin/users.php` + panel on the user-edit screen. The new address must be confirmed via a hashed token emailed by the plugin (because WorkOS's `email_verification` endpoints can't verify a *pending* change); the old address simultaneously receives a one-click cancel link. Configurable conflict policy (`block` default, `allow_orphan`, `merge_request`) keeps the new email from silently overwriting another local WP user. Commits to WorkOS first (`update_user`) and then mirrors into WordPress, with a 60-second in-progress transient that short-circuits the webhook fan-back. Eight new filters, five new actions, seven new activity-log events, and 40 new WPUnit tests. See `docs/change-email.md`. (#22)
 * New: Per-form magic-code registration toggles. Two independent per-environment checkboxes — Email Code Registration (default sign-in form, `/login/`) and Legacy Email Code Registration (legacy `/login/legacy/` form) — gate whether an unknown email signing in with a magic code provisions a new account. When a form's toggle is off, `POST /auth/magic/send` silently skips the WorkOS call for unknown addresses and still returns `200 ok: true`, and `POST /auth/magic/verify` returns a generic `400 workos_authkit_invalid_code` instead of creating the user — closing the account-enumeration leak where the endpoint previously returned `404 workos_authkit_no_account`. Both toggles default on to preserve existing behavior. ([CONS-350](https://linear.app/nexcess/issue/CONS-350)) (#25)
@@ -262,7 +262,7 @@ Base platform:
 == Upgrade Notice ==
 
 = 1.0.6 =
-Maintenance release.
+Adds a WorkOS-verified change-email flow (self-service `[workos:change-email]` shortcode, admin row action, and user-edit panel) with hashed confirm/cancel tokens, a configurable conflict policy, and an old-address cancel notice. Also adds two per-environment magic-code registration toggles (default and legacy sign-in forms) that close an account-enumeration leak by no longer creating accounts — or revealing whether an address exists — for unknown emails when registration is off.
 
 = 1.0.5 =
 Adds the WorkOS → Users admin page (read-only, paginated, searchable, with deep-links into the WorkOS Dashboard for re-enabling a user's suppressed email), admin-triggered WorkOS password resets (Users list row action, user-edit panel, and `[workos:password-reset]` shortcode), and a `redirect_url` parameter that lands users on the chosen page after they finish resetting. WorkOS reset emails now point at the in-site React reset page instead of `wp-login.php`.
