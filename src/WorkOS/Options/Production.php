@@ -41,6 +41,18 @@ class Production extends Options {
 			'redirect_first_login_only'               => true,
 			'logout_redirect_urls'                    => [],
 			'audit_logging_enabled'                   => false,
+			// Change-email feature (see src/WorkOS/Auth/ChangeEmail).
+			'change_email_enabled'                    => true,
+			'change_email_conflict_policy'            => 'block',
+			'change_email_token_lifetime'             => 3600,
+			'change_email_rate_limit_user_count'      => 3,
+			'change_email_rate_limit_user_window'     => 3600,
+			'change_email_rate_limit_ip_count'        => 10,
+			'change_email_rate_limit_ip_window'       => 3600,
+			'change_email_notify_old_address'         => true,
+			'change_email_require_reauth'             => true,
+			'change_email_admin_bypass_verification'  => false,
+			'change_email_confirm_path'               => 'workos/change-email',
 			'allow_magic_code_registration'           => true,
 			'allow_legacy_magic_code_registration'    => true,
 		];

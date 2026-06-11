@@ -2,6 +2,40 @@
 
 ## [1.0.6] - Unreleased
 
+### Added
+
+- **Change email (WorkOS-verified, conflict-guarded)** (#22) — self-service and admin-triggered email-change flow.
+  - Self-service `[workos:change-email]` shortcode.
+  - Admin "Change email" row action under the **WorkOS column** on `wp-admin/users.php`; "Change Email" panel on the user-edit / profile screen.
+  - WP-side verification: hashed (HMAC-SHA256 + `wp_salt('auth')`) confirm + cancel tokens stored as `_workos_pending_email_change` user_meta, validated with `hash_equals`, single-use, expiry-bounded. (WorkOS's `email_verification` endpoints can't verify a *pending* address.)
+  - Three new REST endpoints: `POST /workos/v1/users/{id}/email-change` (initiate, capability-gated, per-IP + per-user rate-limited, enumeration-safe conflict response), `…/email-change/confirm` (race re-checked, transient-guarded WorkOS + WP commit, rollback on partial failure), `…/email-change/cancel` (cancel-token or `edit_user` cap).
+  - Configurable conflict policy: `block` (default), `allow_orphan` (gated by `_workos_user_id`, posts, comments, last-login window), `merge_request` (rejects today, fires `workos_change_email_merge_requested` for the future merge feature).
+  - `wp_mail()`-backed verification, old-address cancel-link notice (opt-out via `change_email_notify_old_address`), and post-commit confirmation. Templates under `templates/change-email/` and overridable from a theme.
+  - Frontend confirm route under a configurable path (default `/workos/change-email/`, settable via `change_email_confirm_path`).
+  - UserSync race guard: `_workos_email_change_in_progress_<user_id>` transient short-circuits `handle_user_updated()` while the confirm handler is mid-commit.
+  - 8 new filters (`workos_change_email_enabled`, `…/conflict_policy`, `…/token_lifetime`, `…/can_initiate`, `…/notify_old_address`, `…/orphan_max_inactive_days`, plus `workos_email_subject|body|headers`) and 5 actions (`…/initiated`, `…/confirmed`, `…/cancelled`, `…/conflict_detected`, `…/merge_requested`).
+  - 7 new activity-log event types: `email_change.initiated|confirmed|cancelled|expired|conflict_blocked|commit_failed|admin_bypass`.
+  - 40 new WPUnit tests across 6 suites under `tests/wpunit/ChangeEmail*Test.php`.
+  - See [`docs/change-email.md`](docs/change-email.md).
+- **Per-form magic-code registration toggles** ([CONS-350](https://linear.app/nexcess/issue/CONS-350)) (#25) — two independent per-environment checkboxes on the WorkOS settings page gate whether an unknown email signing in with a magic code provisions a new account.
+  - **Email Code Registration** controls the default sign-in form (`/login/`); **Legacy Email Code Registration** controls the legacy form (`/login/legacy/`). The legacy profile slug (`legacy` by default) is filterable via `workos_legacy_profile_slug` and resolved from the `$profile` that `BaseEndpoint::resolve_profile()` already produces.
+  - When a form's toggle is off, `POST /auth/magic/send` skips the WorkOS call for unknown addresses and still returns `200 ok: true`, and `POST /auth/magic/verify` early-returns a generic `400 workos_authkit_invalid_code` instead of proceeding to `LoginCompleter`/`UserSync` — closing the account-enumeration leak where `send` previously returned `404 workos_authkit_no_account`.
+  - New options `allow_magic_code_registration` and `allow_legacy_magic_code_registration` (both default `true`, preserving historical behavior). `render_checkbox()` now honors a `default` key so the boxes render checked before first save.
+
+### Fixed
+
+- **WorkOS → Users settings would not save** — the "Sync Roles to
+  WorkOS" button rendered its own `<form>` inside the Settings API
+  `<form action="options.php">`. Browsers don't allow nested forms:
+  the inner `</form>` closed the outer settings form early, and since
+  Role Mapping is the last section, the "Save Settings" submit button
+  was left outside the form. Clicking Save did nothing and no changes
+  (logout redirects, deprovision action, role map, etc.) persisted.
+  The sync form is now deferred to `admin_footer` (body level, like
+  the Create Organization modal) and its button is wired back via the
+  HTML5 `form="workos-role-sync-form"` attribute, so the settings form
+  stays intact and saves normally.
+
 ## [1.0.5] - 2026-05-18
 
 ### Added

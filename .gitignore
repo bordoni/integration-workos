@@ -33,3 +33,4 @@ tests/_support/_generated/
 # OS
 .DS_Store
 Thumbs.db
+/.claude/

@@ -16,5 +16,7 @@ module.exports = {
 		'admin-profiles': path.resolve( __dirname, 'src/js/admin-profiles/index.tsx' ),
 		'admin-users': path.resolve( __dirname, 'src/js/admin-users/index.tsx' ),
 		'admin-password-reset': path.resolve( __dirname, 'src/js/admin-password-reset/index.ts' ),
+		'admin-change-email': path.resolve( __dirname, 'src/js/admin-change-email/index.ts' ),
+		'change-email-confirm': path.resolve( __dirname, 'src/js/change-email-confirm/index.ts' ),
 	},
 };
