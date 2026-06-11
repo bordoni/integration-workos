@@ -7,7 +7,9 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use Closure;
 use lucatume\WPBrowser\TestCase\WPTestCase;
+use ReflectionMethod;
 use WorkOS\Sync\UserSync;
 
 /**
@@ -39,7 +41,7 @@ class UserSyncGenerateUsernameTest extends WPTestCase {
 	 * @return string Generated username.
 	 */
 	private function generate( string $email ): string {
-		$method = new \ReflectionMethod( UserSync::class, 'generate_username' );
+		$method = new ReflectionMethod( UserSync::class, 'generate_username' );
 		$method->setAccessible( true );
 
 		return $method->invoke( null, [ 'email' => $email ] );
@@ -60,52 +62,87 @@ class UserSyncGenerateUsernameTest extends WPTestCase {
 	}
 
 	/**
-	 * Test bare local part is used when free.
+	 * Collision-ladder scenarios.
+	 *
+	 * Each case seeds the usernames the email's derivation collides with,
+	 * then states the expected outcome — reading top to bottom walks the
+	 * full ladder: bare base → 5-hex suffix → 12-hex widening → salted
+	 * retries.
+	 *
+	 * @return array<string, array{0: Closure, 1: string, 2: string}>
 	 */
-	public function test_uses_bare_local_part_when_base_is_free(): void {
-		$this->assertSame( 'info', $this->generate( 'info@acme-widgets.com' ) );
+	public function username_scenario_provider(): array {
+		$seed = static function ( string ...$logins ): Closure {
+			return static function ( self $test ) use ( $logins ): void {
+				foreach ( $logins as $login ) {
+					$test->seed_login( $login );
+				}
+			};
+		};
+
+		return [
+			'bare local part when base is free'            => [
+				$seed(),
+				'info@acme-widgets.com',
+				'info',
+			],
+			'5-hex email hash suffix when base is taken'   => [
+				$seed( 'info' ),
+				'info@acme-widgets.com',
+				'info_48f25',
+			],
+			'widened 12-hex suffix when 5-hex name taken'  => [
+				$seed( 'info', 'info_48f25' ),
+				'info@acme-widgets.com',
+				'info_48f257791ee0',
+			],
+			'first salted retry when widened name taken'   => [
+				$seed( 'info', 'info_48f25', 'info_48f257791ee0' ),
+				'info@acme-widgets.com',
+				'info_b1dc4def5ca9',
+			],
+			'second salted retry when first salt taken'    => [
+				$seed( 'info', 'info_48f25', 'info_48f257791ee0', 'info_b1dc4def5ca9' ),
+				'info@acme-widgets.com',
+				'info_023b84c3d9b3',
+			],
+			'long local part capped to 47 chars'           => [
+				$seed(),
+				'international-wholesale-distribution-and-logistics-coordination@globex.test',
+				'international-wholesale-distribution-and-logist',
+			],
+			'widened suffix on capped base lands on 60'    => [
+				$seed(
+					'international-wholesale-distribution-and-logist',
+					'international-wholesale-distribution-and-logist_6a3ae'
+				),
+				'international-wholesale-distribution-and-logistics-coordination@globex.test',
+				'international-wholesale-distribution-and-logist_6a3aeb9adeab',
+			],
+			'workos_user fallback when local part empty'   => [
+				$seed(),
+				'@example.com',
+				'workos_user',
+			],
+		];
 	}
 
 	/**
-	 * Test the 5-hex email hash suffix is appended when the base is taken.
+	 * Test the generator walks the collision ladder deterministically.
+	 *
+	 * @dataProvider username_scenario_provider
+	 *
+	 * @param Closure $arrange  Seeds the usernames the scenario collides with.
+	 * @param string  $email    Email to derive a username from.
+	 * @param string  $expected Expected username.
 	 */
-	public function test_appends_short_email_hash_when_base_is_taken(): void {
-		$this->seed_login( 'info' );
+	public function test_derives_expected_username( Closure $arrange, string $email, string $expected ): void {
+		$arrange( $this );
 
-		$this->assertSame( 'info_48f25', $this->generate( 'info@acme-widgets.com' ) );
-	}
+		$username = $this->generate( $email );
 
-	/**
-	 * Test the suffix widens to 12 hex chars when the 5-hex name is taken.
-	 */
-	public function test_widens_suffix_when_short_hash_name_is_taken(): void {
-		$this->seed_login( 'info' );
-		$this->seed_login( 'info_48f25' );
-
-		$this->assertSame( 'info_48f257791ee0', $this->generate( 'info@acme-widgets.com' ) );
-	}
-
-	/**
-	 * Test a salted re-derivation is used when the widened name is taken.
-	 */
-	public function test_salted_retry_when_widened_name_is_taken(): void {
-		$this->seed_login( 'info' );
-		$this->seed_login( 'info_48f25' );
-		$this->seed_login( 'info_48f257791ee0' );
-
-		$this->assertSame( 'info_b1dc4def5ca9', $this->generate( 'info@acme-widgets.com' ) );
-	}
-
-	/**
-	 * Test salted attempts progress deterministically when the first salt is taken.
-	 */
-	public function test_second_salted_retry_when_first_salt_is_taken(): void {
-		$this->seed_login( 'info' );
-		$this->seed_login( 'info_48f25' );
-		$this->seed_login( 'info_48f257791ee0' );
-		$this->seed_login( 'info_b1dc4def5ca9' );
-
-		$this->assertSame( 'info_023b84c3d9b3', $this->generate( 'info@acme-widgets.com' ) );
+		$this->assertSame( $expected, $username );
+		$this->assertLessThanOrEqual( 60, strlen( $username ) );
 	}
 
 	/**
@@ -149,29 +186,6 @@ class UserSyncGenerateUsernameTest extends WPTestCase {
 	}
 
 	/**
-	 * Test a long local part is capped so the widest suffix still fits varchar(60).
-	 */
-	public function test_long_local_part_is_capped_for_suffix_headroom(): void {
-		$username = $this->generate( 'international-wholesale-distribution-and-logistics-coordination@globex.test' );
-
-		$this->assertSame( 'international-wholesale-distribution-and-logist', $username );
-		$this->assertSame( 47, strlen( $username ) );
-	}
-
-	/**
-	 * Test the widened suffix on a capped base lands exactly on the 60-char limit.
-	 */
-	public function test_generated_username_never_exceeds_sixty_chars(): void {
-		$this->seed_login( 'international-wholesale-distribution-and-logist' );
-		$this->seed_login( 'international-wholesale-distribution-and-logist_6a3ae' );
-
-		$username = $this->generate( 'international-wholesale-distribution-and-logistics-coordination@globex.test' );
-
-		$this->assertSame( 'international-wholesale-distribution-and-logist_6a3aeb9adeab', $username );
-		$this->assertSame( 60, strlen( $username ) );
-	}
-
-	/**
 	 * Test emails sharing a truncated base still derive distinct usernames.
 	 *
 	 * The hash is computed from the full email, never the truncated base, so
@@ -185,12 +199,5 @@ class UserSyncGenerateUsernameTest extends WPTestCase {
 
 		$this->assertSame( 'international-wholesale-distribution-and-logist_6a3ae', $first );
 		$this->assertSame( 'international-wholesale-distribution-and-logist_1c20f', $second );
-	}
-
-	/**
-	 * Test the fallback base is used when the local part sanitizes to nothing.
-	 */
-	public function test_falls_back_to_workos_user_when_local_part_empty(): void {
-		$this->assertSame( 'workos_user', $this->generate( '@example.com' ) );
 	}
 }
