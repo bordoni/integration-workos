@@ -17,6 +17,10 @@
   - 7 new activity-log event types: `email_change.initiated|confirmed|cancelled|expired|conflict_blocked|commit_failed|admin_bypass`.
   - 40 new WPUnit tests across 6 suites under `tests/wpunit/ChangeEmail*Test.php`.
   - See [`docs/change-email.md`](docs/change-email.md).
+- **Per-form magic-code registration toggles** ([CONS-350](https://linear.app/nexcess/issue/CONS-350)) (#25) — two independent per-environment checkboxes on the WorkOS settings page gate whether an unknown email signing in with a magic code provisions a new account.
+  - **Email Code Registration** controls the default sign-in form (`/login/`); **Legacy Email Code Registration** controls the legacy form (`/login/legacy/`). The legacy profile slug (`legacy` by default) is filterable via `workos_legacy_profile_slug` and resolved from the `$profile` that `BaseEndpoint::resolve_profile()` already produces.
+  - When a form's toggle is off, `POST /auth/magic/send` skips the WorkOS call for unknown addresses and still returns `200 ok: true`, and `POST /auth/magic/verify` early-returns a generic `400 workos_authkit_invalid_code` instead of proceeding to `LoginCompleter`/`UserSync` — closing the account-enumeration leak where `send` previously returned `404 workos_authkit_no_account`.
+  - New options `allow_magic_code_registration` and `allow_legacy_magic_code_registration` (both default `true`, preserving historical behavior). `render_checkbox()` now honors a `default` key so the boxes render checked before first save.
 
 ### Fixed
 

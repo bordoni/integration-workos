@@ -53,6 +53,8 @@ class Staging extends Options {
 			'change_email_require_reauth'             => true,
 			'change_email_admin_bypass_verification'  => false,
 			'change_email_confirm_path'               => 'workos/change-email',
+			'allow_magic_code_registration'           => true,
+			'allow_legacy_magic_code_registration'    => true,
 		];
 	}
 }

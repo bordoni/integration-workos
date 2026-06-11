@@ -160,6 +160,40 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		return rest_get_server()->dispatch( $request );
 	}
 
+	/**
+	 * Helper: toggle the per-environment "allow magic-code registration" setting.
+	 */
+	private function set_registration_allowed( bool $allowed ): void {
+		\WorkOS\App::container()
+			->get( \WorkOS\Options\Production::class )
+			->set( 'allow_magic_code_registration', $allowed );
+	}
+
+	/**
+	 * Helper: toggle the per-environment legacy "allow magic-code registration" setting.
+	 */
+	private function set_legacy_registration_allowed( bool $allowed ): void {
+		\WorkOS\App::container()
+			->get( \WorkOS\Options\Production::class )
+			->set( 'allow_legacy_magic_code_registration', $allowed );
+	}
+
+	/**
+	 * Helper: register a profile under the legacy slug with magic-code enabled.
+	 */
+	private function register_legacy_profile(): void {
+		$saved = $this->repository->save(
+			Profile::from_array(
+				[
+					'slug'    => 'legacy',
+					'title'   => 'Legacy',
+					'methods' => [ Profile::METHOD_MAGIC_CODE ],
+				]
+			)
+		);
+		$this->assertInstanceOf( Profile::class, $saved );
+	}
+
 	// ------------------------------- /auth/nonce -------------------------------
 
 	public function test_nonce_returns_nonce_and_radar_key(): void {
@@ -192,6 +226,50 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertTrue( $response->get_data()['ok'] );
 
+		$send_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertNotEmpty( $send_calls );
+	}
+
+
+	public function test_magic_send_is_enumeration_safe_for_unknown_email_when_blocked(): void {
+		$this->set_registration_allowed( false );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'members', 'email' => 'ghost@nowhere.test' ]
+		);
+
+		// Returns the same success response as a real send so the endpoint never
+		// reveals whether the address has an account (anti-enumeration)...
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['ok'] );
+
+		// ...but no WorkOS user is provisioned and no code is sent.
+		$send_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertEmpty( $send_calls );
+	}
+
+	public function test_magic_send_allows_unknown_email_when_registration_enabled(): void {
+		$this->set_registration_allowed( true );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'members', 'email' => 'ghost@nowhere.test' ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['ok'] );
+
+		// With registration enabled the unknown email reaches WorkOS, which
+		// provisions the user and sends the code.
 		$send_calls = array_filter(
 			$this->captured,
 			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
@@ -232,9 +310,77 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$this->assertSame( 'workos_authkit_method_disabled', $response->get_data()['code'] );
 	}
 
+	public function test_magic_send_is_enumeration_safe_for_unknown_email_on_legacy_when_blocked(): void {
+		$this->register_legacy_profile();
+		$this->set_legacy_registration_allowed( false );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'legacy', 'email' => 'ghost@nowhere.test' ],
+			'legacy'
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['ok'] );
+
+		// Unknown legacy email: no account provisioned and no code sent.
+		$send_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertEmpty( $send_calls );
+	}
+
+	public function test_magic_send_allows_existing_account_on_legacy_when_blocked(): void {
+		$this->register_legacy_profile();
+		$this->set_legacy_registration_allowed( false );
+		self::factory()->user->create( [ 'user_email' => 'legacy-customer@example.com' ] );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'legacy', 'email' => 'legacy-customer@example.com' ],
+			'legacy'
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+
+		// An existing customer still receives a code even with legacy registration off.
+		$send_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertNotEmpty( $send_calls );
+	}
+
+	public function test_legacy_block_does_not_affect_default_form(): void {
+		// Legacy registration off, default (members) registration on: the two
+		// forms are governed by independent toggles.
+		$this->set_legacy_registration_allowed( false );
+		$this->set_registration_allowed( true );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'members', 'email' => 'ghost@nowhere.test' ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+
+		// The default form still reaches WorkOS and provisions the new customer.
+		$send_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertNotEmpty( $send_calls );
+	}
+
 	// ------------------------------- /auth/magic/verify ------------------------
 
 	public function test_magic_verify_completes_login_on_success(): void {
+		self::factory()->user->create( [ 'user_email' => 'alice@example.com' ] );
+
 		$this->next_workos['body'] = wp_json_encode(
 			[
 				'access_token'  => 'eyJhbGciOi.eyJzdWIiOiJ1c2VyX20xIiwiZXhwIjo5OTk5OTk5OTk5fQ.sig',
@@ -265,6 +411,84 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$body = json_decode( (string) array_values( $authenticate_calls )[0]['body'], true );
 		$this->assertSame( 'urn:workos:oauth:grant-type:magic-auth:code', $body['grant_type'] );
 		$this->assertSame( '123456', $body['code'] );
+	}
+
+	public function test_magic_verify_refuses_unknown_email(): void {
+		$this->set_registration_allowed( false );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/verify',
+			[ 'profile' => 'members', 'email' => 'ghost@nowhere.test', 'code' => '123456' ]
+		);
+
+		// Generic invalid-code error so a blocked unknown email is indistinguishable
+		// from a wrong code (anti-enumeration).
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_authkit_invalid_code', $response->get_data()['code'] );
+
+		// Never reaches WorkOS, so no account can be provisioned.
+		$authenticate_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertEmpty( $authenticate_calls );
+	}
+
+	public function test_magic_verify_is_enumeration_safe_on_legacy_when_blocked(): void {
+		$this->register_legacy_profile();
+		$this->set_legacy_registration_allowed( false );
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/verify',
+			[ 'profile' => 'legacy', 'email' => 'ghost@nowhere.test', 'code' => '123456' ],
+			'legacy'
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_authkit_invalid_code', $response->get_data()['code'] );
+
+		// Defence in depth: a blocked unknown legacy email never reaches WorkOS.
+		$authenticate_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertEmpty( $authenticate_calls );
+	}
+
+	public function test_magic_verify_creates_account_when_registration_enabled(): void {
+		$this->set_registration_allowed( true );
+		$this->assertFalse( get_user_by( 'email', 'newbie@example.com' ) );
+
+		$this->next_workos['body'] = wp_json_encode(
+			[
+				'access_token'  => 'eyJhbGciOi.eyJzdWIiOiJ1c2VyX24xIiwiZXhwIjo5OTk5OTk5OTk5fQ.sig',
+				'refresh_token' => 'rt_magic_new',
+				'user'          => [
+					'id'             => 'user_n1',
+					'email'          => 'newbie@example.com',
+					'email_verified' => true,
+				],
+			]
+		);
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/verify',
+			[ 'profile' => 'members', 'email' => 'newbie@example.com', 'code' => '123456' ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( 'newbie@example.com', $response->get_data()['user']['email'] );
+
+		// The flow reached WorkOS and provisioned a fresh WP account.
+		$authenticate_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertNotEmpty( $authenticate_calls );
+		$this->assertInstanceOf( \WP_User::class, get_user_by( 'email', 'newbie@example.com' ) );
 	}
 
 	// ------------------------------- /auth/session/refresh ---------------------
