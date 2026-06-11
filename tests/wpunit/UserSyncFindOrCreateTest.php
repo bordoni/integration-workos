@@ -242,4 +242,21 @@ class UserSyncFindOrCreateTest extends WPTestCase {
 		$this->assertNotSame( 'conflicting', $result->user_login );
 		$this->assertStringStartsWith( 'conflicting', $result->user_login );
 	}
+
+	/**
+	 * Test the created username carries the deterministic email-hash suffix on conflict.
+	 */
+	public function test_creates_user_with_hash_suffix_when_local_part_taken(): void {
+		self::factory()->user->create( [ 'user_login' => 'info', 'user_email' => 'other-info@example.com' ] );
+
+		$result = UserSync::find_or_create_wp_user(
+			[
+				'id'    => 'user_info_hash_test',
+				'email' => 'info@acme-widgets.com',
+			]
+		);
+
+		$this->assertInstanceOf( \WP_User::class, $result );
+		$this->assertSame( 'info_48f25', $result->user_login );
+	}
 }

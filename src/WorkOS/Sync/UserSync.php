@@ -642,24 +642,49 @@ class UserSync {
 	/**
 	 * Generate a unique username from WorkOS user data.
 	 *
+	 * Uses the email local part as the base and resolves collisions with a
+	 * short hash of the full email instead of probing sequential suffixes —
+	 * popular shared-mailbox local parts (info, sales, …) build chains deep
+	 * enough that a sequential probe walks thousands of users and exhausts
+	 * memory. Hashing keeps the lookup count constant regardless of chain
+	 * depth, and the same email always derives the same username.
+	 *
 	 * @param array $workos_user WorkOS user data.
 	 *
 	 * @return string
 	 */
 	private static function generate_username( array $workos_user ): string {
-		$email = $workos_user['email'] ?? '';
-		$base  = sanitize_user( strtok( $email, '@' ), true );
+		$email = strtolower( trim( (string) ( $workos_user['email'] ?? '' ) ) );
+		$base  = sanitize_user( explode( '@', $email, 2 )[0], true );
 
 		if ( ! $base ) {
 			$base = 'workos_user';
 		}
 
-		$username = $base;
-		$counter  = 1;
+		// Cap so the widest suffix ('_' + 12 hex) fits user_login's varchar(60).
+		$base = substr( $base, 0, 47 );
 
-		while ( username_exists( $username ) ) {
-			$username = $base . '_' . $counter;
-			++$counter;
+		if ( ! username_exists( $base ) ) {
+			return $base;
+		}
+
+		$hash     = hash( 'sha256', $email );
+		$username = $base . '_' . substr( $hash, 0, 5 );
+
+		if ( ! username_exists( $username ) ) {
+			return $username;
+		}
+
+		$username = $base . '_' . substr( $hash, 0, 12 );
+
+		// ~2^-48 territory. The generator is deterministic, so recovery must
+		// change the input — salt with an attempt counter, never re-roll.
+		for ( $attempt = 1; $attempt <= 3; $attempt++ ) {
+			if ( ! username_exists( $username ) ) {
+				return $username;
+			}
+
+			$username = $base . '_' . substr( hash( 'sha256', $email . '|' . $attempt ), 0, 12 );
 		}
 
 		return $username;
