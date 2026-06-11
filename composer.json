@@ -52,11 +52,11 @@
 		"phpstan": "phpstan analyse --memory-limit=1G",
 		"phpstan:baseline": "phpstan analyse --memory-limit=1G --generate-baseline",
 		"strauss-install": [
-			"test -f ./bin/strauss.phar || (mkdir -p bin && curl -o bin/strauss.phar -L https://github.com/BrianHenryIE/strauss/releases/download/0.26.5/strauss.phar)"
+			"test -f ./bin/strauss-0.27.3.phar || (mkdir -p bin && curl -o bin/strauss-0.27.3.phar -L https://github.com/BrianHenryIE/strauss/releases/download/0.27.3/strauss.phar)"
 		],
 		"strauss": [
 			"@strauss-install",
-			"@php bin/strauss.phar",
+			"@php bin/strauss-0.27.3.phar",
 			"@composer dump-autoload"
 		],
 		"post-install-cmd": ["@strauss"],
