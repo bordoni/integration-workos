@@ -35,6 +35,18 @@
   the Create Organization modal) and its button is wired back via the
   HTML5 `form="workos-role-sync-form"` attribute, so the settings form
   stays intact and saves normally.
+- **Username generation could exhaust memory and block provisioning**
+  ([CONS-513](https://linear.app/nexcess/issue/CONS-513)) (#27) — when a
+  popular email local part (e.g. `info@`) already had a deep `info_1`,
+  `info_2`, … collision chain, `generate_username()` probed it one
+  `username_exists()` call at a time, hydrating a `WP_User` into the
+  object cache per probe until the request OOM'd — so those users could
+  log in via WorkOS but never got a WordPress account. Collisions are
+  now resolved with a suffix derived from `sha256( email )` (e.g.
+  `info_48f25`), which is unique by construction: at most 2 lookups
+  regardless of chain depth, and the same email always derives the same
+  username, so crash retries and replayed webhooks converge instead of
+  minting new names. Existing accounts keep their current usernames.
 
 ## [1.0.5] - 2026-05-18
 
