@@ -841,6 +841,34 @@ introduces them. The `composer phpstan:baseline` script exists as a
 safety hatch, but the resulting file should not be committed without
 discussion.
 
+### Release & Deployment
+
+Publishing a **GitHub Release** deploys the plugin to WordPress.org
+automatically. Three workflows under `.github/workflows/` drive it:
+
+- **`zip.yml`** — builds the production ZIP (`composer install --no-dev`,
+  `bun run build`, then prunes dev files). Reusable; outputs the
+  artifact name.
+- **`release-attach-zip.yml`** — on `release: published`, builds the
+  ZIP, attaches it to the Release, then chains the SVN deploy with the
+  **same-run artifact** (the exact bytes attached to the release).
+- **`svn-deploy.yml`** — deploys that ZIP to WordPress.org SVN. It
+  creates `tags/{version}` (server-side copy of the previous tag, then
+  syncs the ZIP over it with a file-path + size checksum gate before
+  committing) and, for full releases, flips the **Stable tag** by
+  copying the tag's `readme.txt` into `trunk/`.
+
+**Full releases** tag *and* flip stable; **prereleases** create the tag
+only. To dry-run a deploy without writing to SVN, go to **Actions →
+Deploy to WordPress.org SVN → Run workflow** against an existing tag —
+manual dispatch defaults to `dry_run: true` and just reports the
+add/delete/change set it would commit.
+
+Requires the `SVN_USERNAME` / `SVN_PASSWORD` / `RELEASE_TOKEN` repo
+secrets and an approved `integration-workos` slug on WordPress.org. The
+version-bump checklist lives in `AGENTS.md` (*Releasing / Version
+Bumps*).
+
 ### Architecture
 
 The plugin uses a DI container (di52) with a feature-controller pattern:

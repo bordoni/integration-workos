@@ -249,6 +249,42 @@ When bumping the plugin version, update **every** location below in the same com
 
 Also add a matching entry to the changelog in `readme.txt` (and `README.md` if its changelog is kept in sync).
 
+### Release Automation (CI/CD)
+
+After the version is bumped and a **GitHub Release** is published, deployment to WordPress.org is fully automated. Three workflows under `.github/workflows/` form the pipeline:
+
+| Workflow | Trigger | Role |
+|----------|---------|------|
+| `zip.yml` | `workflow_dispatch`, `workflow_call` | Builds the production plugin ZIP (composer `--no-dev`, `bun run build`, prunes dev files via rsync). Reusable — emits the artifact name as `zip_name`. |
+| `release-attach-zip.yml` | `release: published`, `workflow_dispatch` | Builds the ZIP (calls `zip.yml`), attaches it to the GitHub Release, then chains the SVN deploy. |
+| `svn-deploy.yml` | `workflow_call`, `workflow_dispatch` | Ports the [tut](https://github.com/the-events-calendar/tut) `svn:tag` + `svn:release` commands to deploy the built ZIP to WordPress.org SVN. |
+
+**End-to-end flow on a published release:**
+
+1. `release-attach-zip.yml` fires on `release: published`.
+2. It calls `zip.yml` to build the production ZIP once, then attaches it to the GitHub Release.
+3. It chains `svn-deploy.yml`, passing the **same-run artifact** (`artifact_name`) — the exact bytes attached to the release, never a re-download.
+4. `svn-deploy.yml` runs the `svn:tag` port: `svn co --depth=immediates`, server-side `svn copy` of the newest existing tag into `tags/{version}` (so only the diff transfers), rsyncs the ZIP over it, schedules `svn add`/`svn rm` from `svn status`, runs a **checksum gate** (file paths + sizes must match the ZIP), then commits. If the server-side copy lands but the commit fails, an `if: failure()` step removes the orphaned remote tag.
+5. For **full releases**, it then runs the `svn:release` port: verifies `tags/{version}/readme.txt` declares `Stable tag: {version}`, copies it into `trunk/`, and commits — this is what ships the update to users. **Prereleases skip the stable flip** (tag only); flip later via manual dispatch.
+
+**`svn-deploy.yml` inputs (manual dispatch):**
+
+| Input | Default | Notes |
+|-------|---------|-------|
+| `tag_name` | — (required) | GitHub release tag, e.g. `v1.0.7` or `1.0.7`. |
+| `flip_stable` | `false` | Run the `svn:release` step (copy tag readme into trunk). |
+| `dry_run` | `true` | Build + checkout + report the would-be add/delete/change set **without writing to SVN**. |
+
+On standalone dispatch there's no caller artifact, so `svn-deploy.yml` builds the ZIP itself (calls `zip.yml` with `ref: tag_name`) — every deploy consumes a freshly built, reproducible artifact.
+
+**Required configuration (one-time):**
+
+- Repo secrets `SVN_USERNAME` / `SVN_PASSWORD` — WordPress.org SVN credentials.
+- `RELEASE_TOKEN` secret — used by `release-attach-zip.yml` to attach the asset.
+- The `integration-workos` slug must exist/be approved on WordPress.org (SVN checkout 404s otherwise).
+
+**To verify safely:** Actions → *Deploy to WordPress.org SVN* → Run workflow against an existing tag. It defaults to `dry_run: true`, printing the exact diff it would commit without touching live SVN.
+
 ## Testing
 
 ### Prerequisites
