@@ -1,0 +1,242 @@
+name: Deploy to WordPress.org SVN
+
+# Port of the-events-calendar/tut `svn:tag` and `svn:release` commands.
+#
+# svn:tag    -> creates tags/{version} on WordPress.org SVN from the ZIP attached
+#               to the GitHub release, using a server-side copy of the previous
+#               tag so only the diff is committed.
+# svn:release -> flips the "Stable tag" by copying the new tag's readme.txt into
+#               trunk/ (this is what actually ships the update to users).
+
+on:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: 'GitHub release tag to deploy (e.g., v1.0.7 or 1.0.7)'
+        required: true
+        type: string
+      artifact_name:
+        description: 'Name of the plugin artifact built in this run (from zip.yml). When set, the artifact is used instead of downloading the release asset.'
+        default: ''
+        type: string
+      flip_stable:
+        description: 'Copy the tag readme.txt into trunk (svn:release step)'
+        default: false
+        type: boolean
+      dry_run:
+        description: 'Compute and report changes without writing to SVN'
+        default: false
+        type: boolean
+    secrets:
+      SVN_USERNAME:
+        required: true
+      SVN_PASSWORD:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'GitHub release tag to deploy (e.g., v1.0.7 or 1.0.7)'
+        required: true
+        type: string
+      flip_stable:
+        description: 'Copy the tag readme.txt into trunk (svn:release step)'
+        default: false
+        type: boolean
+      dry_run:
+        description: 'Compute and report changes without writing to SVN'
+        default: true
+        type: boolean
+
+jobs:
+  # Standalone manual dispatch: build the ZIP from the tag in this run.
+  # When called from release-attach-zip.yml an artifact name is passed in and
+  # this job is skipped — the ZIP built in the caller's run is used instead.
+  build-zip:
+    name: Build Plugin Package
+    if: ${{ inputs.artifact_name == '' }}
+    uses: ./.github/workflows/zip.yml
+    with:
+      production: true
+      ref: ${{ inputs.tag_name }}
+
+  svn-deploy:
+    name: Deploy to WordPress.org SVN
+    needs: build-zip
+    if: ${{ !cancelled() && (needs.build-zip.result == 'success' || needs.build-zip.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SLUG: integration-workos
+      SVN_URL: https://plugins.svn.wordpress.org/integration-workos
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+    steps:
+      - name: Install Subversion
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q subversion
+
+      - name: Resolve version
+        run: |
+          TAG_NAME="${{ inputs.tag_name }}"
+          VERSION="${TAG_NAME#v}"
+          echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Deploying GitHub release '$TAG_NAME' as SVN tag '$VERSION'."
+
+      # Use the artifact built by zip.yml — either in this run (standalone
+      # dispatch builds it via the build-zip job above) or in the caller's run
+      # (release-attach-zip.yml passes the name of the exact ZIP being attached
+      # to the release).
+      - name: Download plugin artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name || needs.build-zip.outputs.zip_name }}
+          path: plugin
+
+      - name: Verify plugin files
+        run: |
+          if [ ! -f "plugin/${SLUG}.php" ] && [ ! -f plugin/readme.txt ]; then
+            echo "::error::Plugin files were not staged correctly, expected plugin/ to contain the plugin."
+            ls -la plugin || true
+            exit 1
+          fi
+          find plugin -type f | wc -l | xargs echo "Files staged for deploy:"
+
+      - name: Checkout SVN repository (immediates)
+        run: |
+          svn checkout "$SVN_URL" repo --depth=immediates --non-interactive
+          cd repo
+          svn update trunk/readme.txt --non-interactive
+
+      - name: Verify tag does not already exist
+        run: |
+          if svn ls "$SVN_URL/tags/" --non-interactive | grep -qx "$VERSION/"; then
+            echo "::error::SVN tag '$VERSION' already exists on WordPress.org, aborting."
+            exit 1
+          fi
+
+      - name: Determine source tag
+        run: |
+          SOURCE_TAG="$(svn ls "$SVN_URL/tags/" --non-interactive | sed 's#/$##' | sort -V | tail -n 1)"
+          echo "SOURCE_TAG=$SOURCE_TAG" >> "$GITHUB_ENV"
+          if [ -n "$SOURCE_TAG" ]; then
+            echo "Newest existing SVN tag: $SOURCE_TAG (will be copied server-side into $VERSION)."
+          else
+            echo "No existing SVN tags found, '$VERSION' will be created from scratch."
+          fi
+
+      # --- svn:tag -----------------------------------------------------------
+
+      - name: Copy source tag to destination tag (server-side)
+        id: copy_tag
+        if: ${{ !inputs.dry_run && env.SOURCE_TAG != '' }}
+        run: |
+          svn copy "$SVN_URL/tags/$SOURCE_TAG" "$SVN_URL/tags/$VERSION" \
+            -m "Copying $SOURCE_TAG into $VERSION" \
+            --username "$SVN_USERNAME" --password "$SVN_PASSWORD" \
+            --non-interactive --no-auth-cache
+          cd repo
+          svn update "tags/$VERSION" --non-interactive
+
+      - name: Stage destination tag from ZIP
+        if: ${{ !inputs.dry_run }}
+        run: |
+          cd repo
+          if [ -d "tags/$VERSION" ]; then
+            # Replace the copied tag contents with the ZIP contents.
+            rsync -a --delete ../plugin/ "tags/$VERSION/"
+          else
+            # First release: no source tag to copy from.
+            cp -r ../plugin "tags/$VERSION"
+            svn add "tags/$VERSION" --non-interactive
+          fi
+
+          # Schedule additions and deletions detected against the copied tag.
+          svn status "tags/$VERSION" | awk '/^\?/ { print substr($0, 9) }' | while IFS= read -r file; do
+            svn add --parents "$file" --non-interactive
+          done
+          svn status "tags/$VERSION" | awk '/^!/ { print substr($0, 9) }' | while IFS= read -r file; do
+            svn rm "$file" --non-interactive
+          done
+
+          echo "Pending changes for tags/$VERSION:"
+          svn status "tags/$VERSION"
+
+      - name: Report changes (dry run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          cd repo
+          if [ -z "$SOURCE_TAG" ]; then
+            echo "Dry run: no existing tags. Every file in the ZIP would be added as tags/$VERSION:"
+            find ../plugin -type f | sed 's#^\.\./plugin/##' | sort
+            exit 0
+          fi
+          svn update "tags/$SOURCE_TAG" --non-interactive
+          echo "Dry run: changes from tags/$SOURCE_TAG to tags/$VERSION (from the ZIP):"
+          rsync -rci --delete --dry-run ../plugin/ "tags/$SOURCE_TAG/" --exclude='.svn' || true
+
+      - name: Verify checksum of ZIP against staged tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          ( cd plugin && find . -type f -printf '%P|%s\n' | sort ) > /tmp/zip-files.list
+          ( cd "repo/tags/$VERSION" && find . -type f -not -path './.svn/*' -printf '%P|%s\n' | sort ) > /tmp/tag-files.list
+          echo "Comparing directories:"
+          echo " - plugin/ (from ZIP)"
+          echo " - repo/tags/$VERSION (staged for commit)"
+          if ! diff /tmp/zip-files.list /tmp/tag-files.list; then
+            echo "::error::Failed the checksum of the two folders, aborting."
+            exit 1
+          fi
+          echo "Checksum passed: file lists and sizes match."
+
+      - name: Commit destination tag
+        id: commit_tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          cd repo
+          svn commit "tags/$VERSION" \
+            -m "Tagging $VERSION from GitHub release $TAG_NAME" \
+            --username "$SVN_USERNAME" --password "$SVN_PASSWORD" \
+            --non-interactive --no-auth-cache
+
+      # Port of tut's `remove_remote_destination_tag` cleanup step: if the
+      # server-side copy landed but the commit never did, remove the remote tag
+      # so a re-run starts from a clean slate.
+      - name: Cleanup remote tag on failure
+        if: ${{ failure() && steps.copy_tag.outcome == 'success' && steps.commit_tag.outcome != 'success' }}
+        run: |
+          echo "Deleting remote tag '$VERSION' to cleanup after failure."
+          svn rm "$SVN_URL/tags/$VERSION" \
+            -m "Delete remote tag $VERSION." \
+            --username "$SVN_USERNAME" --password "$SVN_PASSWORD" \
+            --non-interactive --no-auth-cache
+
+      # --- svn:release -------------------------------------------------------
+
+      - name: Verify tag readme stable tag
+        if: ${{ inputs.flip_stable && !inputs.dry_run }}
+        run: |
+          cd repo
+          if ! grep -qiE "^Stable tag:\s*$VERSION\s*$" "tags/$VERSION/readme.txt"; then
+            echo "::error::readme.txt in tags/$VERSION does not declare 'Stable tag: $VERSION', refusing to flip stable."
+            grep -i '^Stable tag:' "tags/$VERSION/readme.txt" || true
+            exit 1
+          fi
+
+      - name: Flip stable tag (copy readme.txt into trunk)
+        if: ${{ inputs.flip_stable && !inputs.dry_run }}
+        run: |
+          cd repo
+          cp -f "tags/$VERSION/readme.txt" trunk/readme.txt
+          svn commit trunk/readme.txt \
+            -m "Copying $VERSION readme.txt into trunk." \
+            --username "$SVN_USERNAME" --password "$SVN_PASSWORD" \
+            --non-interactive --no-auth-cache
+          echo "Stable tag flipped: WordPress.org now serves $VERSION."
+
+      - name: Skipped stable flip notice
+        if: ${{ !inputs.flip_stable }}
+        run: |
+          echo "Stable tag flip skipped. Run this workflow manually with 'flip_stable: true' to release tags/$VERSION to users."

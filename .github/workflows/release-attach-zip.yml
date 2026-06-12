@@ -57,3 +57,17 @@ jobs:
           fail_on_unmatched_files: false
           draft: false
           prerelease: ${{ github.event.release.prerelease }}
+
+  # Deploy the attached ZIP to WordPress.org SVN.
+  # Prereleases only create the SVN tag; full releases also flip the stable tag.
+  svn-deploy:
+    name: Deploy to WordPress.org SVN
+    needs: [build-zip, attach-to-release]
+    uses: ./.github/workflows/svn-deploy.yml
+    with:
+      tag_name: ${{ github.event.inputs.tag_name || github.event.release.tag_name }}
+      artifact_name: ${{ needs.build-zip.outputs.zip_name }}
+      flip_stable: ${{ github.event_name == 'release' && !github.event.release.prerelease }}
+    secrets:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
