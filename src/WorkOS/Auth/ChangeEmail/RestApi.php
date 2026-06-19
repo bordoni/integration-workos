@@ -421,7 +421,17 @@ class RestApi {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	private function commit_admin_change( WP_User $user, string $new_email ) {
+		// Admin-direct changes are silent. Beyond skipping our own notifier,
+		// suppress WP core's "Notice of Email Change" that wp_update_user()
+		// would otherwise mail to the old address. Scoped to this commit so
+		// the self-service confirm path keeps its core notice.
+		$suppress_core_notice = static function () {
+			return false;
+		};
+		add_filter( 'send_email_change_email', $suppress_core_notice );
 		$commit = $this->commit_change( $user, $new_email );
+		remove_filter( 'send_email_change_email', $suppress_core_notice );
+
 		if ( is_wp_error( $commit ) ) {
 			return $commit;
 		}
