@@ -109,17 +109,24 @@ class AdminPage {
 			$asset['version'] ?? WORKOS_VERSION
 		);
 
+		$container            = workos()->getContainer();
+		$change_email_enabled = $container
+			? $container->get( \WorkOS\Auth\ChangeEmail\Controller::class )->isActive()
+			: false;
+
 		wp_localize_script(
 			self::SCRIPT_HANDLE,
 			'workosUsersAdmin',
 			[
-				'restUrl'          => esc_url_raw( rest_url( RestApi::NAMESPACE . RestApi::BASE ) ),
-				'nonce'            => wp_create_nonce( 'wp_rest' ),
-				'environment'      => Config::get_active_environment(),
-				'environmentId'    => Config::get_environment_id(),
-				'dashboardBaseUrl' => 'https://dashboard.workos.com',
-				'defaultLimit'     => 25,
-				'pluginEnabled'    => workos()->is_enabled(),
+				'restUrl'            => esc_url_raw( rest_url( RestApi::NAMESPACE . RestApi::BASE ) ),
+				'changeEmailUrl'     => esc_url_raw( rest_url( RestApi::NAMESPACE . '/users/' ) ),
+				'nonce'              => wp_create_nonce( 'wp_rest' ),
+				'environment'        => Config::get_active_environment(),
+				'environmentId'      => Config::get_environment_id(),
+				'dashboardBaseUrl'   => 'https://dashboard.workos.com',
+				'defaultLimit'       => 25,
+				'pluginEnabled'      => workos()->is_enabled(),
+				'changeEmailEnabled' => $change_email_enabled,
 			]
 		);
 
@@ -129,5 +136,10 @@ class AdminPage {
 		// this page only needs to enqueue them.
 		wp_enqueue_script( \WorkOS\Auth\PasswordResetAdmin\Assets::SCRIPT_HANDLE );
 		wp_enqueue_style( \WorkOS\Auth\PasswordResetAdmin\Assets::STYLE_HANDLE );
+
+		// The change-email action is handled natively by the React bundle
+		// (own modal + in-place row refresh), so unlike password reset it
+		// does not enqueue the shared ChangeEmail admin handler — it just
+		// needs `changeEmailUrl` + `changeEmailEnabled` from the config above.
 	}
 }

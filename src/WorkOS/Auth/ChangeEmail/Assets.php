@@ -109,15 +109,17 @@ class Assets {
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'strings' => [
 					'modalTitle'       => __( 'Change email address', 'integration-workos' ),
-					'modalMessage'     => __( 'A verification link will be sent to the new address. The change only commits once that link is clicked.', 'integration-workos' ),
+					'modalMessage'     => __( 'Enter the new email address for this account.', 'integration-workos' ),
 					'modalInputLabel'  => __( 'New email address', 'integration-workos' ),
 					'modalPlaceholder' => __( 'name@example.com', 'integration-workos' ),
-					'modalConfirm'     => __( 'Send verification', 'integration-workos' ),
+					'modalConfirm'     => __( 'Change email', 'integration-workos' ),
 					'modalCancel'      => __( 'Cancel', 'integration-workos' ),
-					'sending'          => __( 'Sending verification…', 'integration-workos' ),
+					'sending'          => __( 'Saving…', 'integration-workos' ),
 					/* translators: %s: masked email (e.g. "j•••@e•••.com"). */
 					'success'          => __( 'Verification email sent to %s.', 'integration-workos' ),
-					'errorGeneric'     => __( 'Could not start the email change. Please try again.', 'integration-workos' ),
+					/* translators: %s: the new email address. */
+					'successImmediate' => __( 'Email changed to %s.', 'integration-workos' ),
+					'errorGeneric'     => __( 'Could not change the email. Please try again.', 'integration-workos' ),
 					'invalidEmail'     => __( 'Please enter a valid email address.', 'integration-workos' ),
 				],
 			]
