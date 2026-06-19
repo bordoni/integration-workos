@@ -309,12 +309,10 @@ function App(): JSX.Element {
 					return;
 				}
 
-				// The server decides immediate-commit vs. verified flow by who
-				// is acting: an admin on another account commits now; an admin
-				// acting on their *own* account still goes through emailed
-				// verification. Honor that discriminator rather than assuming a
-				// commit — otherwise we'd rewrite the row for a change that
-				// hasn't landed yet.
+				// An admin acting on their own account falls into the verified
+				// flow (no `committed`), so branch on the response — don't
+				// assume a commit, or we'd rewrite the row for a change that
+				// hasn't landed.
 				if ( data.no_op ) {
 					setActionNotice( {
 						kind: 'success',

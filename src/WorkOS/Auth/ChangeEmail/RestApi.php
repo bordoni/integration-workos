@@ -270,15 +270,10 @@ class RestApi {
 		}
 		$new_email = strtolower( $new_email );
 
-		// A privileged admin acting on another account commits the change
-		// immediately and skips the verification round-trip entirely; the
-		// capability gate is the trust boundary. Self-service callers go
-		// through the emailed-token flow below.
 		$is_admin_action = $this->is_admin_action( (int) $user->ID );
 
-		// Rate limits exist to throttle anonymous-ish self-service abuse;
-		// they'd only get in an admin's way during a legitimate cleanup
-		// sweep, so the capability-gated admin path bypasses them.
+		// Rate limits throttle self-service abuse; the capability-gated admin
+		// path bypasses them so a legitimate cleanup sweep isn't blocked.
 		if ( ! $is_admin_action ) {
 			$ip          = $this->rate_limiter->client_ip();
 			$user_count  = (int) workos()->option( 'change_email_rate_limit_user_count', self::RATE_LIMIT_DEFAULT_USER );
@@ -408,12 +403,10 @@ class RestApi {
 	/**
 	 * Commit an admin-initiated change immediately, bypassing verification.
 	 *
-	 * Reuses the shared {@see commit_change()} (WorkOS + WP, with rollback
-	 * and the webhook race-guard) but skips the token round-trip and the
-	 * user-facing notification — admins act on accounts directly, and the
-	 * change is recorded in the activity log for audit. The new address is
-	 * echoed back unmasked so the admin UI can refresh the row in place;
-	 * the caller already typed it, so there's nothing to hide.
+	 * Skips the token round-trip and the user notification — the capability
+	 * is the trust boundary, and the change is audit-logged instead. Echoes
+	 * the new address back unmasked (the admin typed it) so the UI can
+	 * refresh the row in place.
 	 *
 	 * @param WP_User $user      Target user (pre-update).
 	 * @param string  $new_email Lowercased, validated new address.
