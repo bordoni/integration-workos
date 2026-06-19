@@ -380,6 +380,52 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$this->assertSame( '1', (string) $row );
 	}
 
+	public function test_initiate_admin_acting_on_self_uses_verified_flow(): void {
+		// An admin changing *their own* email is not an "admin action" — it
+		// must go through emailed verification like any self-service change,
+		// not commit immediately.
+		wp_set_current_user( $this->admin_user_id );
+
+		$new_email = 'admin-own-' . uniqid() . '@example.test';
+		$response  = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->admin_user_id . '/email-change',
+			[ 'new_email' => $new_email ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		// Verified-flow shape: a pending expiry, and crucially NOT committed.
+		$this->assertArrayNotHasKey( 'committed', $data );
+		$this->assertArrayHasKey( 'expires_at', $data );
+
+		// The address is only pending — WP still holds the old email.
+		$this->assertNotEmpty( get_user_meta( $this->admin_user_id, PendingChange::META_KEY, true ) );
+		$unchanged = get_userdata( $this->admin_user_id );
+		$this->assertNotSame( strtolower( $new_email ), strtolower( $unchanged->user_email ) );
+	}
+
+	public function test_initiate_admin_direct_on_unlinked_user_skips_workos(): void {
+		// Admin-direct change for a user with no WorkOS link should mirror
+		// only into WordPress and make no upstream call.
+		wp_set_current_user( $this->admin_user_id );
+
+		$new_email = 'unlinked-new-' . uniqid() . '@example.test';
+		$response  = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->unlinked_user_id . '/email-change',
+			[ 'new_email' => $new_email ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['committed'] ?? false );
+
+		// WP updated, but no WorkOS round-trip (user has no `_workos_user_id`).
+		$updated = get_userdata( $this->unlinked_user_id );
+		$this->assertSame( strtolower( $new_email ), strtolower( $updated->user_email ) );
+		$this->assertEmpty( $this->http_captured );
+	}
+
 	// ----------------------------------------------------------------- confirm
 
 	public function test_confirm_commits_change_and_clears_meta(): void {

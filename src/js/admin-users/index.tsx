@@ -309,25 +309,53 @@ function App(): JSX.Element {
 					return;
 				}
 
-				const updatedEmail = ( data.email as string ) || newEmail;
-				// Reflect the committed change in place — the row's email is
-				// now the new address, and it's unverified until the user
-				// verifies it in WorkOS.
-				setUsers( ( prev ) =>
-					prev.map( ( u ) =>
-						u.id === user.id
-							? { ...u, email: updatedEmail, email_verified: false }
-							: u
-					)
-				);
-				setActionNotice( {
-					kind: 'success',
-					text: sprintf(
-						/* translators: %s: the new email address. */
-						__( 'Email changed to %s.', 'integration-workos' ),
-						updatedEmail
-					),
-				} );
+				// The server decides immediate-commit vs. verified flow by who
+				// is acting: an admin on another account commits now; an admin
+				// acting on their *own* account still goes through emailed
+				// verification. Honor that discriminator rather than assuming a
+				// commit — otherwise we'd rewrite the row for a change that
+				// hasn't landed yet.
+				if ( data.no_op ) {
+					setActionNotice( {
+						kind: 'success',
+						text: __(
+							'That is already this user’s email.',
+							'integration-workos'
+						),
+					} );
+				} else if ( data.committed ) {
+					const updatedEmail = ( data.email as string ) || newEmail;
+					// Reflect the committed change in place — the row's email is
+					// now the new address, and it's unverified until the user
+					// verifies it in WorkOS.
+					setUsers( ( prev ) =>
+						prev.map( ( u ) =>
+							u.id === user.id
+								? { ...u, email: updatedEmail, email_verified: false }
+								: u
+						)
+					);
+					setActionNotice( {
+						kind: 'success',
+						text: sprintf(
+							/* translators: %s: the new email address. */
+							__( 'Email changed to %s.', 'integration-workos' ),
+							updatedEmail
+						),
+					} );
+				} else {
+					setActionNotice( {
+						kind: 'success',
+						text: sprintf(
+							/* translators: %s: the masked new email address. */
+							__(
+								'Verification email sent to %s.',
+								'integration-workos'
+							),
+							( data.masked_new_email as string ) || newEmail
+						),
+					} );
+				}
 			} catch ( _err ) {
 				setActionNotice( {
 					kind: 'error',
@@ -413,7 +441,7 @@ function App(): JSX.Element {
 					className={ `notice notice-${
 						actionNotice.kind === 'success' ? 'success' : 'error'
 					} is-dismissible workos-users-notice` }
-					role="status"
+					role={ actionNotice.kind === 'error' ? 'alert' : 'status' }
 				>
 					<p>{ actionNotice.text }</p>
 				</div>
