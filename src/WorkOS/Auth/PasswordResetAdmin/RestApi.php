@@ -111,7 +111,7 @@ class RestApi {
 				'args'                => [
 					'id'           => [ 'sanitize_callback' => 'absint' ],
 					'redirect_url' => [ 'sanitize_callback' => 'sanitize_text_field' ],
-					'profile'      => [ 'sanitize_callback' => 'sanitize_title' ],
+					'profile'      => [ 'sanitize_callback' => static fn( $value ) => sanitize_title( (string) $value ) ],
 				],
 			]
 		);
