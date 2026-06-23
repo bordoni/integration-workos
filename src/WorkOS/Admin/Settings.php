@@ -513,7 +513,17 @@ class Settings {
 				'type'              => 'string',
 				'default'           => 'staging',
 				'sanitize_callback' => function ( $value ) {
-					return in_array( $value, [ 'production', 'staging' ], true ) ? $value : 'staging';
+					/*
+					 * The settings form does not submit this option; environment
+					 * activation is handled by handle_activate_environment().
+					 * Preserve the existing value when options.php sanitizes the
+					 * missing field during a normal credential/settings save.
+					 */
+					if ( ! in_array( $value, [ 'production', 'staging' ], true ) ) {
+						return Config::get_active_environment();
+					}
+
+					return $value;
 				},
 			]
 		);

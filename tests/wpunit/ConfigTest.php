@@ -8,6 +8,7 @@
 namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
+use WorkOS\Admin\Settings;
 use WorkOS\App;
 use WorkOS\Config;
 use WorkOS\Database\Schema;
@@ -115,6 +116,52 @@ class ConfigTest extends WPTestCase {
 		$this->assertArrayNotHasKey( 'active_environment', $global );
 
 		$this->assertSame( 3, (int) get_option( 'workos_db_version' ) );
+	}
+
+	/**
+	 * The settings form edits production/staging option rows but does not post
+	 * workos_active_environment. A normal save must not coerce the missing
+	 * active-environment field back to staging.
+	 */
+	public function test_settings_save_preserves_active_environment_when_field_is_missing(): void {
+		if ( ! defined( 'WORKOS_BASENAME' ) ) {
+			define( 'WORKOS_BASENAME', 'integration-workos/integration-workos.php' );
+		}
+
+		update_option( 'workos_active_environment', 'production' );
+
+		$settings = new Settings();
+		$settings->register_settings();
+
+		update_option( 'workos_active_environment', null );
+
+		$this->assertSame( 'production', get_option( 'workos_active_environment' ) );
+	}
+
+	/**
+	 * Legacy installs may still have the active environment only in
+	 * workos_global. A settings save must preserve that fallback instead of
+	 * writing the standalone row as staging.
+	 */
+	public function test_settings_save_preserves_legacy_active_environment_when_field_is_missing(): void {
+		if ( ! defined( 'WORKOS_BASENAME' ) ) {
+			define( 'WORKOS_BASENAME', 'integration-workos/integration-workos.php' );
+		}
+
+		update_option(
+			'workos_global',
+			[
+				'active_environment' => 'production',
+			]
+		);
+		App::container()->get( Global_Options::class )->reset();
+
+		$settings = new Settings();
+		$settings->register_settings();
+
+		update_option( 'workos_active_environment', null );
+
+		$this->assertSame( 'production', get_option( 'workos_active_environment' ) );
 	}
 
 	/**
