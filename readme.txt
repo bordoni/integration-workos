@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,10 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.7 - 2026-06-23 =
+
+* Fix: Active environment no longer reverts on settings save. Saving WorkOS settings no longer resets `workos_active_environment` to `staging` when the active environment field is absent from the form. The sanitizer now preserves the current active environment, including legacy `workos_global['active_environment']` fallback state. (#34)
+
 = 1.0.6 - 2026-06-11 =
 
 * New: WorkOS-verified change-email flow. Self-service `[workos:change-email]` shortcode + admin row action on `wp-admin/users.php` + panel on the user-edit screen. The new address must be confirmed via a hashed token emailed by the plugin (because WorkOS's `email_verification` endpoints can't verify a *pending* change); the old address simultaneously receives a one-click cancel link. Configurable conflict policy (`block` default, `allow_orphan`, `merge_request`) keeps the new email from silently overwriting another local WP user. Commits to WorkOS first (`update_user`) and then mirrors into WordPress, with a 60-second in-progress transient that short-circuits the webhook fan-back. Eight new filters, five new actions, seven new activity-log events, and 40 new WPUnit tests. See `docs/change-email.md`. (#22)
@@ -261,6 +265,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.7 =
+Fixes settings saves resetting the active WorkOS environment to Staging when the environment field is absent from the form. The saved active environment is now preserved, including legacy fallback state.
 
 = 1.0.6 =
 Adds a WorkOS-verified change-email flow (self-service `[workos:change-email]` shortcode, admin row action, and user-edit panel) with hashed confirm/cancel tokens, a configurable conflict policy, and an old-address cancel notice. Also adds two per-environment magic-code registration toggles (default and legacy sign-in forms) that close an account-enumeration leak by no longer creating accounts — or revealing whether an address exists — for unknown emails when registration is off. Fixes a username-generation memory exhaustion that prevented users with popular email local parts (e.g. `info@`) from being provisioned: collisions now get a hash-derived suffix instead of sequential probing.
