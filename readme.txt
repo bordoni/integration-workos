@@ -177,9 +177,9 @@ WorkOS is provided by WorkOS, Inc.
 
 = 1.0.8 - 2026-06-30 =
 
-* New: Change a user's email straight from the WorkOS → Users admin page. A native "Change email" action (beside "Open in WorkOS" and "Send password reset") opens a modal, posts the change, and refreshes the row in place. (#33)
-* New: Admin-direct email changes commit immediately. When a privileged user (`edit_users`) changes *another* account's email — from any admin surface — the change now lands at once with no emailed verification step; self-service changes keep the hashed-token verified flow. Forced changes skip rate limiting, send no notification (including WP core's "Notice of Email Change"), and log a distinct `email_change.admin_changed` event. Admins also see the real "already in use" conflict, while self-service stays enumeration-safe. The immediate-commit path is gated by the `edit_users` capability and the unused `change_email_admin_bypass_verification` option has been removed. (#33)
-* Fix: Admin password reset no longer 500s when the `profile` field is empty. Registering `sanitize_title` bare let WordPress hand the request object back as the sanitized value, which fataled on a string cast; the callback now resolves an empty profile to the default login profile as intended. (#33)
+* New: Change a user's email from the WorkOS → Users admin page, alongside "Open in WorkOS" and "Send password reset". (#33)
+* New: Admin-direct email changes commit immediately. A privileged user (`edit_users`) changing *another* account's email now commits without the emailed verification step that self-service still uses; the admin path skips rate limiting, sends no notification, and surfaces real conflicts. Removes the unused `change_email_admin_bypass_verification` option. (#33)
+* Fix: Admin password reset no longer 500s when the `profile` field is empty — it now resolves to the default login profile. (#33)
 
 = 1.0.7 - 2026-06-23 =
 
@@ -273,7 +273,7 @@ Base platform:
 == Upgrade Notice ==
 
 = 1.0.8 =
-Adds a "Change email" action to the WorkOS → Users admin page and makes admin-of-other email changes commit immediately (no emailed verification), while self-service keeps the verified token flow. Removes the unused `change_email_admin_bypass_verification` option — admin-direct commits are now gated by the `edit_users` capability. Also fixes a 500 in the admin password-reset endpoint when the profile field is empty.
+Adds a "Change email" action to the WorkOS → Users admin page and makes admin-of-other email changes commit immediately, while self-service keeps the verified token flow. Also fixes a 500 in the admin password-reset endpoint when the profile field is empty.
 
 = 1.0.7 =
 Fixes settings saves resetting the active WorkOS environment to Staging when the environment field is absent from the form. The saved active environment is now preserved, including legacy fallback state.

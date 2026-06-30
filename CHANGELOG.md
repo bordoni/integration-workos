@@ -4,16 +4,11 @@
 
 ### Added
 
-- **Change email from the WorkOS Users page + immediate admin commits** (#33) — extends the change-email flow with a third admin surface and a forced-commit path for privileged callers.
-  - A native "Change email" action on the **WorkOS → Users** admin page (`admin.php?page=workos-users`), beside "Open in WorkOS" and "Send password reset" — own modal, immediate POST, in-place row refresh, success/error notice, per-row busy state.
-  - Admin-of-other changes (caller has `edit_users` and is not the target) now **commit immediately**, with no emailed verification round-trip. Self-service email changes keep the hashed-token verified flow. The forced path skips rate limiting and sends no user notification — including suppressing WP core's "Notice of Email Change" to the old address — and logs a distinct `email_change.admin_changed` event (`verified: false`).
-  - Admins acting on another account now see the real `409` conflict (`This email is already in use by another account.`); self-service initiates stay enumeration-safe (same-shape `200`).
-  - The shared commit logic (WorkOS `update_user` → `wp_update_user` → rollback → webhook race-guard → sync-hash refresh) is extracted into one `commit_change()` used by both the verified-confirm and admin-direct paths.
-  - Removes the unused `change_email_admin_bypass_verification` option — the immediate-commit path is now gated purely by the `edit_users` capability, not a setting.
+- **Change email from the WorkOS Users page** (#33) — adds a "Change email" action to the WorkOS → Users admin page, alongside "Open in WorkOS" and "Send password reset". When a privileged user (`edit_users`) changes *another* account's email it now commits immediately, skipping the emailed verification step that self-service still uses; the admin path also skips rate limiting, sends no notification, surfaces real conflicts, and logs `email_change.admin_changed`. Removes the now-unused `change_email_admin_bypass_verification` option.
 
 ### Fixed
 
-- **500 in admin password-reset when `profile` is empty** (#33) — registering `sanitize_title` bare as the `profile` arg's `sanitize_callback` let WordPress pass the `WP_REST_Request` into its `$fallback_title` parameter, so an empty `profile` (the common case — the UI posts `profile: ""`) came back as the request object and fataled on the `(string)` cast in `send_reset()`. The callback now drops the extra args, so an empty profile resolves to the default login profile as intended.
+- **500 in admin password-reset when `profile` is empty** (#33) — an empty `profile` (the common case) fataled the endpoint instead of resolving to the default login profile. The `profile` sanitize callback no longer hands the request object back as the sanitized value.
 
 ## [1.0.7] - 2026-06-23
 
