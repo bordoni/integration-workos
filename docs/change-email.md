@@ -6,7 +6,7 @@ This document covers every way to start, confirm, or cancel a WorkOS-backed emai
 
 It is written for two audiences in parallel: a developer integrating against the plugin, and an LLM agent reading it as the source of truth for code-gen. The patterns and gotchas below are exhaustive — if your integration deviates from them, you are almost certainly hitting one of the **Don't do this** sections near the bottom.
 
-> **Plugin requirement:** integration-workos **1.0.6** or later. Earlier versions do not expose the `email-change` endpoints, the `[workos:change-email]` shortcode, or the admin row action.
+> **Plugin requirement:** integration-workos **1.0.6** or later. Earlier versions do not expose the `email-change` endpoints, the `[workos:change-email]` shortcode, or the admin row action. The **WorkOS → Users** admin-page action and the admin-direct immediate-commit behavior (see [Admin-direct vs. self-service](#admin-direct-vs-self-service)) require **1.0.8** or later.
 
 ## Why this exists
 
@@ -15,11 +15,13 @@ WordPress lets an admin overwrite a user's `user_email` directly in `wp-admin/us
 This feature adds:
 
 - A self-service `[workos:change-email]` shortcode that prompts the user for a new address and starts the flow.
-- An admin "Change email" row action + user-edit panel that mirrors the existing "Send password reset" surfaces.
-- A WP-side hashed token + pending-state record so the new address must be confirmed (clicked on) before the change commits.
+- An admin "Change email" row action + user-edit panel + **WorkOS → Users** admin-page action that mirror the existing "Send password reset" surfaces.
+- A WP-side hashed token + pending-state record so a self-service user's new address must be confirmed (clicked on) before the change commits.
 - An old-address notice with a one-click cancel link (so a session-hijack victim can stop a change in progress).
 - A configurable conflict policy that prevents the change from silently overwriting another local WP user's email.
 - A WorkOS sync race guard so the `user.updated` webhook fan-back can't re-trigger the very mutation we just made.
+
+The emailed-token verification protects **self-service**. An admin acting on *another* account can already manage every user, so they commit the change immediately — but routing it through this path is the point: it's conflict-checked, mirrored to WorkOS, race-guarded, and audit-logged, rather than the raw `users.php` field edit that does none of that. See [Admin-direct vs. self-service](#admin-direct-vs-self-service).
 
 Verification is owned WP-side because WorkOS's `email_verification` endpoints verify the *current* address on a WorkOS user, not a pending change.
 
@@ -30,14 +32,15 @@ Verification is owned WP-side because WorkOS's `email_verification` endpoints ve
 | Surface | Endpoint | Auth | Audience |
 | --- | --- | --- | --- |
 | Initiate (self-service) | `POST /wp-json/workos/v1/users/{id}/email-change` | WP REST nonce (`X-WP-Nonce`) + `edit_user($id)` | A logged-in user changing their own address |
-| Initiate (admin-of-other) | Same endpoint | WP REST nonce + `edit_user($id)` | Editors / admins acting on another account |
+| Initiate (admin-of-other) | Same endpoint | WP REST nonce + `edit_users` (and `initiator ≠ target`) | Editors / admins acting on another account — **commits immediately** |
 | Confirm | `POST /wp-json/workos/v1/users/{id}/email-change/confirm` | The confirm **token** (no capability) | The person who clicked the verification link |
 | Cancel | `POST /wp-json/workos/v1/users/{id}/email-change/cancel` | Cancel **token** *or* `edit_user($id)` | Old-address recipient, or an admin |
 | WP Users list (row action under the WorkOS column) | Posts to the initiate endpoint | WP REST nonce + `edit_user($id)` | Admins, in the linked-user row only |
+| WorkOS → Users admin page ("Change email" action) | Posts to the initiate endpoint | WP REST nonce + `edit_user($id)` | Admins, on the WorkOS user list |
 | User-edit / profile panel | Posts to the initiate endpoint | WP REST nonce + `edit_user($id)` | Admins / the user on their own profile |
 | Shortcode | `[workos:change-email]` | Rendered server-side; posts to the initiate endpoint | Page authors |
 
-All entry points converge on the same commit path: a WorkOS `update_user` call followed by `wp_update_user()`, guarded by the conflict resolver, rate limiter, and in-progress transient.
+All entry points commit through the same shared path — a WorkOS `update_user` call followed by `wp_update_user()`, guarded by the conflict resolver and the in-progress transient. **Self-service** initiates email a hashed-token verification link and only commit on confirm (and are rate-limited); an **admin acting on another account** commits immediately, with no token, no rate limit, and no notification. See [Admin-direct vs. self-service](#admin-direct-vs-self-service).
 
 > **Note:** Unlike the password-reset flow — whose *public* endpoints use a profile-scoped `X-WorkOS-Nonce` — **every** change-email endpoint uses the standard WordPress `X-WP-Nonce`. See [Don't do this](#dont-do-this).
 
@@ -70,6 +73,31 @@ sequenceDiagram
     WP->>Mail: send_confirmation_notice(old_email)
     WP-->>User: 200 { redirect_url }
 ```
+
+---
+
+## Admin-direct vs. self-service
+
+The initiate endpoint branches on **who is acting**, decided by `is_admin_action()`:
+
+> The caller holds the `edit_users` capability **and** is not the target user.
+
+That single condition is the trust boundary. A caller who clears it can already manage every account, so the flow drops the ceremony that exists to protect a self-service user (or a hijacked session) from an unverified change:
+
+| Behavior | Self-service (or admin editing self) | Admin acting on another account |
+| --- | --- | --- |
+| Commit timing | On confirm, after the emailed token is clicked | **Immediately**, in the initiate request |
+| Verification email | Sent to the new address | Not sent |
+| Rate limiting | Per-IP + per-user windows enforced | Skipped |
+| Old-address cancel notice | Sent (unless opted out) | Not sent |
+| WP core "Notice of Email Change" | Sent | Suppressed for this commit |
+| Conflict response | Enumeration-safe `200` (same shape as success) | Real `409 workos_change_email_conflict` |
+| Success response | `{ ok, masked_new_email, expires_at }` | `{ ok: true, committed: true, email }` (unmasked — the admin typed it) |
+| Activity-log event | `email_change.initiated` (then `…confirmed` on confirm) | `email_change.admin_changed` (`verified: false`) |
+
+Editing *your own* address from an admin screen still counts as self-service — `is_admin_action()` is false when initiator == target — so an admin changing their own email gets the verified flow, not an immediate commit.
+
+This is gated purely by capability; there is no setting to toggle it. It supersedes the `change_email_admin_bypass_verification` option from earlier 1.0.x builds, which has been removed.
 
 ---
 
@@ -109,7 +137,15 @@ When the requested address equals the user's current address, no email is sent a
 { "ok": true, "masked_new_email": "j•••@e•••.com", "no_op": true }
 ```
 
-> **Note:** A conflict-blocked request returns this same `{ ok: true, masked_new_email }` shape (no `expires_at`) and writes an `email_change.conflict_blocked` row to the activity log. The block is **not** surfaced in the response — that's deliberate, so the endpoint can't be used to probe which addresses are taken.
+> **Note:** A conflict-blocked request returns this same `{ ok: true, masked_new_email }` shape (no `expires_at`) and writes an `email_change.conflict_blocked` row to the activity log. The block is **not** surfaced in the response — that's deliberate, so the endpoint can't be used to probe which addresses are taken. This applies to **self-service** callers; an admin acting on another account gets a real `409` instead (see below).
+
+**Admin-direct 200 response (1.0.8+)** — when the caller is an admin acting on another account, the change is committed *in this request* (no confirm step). The body carries `committed: true` and the **unmasked** new address (the admin just typed it), with no `expires_at`:
+
+```json
+{ "ok": true, "committed": true, "email": "jane.new@example.com" }
+```
+
+See [Admin-direct vs. self-service](#admin-direct-vs-self-service) for the full behavior matrix.
 
 **Errors**
 
@@ -119,7 +155,10 @@ When the requested address equals the user's current address, no email is sent a
 | 400 | `workos_invalid_email` | `new_email` is empty or fails `is_email()` |
 | 403 | `workos_forbidden` | Caller lacks `edit_user` on the target, or `workos_change_email_can_initiate` returned `false` |
 | 404 | `workos_user_not_found` | No WP user with that ID |
-| 429 | (rate-limit) | Per-IP or per-user initiate window exhausted (defaults: 10/IP/hr, 3/user/hr) |
+| 409 | `workos_change_email_conflict` | New address already belongs to another account — **admin-of-other only**; self-service gets the enumeration-safe `200` instead |
+| 429 | (rate-limit) | Per-IP or per-user initiate window exhausted (defaults: 10/IP/hr, 3/user/hr) — **self-service only**; admin-of-other actions bypass rate limiting |
+
+> **Note:** An admin-of-other initiate commits in-request, so it can also return the `502` / `500` `workos_commit_failed` errors documented under [confirm](#post-wp-jsonworkosv1usersidemail-changeconfirm--confirm).
 
 ### `POST /wp-json/workos/v1/users/{id}/email-change/confirm` — confirm
 
@@ -215,8 +254,9 @@ Stored under the active environment (`workos()->option(...)`); defaults are list
 | `change_email_rate_limit_ip_window` | `3600` | Window in seconds. |
 | `change_email_notify_old_address` | `true` | Send the "change requested" + "change confirmed" notices to the old address. |
 | `change_email_require_reauth` | `true` | Reserved for the AuthKit step-up flow. |
-| `change_email_admin_bypass_verification` | `false` | When true, an admin with `edit_users` can commit without email verification (audit-logged via `email_change.admin_bypass`). |
 | `change_email_confirm_path` | `'workos/change-email'` | Rewrite path for the confirm route. Slash-trimmed; restricted to `[a-zA-Z0-9/_-]`. |
+
+> An admin acting on another account commits without email verification by default — that's [admin-direct behavior](#admin-direct-vs-self-service), gated by the `edit_users` capability, not a setting. The earlier `change_email_admin_bypass_verification` option has been removed.
 
 ## Conflict policies
 
@@ -553,7 +593,7 @@ The shortcode silently renders nothing when:
 - `email_change.expired`
 - `email_change.conflict_blocked`
 - `email_change.commit_failed`
-- `email_change.admin_bypass` (only when `change_email_admin_bypass_verification=true`)
+- `email_change.admin_changed` (an admin committing another account's change directly; metadata carries `verified: false` and `initiator_id`)
 
 Each row records `{ user_id, user_email, workos_user_id, ip_address, metadata: { masked_new_email, masked_old_email, policy, initiator_id, self_service } }`.
 
@@ -659,7 +699,7 @@ ChangeEmailTokenFactoryTest.php       # entropy + hashing + constant-time verify
 ChangeEmailPendingChangeTest.php      # storage invariants + expiry + clear()
 ChangeEmailConflictResolverTest.php   # block / allow_orphan / merge_request matrix
 ChangeEmailNotifierTest.php           # recipient routing + opt-out gate
-ChangeEmailRestApiTest.php            # 13 tests covering initiate / confirm / cancel
+ChangeEmailRestApiTest.php            # 19 tests — initiate (self-service + admin-direct), confirm, cancel
 ChangeEmailUserSyncRaceGuardTest.php  # the transient short-circuit
 ```
 
@@ -688,6 +728,7 @@ slic run wpunit --filter ChangeEmail
 | Email notifier (verification / old-address / confirmation) | [`src/WorkOS/Auth/ChangeEmail/Notifier.php`](../src/WorkOS/Auth/ChangeEmail/Notifier.php) |
 | Shortcode | [`src/WorkOS/Auth/ChangeEmail/Shortcode.php`](../src/WorkOS/Auth/ChangeEmail/Shortcode.php) |
 | Admin row action | [`src/WorkOS/Auth/ChangeEmail/RowActions.php`](../src/WorkOS/Auth/ChangeEmail/RowActions.php) |
+| WorkOS → Users admin-page action (native button + modal) | [`src/js/admin-users/index.tsx`](../src/js/admin-users/index.tsx), config from [`src/WorkOS/Admin/Users/AdminPage.php`](../src/WorkOS/Admin/Users/AdminPage.php) |
 | User-edit / profile panel | [`src/WorkOS/Auth/ChangeEmail/UserProfilePanel.php`](../src/WorkOS/Auth/ChangeEmail/UserProfilePanel.php) |
 | Frontend confirm route | [`src/WorkOS/Auth/ChangeEmail/FrontendConfirmRoute.php`](../src/WorkOS/Auth/ChangeEmail/FrontendConfirmRoute.php) |
 | Asset / localized-config registration | [`src/WorkOS/Auth/ChangeEmail/Assets.php`](../src/WorkOS/Auth/ChangeEmail/Assets.php) |

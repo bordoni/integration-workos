@@ -16,16 +16,20 @@ import {
 	useState,
 } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
+import { promptModal } from '../shared/modal';
 import './styles.css';
 
 interface AdminConfig {
 	restUrl: string;
+	/** Base for the change-email endpoint: `${changeEmailUrl}{id}/email-change`. */
+	changeEmailUrl: string;
 	nonce: string;
 	environment: string;
 	environmentId: string;
 	dashboardBaseUrl: string;
 	defaultLimit: number;
 	pluginEnabled: boolean;
+	changeEmailEnabled: boolean;
 }
 
 declare global {
@@ -71,12 +75,14 @@ function getConfig(): AdminConfig {
 	return (
 		window.workosUsersAdmin || {
 			restUrl: '/wp-json/workos/v1/admin/users',
+			changeEmailUrl: '/wp-json/workos/v1/users/',
 			nonce: '',
 			environment: '',
 			environmentId: '',
 			dashboardBaseUrl: 'https://dashboard.workos.com',
 			defaultLimit: 25,
 			pluginEnabled: false,
+			changeEmailEnabled: false,
 		}
 	);
 }
@@ -150,6 +156,11 @@ function App(): JSX.Element {
 	const [ metadata, setMetadata ] = useState< ListMetadata >( { before: null, after: null } );
 	const [ loading, setLoading ] = useState< boolean >( false );
 	const [ error, setError ] = useState< string >( '' );
+	const [ actionNotice, setActionNotice ] = useState< {
+		kind: 'success' | 'error';
+		text: string;
+	} | null >( null );
+	const [ busyUserId, setBusyUserId ] = useState< number >( 0 );
 	const [ searchInput, setSearchInput ] = useState< string >( '' );
 	const [ search, setSearch ] = useState< string >( '' );
 	const [ limit, setLimit ] = useState< number >( cfg.defaultLimit || 25 );
@@ -239,6 +250,125 @@ function App(): JSX.Element {
 		setLimit( value );
 	};
 
+	const handleChangeEmail = useCallback(
+		async ( user: WorkosUser ): Promise< void > => {
+			setActionNotice( null );
+
+			const newEmail = await promptModal( {
+				title: __( 'Change email address', 'integration-workos' ),
+				message: sprintf(
+					/* translators: %s: the user's current email address. */
+					__(
+						'Set a new email for %s. This updates WorkOS and the portal immediately — no verification email is sent.',
+						'integration-workos'
+					),
+					user.email || __( 'this user', 'integration-workos' )
+				),
+				inputLabel: __( 'New email address', 'integration-workos' ),
+				inputType: 'email',
+				placeholder: __( 'name@example.com', 'integration-workos' ),
+				confirmLabel: __( 'Change email', 'integration-workos' ),
+				cancelLabel: __( 'Cancel', 'integration-workos' ),
+				variant: 'danger',
+				validate: ( value: string ) =>
+					/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test( value )
+						? null
+						: __( 'Please enter a valid email address.', 'integration-workos' ),
+			} );
+
+			if ( ! newEmail ) {
+				return;
+			}
+
+			setBusyUserId( user.wp_user_id );
+			try {
+				const res = await fetch(
+					`${ cfg.changeEmailUrl }${ user.wp_user_id }/email-change`,
+					{
+						method: 'POST',
+						credentials: 'same-origin',
+						headers: {
+							'Content-Type': 'application/json',
+							'X-WP-Nonce': cfg.nonce,
+						},
+						body: JSON.stringify( { new_email: newEmail } ),
+					}
+				);
+				const data = await res.json().catch( () => ( {} ) );
+
+				if ( ! res.ok ) {
+					setActionNotice( {
+						kind: 'error',
+						text:
+							data?.message ||
+							__(
+								'Could not change the email. Please try again.',
+								'integration-workos'
+							),
+					} );
+					return;
+				}
+
+				// An admin acting on their own account falls into the verified
+				// flow (no `committed`), so branch on the response — don't
+				// assume a commit, or we'd rewrite the row for a change that
+				// hasn't landed.
+				if ( data.no_op ) {
+					setActionNotice( {
+						kind: 'success',
+						text: __(
+							'That is already this user’s email.',
+							'integration-workos'
+						),
+					} );
+				} else if ( data.committed ) {
+					const updatedEmail = ( data.email as string ) || newEmail;
+					// Reflect the committed change in place — the row's email is
+					// now the new address, and it's unverified until the user
+					// verifies it in WorkOS.
+					setUsers( ( prev ) =>
+						prev.map( ( u ) =>
+							u.id === user.id
+								? { ...u, email: updatedEmail, email_verified: false }
+								: u
+						)
+					);
+					setActionNotice( {
+						kind: 'success',
+						text: sprintf(
+							/* translators: %s: the new email address. */
+							__( 'Email changed to %s.', 'integration-workos' ),
+							updatedEmail
+						),
+					} );
+				} else {
+					setActionNotice( {
+						kind: 'success',
+						text: sprintf(
+							/* translators: %s: the masked new email address. */
+							__(
+								'Verification email sent to %s.',
+								'integration-workos'
+							),
+							( data.masked_new_email as string ) || newEmail
+						),
+					} );
+				}
+			} catch ( _err ) {
+				setActionNotice( {
+					kind: 'error',
+					text: __(
+						'Could not change the email. Please try again.',
+						'integration-workos'
+					),
+				} );
+			} finally {
+				setBusyUserId( 0 );
+			}
+		},
+		[ cfg.changeEmailUrl, cfg.nonce ]
+	);
+
 	const hasPrev = cursorStack.current.length > 0;
 	const hasNext = Boolean( metadata.after );
 
@@ -301,6 +431,17 @@ function App(): JSX.Element {
 			{ error && (
 				<div className="notice notice-error workos-users-notice">
 					<p>{ error }</p>
+				</div>
+			) }
+
+			{ actionNotice && (
+				<div
+					className={ `notice notice-${
+						actionNotice.kind === 'success' ? 'success' : 'error'
+					} is-dismissible workos-users-notice` }
+					role={ actionNotice.kind === 'error' ? 'alert' : 'status' }
+				>
+					<p>{ actionNotice.text }</p>
 				</div>
 			) }
 
@@ -399,6 +540,22 @@ function App(): JSX.Element {
 											) }
 										>
 											{ __( 'Send password reset', 'integration-workos' ) }
+										</button>
+									) }
+									{ user.wp_user_id > 0 && cfg.changeEmailEnabled && (
+										<button
+											type="button"
+											className="button button-small"
+											onClick={ () => handleChangeEmail( user ) }
+											disabled={ busyUserId === user.wp_user_id }
+											title={ __(
+												'Change this user’s email. Updates WorkOS and the portal immediately — no verification email is sent.',
+												'integration-workos'
+											) }
+										>
+											{ busyUserId === user.wp_user_id
+												? __( 'Changing…', 'integration-workos' )
+												: __( 'Change email', 'integration-workos' ) }
 										</button>
 									) }
 								</td>

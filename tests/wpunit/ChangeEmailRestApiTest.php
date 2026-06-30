@@ -182,7 +182,9 @@ class ChangeEmailRestApiTest extends WPTestCase {
 	// ----------------------------------------------------------------- initiate
 
 	public function test_initiate_writes_pending_meta_and_sends_verification(): void {
-		wp_set_current_user( $this->admin_user_id );
+		// Self-service: the user changes their own email, so the verified
+		// (token + email) flow runs rather than the admin-direct commit.
+		wp_set_current_user( $this->linked_user_id );
 
 		$new_email = 'brand-new-' . uniqid() . '@example.test';
 		$response  = $this->dispatch(
@@ -238,7 +240,7 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$this->assertSame( 403, $response->get_status() );
 	}
 
-	public function test_initiate_conflict_block_is_enumeration_safe(): void {
+	public function test_initiate_conflict_is_revealed_to_admin_acting_on_other(): void {
 		wp_set_current_user( $this->admin_user_id );
 
 		// Target the address owned by another local user.
@@ -248,14 +250,49 @@ class ChangeEmailRestApiTest extends WPTestCase {
 			[ 'new_email' => $this->other_email ]
 		);
 
-		// Enumeration-safe: response shape is the same as success.
-		$this->assertSame( 200, $response->get_status() );
+		// An admin acting on someone else's account can already enumerate
+		// users, so the real reason is surfaced rather than hidden.
+		$this->assertSame( 409, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertSame( 'workos_change_email_conflict', $data['code'] ?? '' );
+		$this->assertStringContainsString( 'already in use', strtolower( $data['message'] ?? '' ) );
 
-		// But no pending meta was written.
+		// Still no pending meta, and the block is still recorded.
 		$stored = get_user_meta( $this->linked_user_id, PendingChange::META_KEY, true );
 		$this->assertTrue( '' === $stored || empty( $stored ) );
 
-		// And the activity log records the block.
+		global $wpdb;
+		$row = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}workos_activity_log WHERE event_type = %s",
+				'email_change.conflict_blocked'
+			)
+		);
+		$this->assertSame( '1', (string) $row );
+	}
+
+	public function test_initiate_conflict_is_enumeration_safe_for_self_service(): void {
+		// A non-privileged user changing their *own* email to an address
+		// owned by someone else must not learn that it's taken.
+		wp_set_current_user( $this->unlinked_user_id );
+
+		$response = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->unlinked_user_id . '/email-change',
+			[ 'new_email' => $this->other_email ]
+		);
+
+		// Enumeration-safe: response shape is identical to success.
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['ok'] ?? false );
+		$this->assertStringContainsString( '•', $data['masked_new_email'] ?? '' );
+
+		// But no pending meta was written.
+		$stored = get_user_meta( $this->unlinked_user_id, PendingChange::META_KEY, true );
+		$this->assertTrue( '' === $stored || empty( $stored ) );
+
+		// And the activity log still records the block.
 		global $wpdb;
 		$row = $wpdb->get_var(
 			$wpdb->prepare(
@@ -284,7 +321,9 @@ class ChangeEmailRestApiTest extends WPTestCase {
 	}
 
 	public function test_initiate_user_rate_limit(): void {
-		wp_set_current_user( $this->admin_user_id );
+		// Rate limits only apply to self-service; the admin-direct path
+		// bypasses them, so this must run as the user acting on themselves.
+		wp_set_current_user( $this->linked_user_id );
 
 		$last = null;
 		for ( $i = 0; $i < 4; $i++ ) {
@@ -297,6 +336,94 @@ class ChangeEmailRestApiTest extends WPTestCase {
 
 		$this->assertNotNull( $last );
 		$this->assertSame( 429, $last->get_status() );
+	}
+
+	public function test_initiate_admin_commits_immediately_without_verification(): void {
+		wp_set_current_user( $this->admin_user_id );
+
+		$new_email = 'admin-set-' . uniqid() . '@example.test';
+		$response  = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->linked_user_id . '/email-change',
+			[ 'new_email' => $new_email ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['committed'] ?? false );
+		$this->assertSame( strtolower( $new_email ), $data['email'] ?? '' );
+
+		// Committed straight to WP — no pending meta, no verification email.
+		$updated = get_userdata( $this->linked_user_id );
+		$this->assertSame( strtolower( $new_email ), strtolower( $updated->user_email ) );
+		$this->assertEmpty( get_user_meta( $this->linked_user_id, PendingChange::META_KEY, true ) );
+		$this->assertEmpty( $this->mail_captured );
+
+		// WorkOS was updated for the linked user.
+		$hit = false;
+		foreach ( $this->http_captured as $req ) {
+			if ( str_contains( (string) $req['url'], 'user_linked_01' ) ) {
+				$hit = true;
+				break;
+			}
+		}
+		$this->assertTrue( $hit, 'WorkOS update_user must be called for a linked user.' );
+
+		// Audit trail records the admin-direct change.
+		global $wpdb;
+		$row = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}workos_activity_log WHERE event_type = %s",
+				'email_change.admin_changed'
+			)
+		);
+		$this->assertSame( '1', (string) $row );
+	}
+
+	public function test_initiate_admin_acting_on_self_uses_verified_flow(): void {
+		// An admin changing *their own* email is not an "admin action" — it
+		// must go through emailed verification like any self-service change,
+		// not commit immediately.
+		wp_set_current_user( $this->admin_user_id );
+
+		$new_email = 'admin-own-' . uniqid() . '@example.test';
+		$response  = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->admin_user_id . '/email-change',
+			[ 'new_email' => $new_email ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		// Verified-flow shape: a pending expiry, and crucially NOT committed.
+		$this->assertArrayNotHasKey( 'committed', $data );
+		$this->assertArrayHasKey( 'expires_at', $data );
+
+		// The address is only pending — WP still holds the old email.
+		$this->assertNotEmpty( get_user_meta( $this->admin_user_id, PendingChange::META_KEY, true ) );
+		$unchanged = get_userdata( $this->admin_user_id );
+		$this->assertNotSame( strtolower( $new_email ), strtolower( $unchanged->user_email ) );
+	}
+
+	public function test_initiate_admin_direct_on_unlinked_user_skips_workos(): void {
+		// Admin-direct change for a user with no WorkOS link should mirror
+		// only into WordPress and make no upstream call.
+		wp_set_current_user( $this->admin_user_id );
+
+		$new_email = 'unlinked-new-' . uniqid() . '@example.test';
+		$response  = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->unlinked_user_id . '/email-change',
+			[ 'new_email' => $new_email ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['committed'] ?? false );
+
+		// WP updated, but no WorkOS round-trip (user has no `_workos_user_id`).
+		$updated = get_userdata( $this->unlinked_user_id );
+		$this->assertSame( strtolower( $new_email ), strtolower( $updated->user_email ) );
+		$this->assertEmpty( $this->http_captured );
 	}
 
 	// ----------------------------------------------------------------- confirm

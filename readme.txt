@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.7
+Stable tag: 1.0.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,12 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.8 - 2026-06-30 =
+
+* New: Change a user's email from the WorkOS → Users admin page, alongside "Open in WorkOS" and "Send password reset". (#33)
+* New: Admin-direct email changes commit immediately. A privileged user (`edit_users`) changing *another* account's email now commits without the emailed verification step that self-service still uses; the admin path skips rate limiting, sends no notification, and surfaces real conflicts. Removes the unused `change_email_admin_bypass_verification` option. (#33)
+* Fix: Admin password reset no longer 500s when the `profile` field is empty — it now resolves to the default login profile. (#33)
+
 = 1.0.7 - 2026-06-23 =
 
 * Fix: Active environment no longer reverts on settings save. Saving WorkOS settings no longer resets `workos_active_environment` to `staging` when the active environment field is absent from the form. The sanitizer now preserves the current active environment, including legacy `workos_global['active_environment']` fallback state. (#34)
@@ -265,6 +271,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.8 =
+Adds a "Change email" action to the WorkOS → Users admin page and makes admin-of-other email changes commit immediately, while self-service keeps the verified token flow. Also fixes a 500 in the admin password-reset endpoint when the profile field is empty.
 
 = 1.0.7 =
 Fixes settings saves resetting the active WorkOS environment to Staging when the environment field is absent from the form. The saved active environment is now preserved, including legacy fallback state.

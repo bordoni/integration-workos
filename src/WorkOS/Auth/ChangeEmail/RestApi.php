@@ -270,19 +270,25 @@ class RestApi {
 		}
 		$new_email = strtolower( $new_email );
 
-		$ip          = $this->rate_limiter->client_ip();
-		$user_count  = (int) workos()->option( 'change_email_rate_limit_user_count', self::RATE_LIMIT_DEFAULT_USER );
-		$user_window = (int) workos()->option( 'change_email_rate_limit_user_window', self::RATE_LIMIT_DEFAULT_WIN );
-		$ip_count    = (int) workos()->option( 'change_email_rate_limit_ip_count', self::RATE_LIMIT_DEFAULT_IP );
-		$ip_window   = (int) workos()->option( 'change_email_rate_limit_ip_window', self::RATE_LIMIT_DEFAULT_WIN );
+		$is_admin_action = $this->is_admin_action( (int) $user->ID );
 
-		$rate_ok = $this->rate_limiter->attempt( 'change_email_init_ip', $ip, $ip_count, $ip_window );
-		if ( is_wp_error( $rate_ok ) ) {
-			return $rate_ok;
-		}
-		$rate_ok = $this->rate_limiter->attempt( 'change_email_init_user', (string) $user->ID, $user_count, $user_window );
-		if ( is_wp_error( $rate_ok ) ) {
-			return $rate_ok;
+		// Rate limits throttle self-service abuse; the capability-gated admin
+		// path bypasses them so a legitimate cleanup sweep isn't blocked.
+		if ( ! $is_admin_action ) {
+			$ip          = $this->rate_limiter->client_ip();
+			$user_count  = (int) workos()->option( 'change_email_rate_limit_user_count', self::RATE_LIMIT_DEFAULT_USER );
+			$user_window = (int) workos()->option( 'change_email_rate_limit_user_window', self::RATE_LIMIT_DEFAULT_WIN );
+			$ip_count    = (int) workos()->option( 'change_email_rate_limit_ip_count', self::RATE_LIMIT_DEFAULT_IP );
+			$ip_window   = (int) workos()->option( 'change_email_rate_limit_ip_window', self::RATE_LIMIT_DEFAULT_WIN );
+
+			$rate_ok = $this->rate_limiter->attempt( 'change_email_init_ip', $ip, $ip_count, $ip_window );
+			if ( is_wp_error( $rate_ok ) ) {
+				return $rate_ok;
+			}
+			$rate_ok = $this->rate_limiter->attempt( 'change_email_init_user', (string) $user->ID, $user_count, $user_window );
+			if ( is_wp_error( $rate_ok ) ) {
+				return $rate_ok;
+			}
 		}
 
 		// Treat "change to the address I already have" as a benign no-op
@@ -313,6 +319,17 @@ class RestApi {
 				]
 			);
 
+			// A privileged user acting on someone else's account may see the
+			// real reason — they can already enumerate accounts, so nothing
+			// leaks. Self-service callers keep the enumeration-safe shape.
+			if ( $is_admin_action ) {
+				return new WP_Error(
+					'workos_change_email_conflict',
+					__( 'This email is already in use by another account.', 'integration-workos' ),
+					[ 'status' => 409 ]
+				);
+			}
+
 			// Enumeration-safe: same shape as success. The conflict is
 			// surfaced in the activity log, not in the response.
 			return new WP_REST_Response(
@@ -322,6 +339,11 @@ class RestApi {
 				],
 				200
 			);
+		}
+
+		// Admin-direct path: commit now, no token, no verification email.
+		if ( $is_admin_action ) {
+			return $this->commit_admin_change( $user, $new_email );
 		}
 
 		$lifetime = $this->token_lifetime();
@@ -373,6 +395,71 @@ class RestApi {
 				'ok'               => true,
 				'masked_new_email' => $this->masker->mask( $new_email ),
 				'expires_at'       => $expires,
+			],
+			200
+		);
+	}
+
+	/**
+	 * Commit an admin-initiated change immediately, bypassing verification.
+	 *
+	 * Skips the token round-trip and the user notification — the capability
+	 * is the trust boundary, and the change is audit-logged instead. Echoes
+	 * the new address back unmasked (the admin typed it) so the UI can
+	 * refresh the row in place.
+	 *
+	 * @param WP_User $user      Target user (pre-update).
+	 * @param string  $new_email Lowercased, validated new address.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function commit_admin_change( WP_User $user, string $new_email ) {
+		// Admin-direct changes are silent. Beyond skipping our own notifier,
+		// suppress WP core's "Notice of Email Change" that wp_update_user()
+		// would otherwise mail to the old address. Scoped to this commit so
+		// the self-service confirm path keeps its core notice.
+		$suppress_core_notice = static function () {
+			return false;
+		};
+		add_filter( 'send_email_change_email', $suppress_core_notice );
+		$commit = $this->commit_change( $user, $new_email );
+		remove_filter( 'send_email_change_email', $suppress_core_notice );
+
+		if ( is_wp_error( $commit ) ) {
+			return $commit;
+		}
+
+		$old_email = $commit['old_email'];
+
+		EventLogger::log(
+			'email_change.admin_changed',
+			[
+				'user_id'  => $user->ID,
+				'metadata' => [
+					'masked_new_email' => $this->masker->mask( $new_email ),
+					'masked_old_email' => $this->masker->mask( $old_email ),
+					'initiator_id'     => get_current_user_id(),
+					'verified'         => false,
+				],
+			]
+		);
+
+		/**
+		 * Fires after an email change is committed to WorkOS + WP. Shared
+		 * with the verified-confirm path so downstream observers don't have
+		 * to special-case how the change was authorized.
+		 *
+		 * @param int    $user_id   Target WP user ID.
+		 * @param string $old_email Previous email.
+		 * @param string $new_email New email.
+		 */
+		do_action( 'workos_change_email_confirmed', (int) $user->ID, $old_email, $new_email );
+
+		return new WP_REST_Response(
+			[
+				'ok'        => true,
+				'committed' => true,
+				'email'     => $new_email,
 			],
 			200
 		);
@@ -459,74 +546,12 @@ class RestApi {
 			return $conflict;
 		}
 
-		$old_email      = (string) $user->user_email;
-		$workos_user_id = (string) get_user_meta( $user->ID, '_workos_user_id', true );
-
-		// Set the in-progress transient BEFORE we touch WorkOS so the
-		// user.updated webhook fan-back is a no-op while we own the
-		// transition. {@see UserSync::handle_user_updated()}.
-		set_transient( self::TRANSIENT_PREFIX . (int) $user->ID, 1, self::TRANSIENT_TTL );
-
-		if ( '' !== $workos_user_id ) {
-			$workos_response = workos()->api()->update_user( $workos_user_id, [ 'email' => $new_email ] );
-			if ( is_wp_error( $workos_response ) ) {
-				delete_transient( self::TRANSIENT_PREFIX . (int) $user->ID );
-				EventLogger::log(
-					'email_change.commit_failed',
-					[
-						'user_id'  => $user->ID,
-						'metadata' => [
-							'masked_new_email' => $this->masker->mask( $new_email ),
-							'reason'           => $workos_response->get_error_message(),
-						],
-					]
-				);
-				return new WP_Error(
-					'workos_commit_failed',
-					__( 'Could not update the email at WorkOS. Please try again.', 'integration-workos' ),
-					[ 'status' => 502 ]
-				);
-			}
+		$commit = $this->commit_change( $user, $new_email );
+		if ( is_wp_error( $commit ) ) {
+			return $commit;
 		}
 
-		$wp_update = wp_update_user(
-			[
-				'ID'         => (int) $user->ID,
-				'user_email' => $new_email,
-			]
-		);
-
-		if ( is_wp_error( $wp_update ) ) {
-			// Rollback WorkOS so the two stores don't drift.
-			if ( '' !== $workos_user_id && '' !== $old_email ) {
-				workos()->api()->update_user( $workos_user_id, [ 'email' => $old_email ] );
-			}
-			delete_transient( self::TRANSIENT_PREFIX . (int) $user->ID );
-			EventLogger::log(
-				'email_change.commit_failed',
-				[
-					'user_id'  => $user->ID,
-					'metadata' => [
-						'masked_new_email' => $this->masker->mask( $new_email ),
-						'reason'           => $wp_update->get_error_message(),
-						'rolled_back'      => true,
-					],
-				]
-			);
-			return new WP_Error(
-				'workos_commit_failed',
-				__( 'Could not update the email locally. Please try again.', 'integration-workos' ),
-				[ 'status' => 500 ]
-			);
-		}
-
-		$this->pending->clear( (int) $user->ID );
-		delete_transient( self::TRANSIENT_PREFIX . (int) $user->ID );
-
-		// Keep the sync change-detection hash in step with the new email so
-		// the next user.updated webhook doesn't see a phantom diff and
-		// re-mirror a change we already committed.
-		\WorkOS\Sync\UserSync::refresh_profile_hash( (int) $user->ID );
+		$old_email = $commit['old_email'];
 
 		// Refresh user object now that the email is committed.
 		$user = get_userdata( (int) $user->ID );
@@ -624,6 +649,118 @@ class RestApi {
 		do_action( 'workos_change_email_cancelled', (int) $user->ID, $by_token ? 'token' : 'capability' );
 
 		return new WP_REST_Response( [ 'ok' => true ], 200 );
+	}
+
+	/**
+	 * Commit an email change to WorkOS and WordPress.
+	 *
+	 * Shared by the verified-confirm path and the admin-direct path. The
+	 * caller is responsible for permission, conflict, and token checks
+	 * *before* calling this — by the time we're here the change is approved
+	 * and we just need it to land atomically across both stores.
+	 *
+	 * Sets the in-progress transient before touching WorkOS so the
+	 * `user.updated` webhook fan-back is a no-op while we own the
+	 * transition, rolls WorkOS back if the local write fails so the two
+	 * stores can't drift, then refreshes the sync hash so the next webhook
+	 * doesn't see a phantom diff. Does NOT send notifications or fire the
+	 * `confirmed` action — those are the caller's concern.
+	 *
+	 * @param WP_User $user      Target user (pre-update).
+	 * @param string  $new_email Lowercased, validated new address.
+	 *
+	 * @return array{old_email:string,workos_user_id:string}|WP_Error
+	 */
+	private function commit_change( WP_User $user, string $new_email ) {
+		$old_email      = (string) $user->user_email;
+		$workos_user_id = (string) get_user_meta( $user->ID, '_workos_user_id', true );
+
+		set_transient( self::TRANSIENT_PREFIX . (int) $user->ID, 1, self::TRANSIENT_TTL );
+
+		if ( '' !== $workos_user_id ) {
+			$workos_response = workos()->api()->update_user( $workos_user_id, [ 'email' => $new_email ] );
+			if ( is_wp_error( $workos_response ) ) {
+				delete_transient( self::TRANSIENT_PREFIX . (int) $user->ID );
+				EventLogger::log(
+					'email_change.commit_failed',
+					[
+						'user_id'  => $user->ID,
+						'metadata' => [
+							'masked_new_email' => $this->masker->mask( $new_email ),
+							'reason'           => $workos_response->get_error_message(),
+						],
+					]
+				);
+				return new WP_Error(
+					'workos_commit_failed',
+					__( 'Could not update the email at WorkOS. Please try again.', 'integration-workos' ),
+					[ 'status' => 502 ]
+				);
+			}
+		}
+
+		$wp_update = wp_update_user(
+			[
+				'ID'         => (int) $user->ID,
+				'user_email' => $new_email,
+			]
+		);
+
+		if ( is_wp_error( $wp_update ) ) {
+			// Rollback WorkOS so the two stores don't drift.
+			if ( '' !== $workos_user_id && '' !== $old_email ) {
+				workos()->api()->update_user( $workos_user_id, [ 'email' => $old_email ] );
+			}
+			delete_transient( self::TRANSIENT_PREFIX . (int) $user->ID );
+			EventLogger::log(
+				'email_change.commit_failed',
+				[
+					'user_id'  => $user->ID,
+					'metadata' => [
+						'masked_new_email' => $this->masker->mask( $new_email ),
+						'reason'           => $wp_update->get_error_message(),
+						'rolled_back'      => true,
+					],
+				]
+			);
+			return new WP_Error(
+				'workos_commit_failed',
+				__( 'Could not update the email locally. Please try again.', 'integration-workos' ),
+				[ 'status' => 500 ]
+			);
+		}
+
+		$this->pending->clear( (int) $user->ID );
+		delete_transient( self::TRANSIENT_PREFIX . (int) $user->ID );
+
+		// Keep the sync change-detection hash in step with the new email so
+		// the next user.updated webhook doesn't see a phantom diff and
+		// re-mirror a change we already committed.
+		\WorkOS\Sync\UserSync::refresh_profile_hash( (int) $user->ID );
+
+		return [
+			'old_email'      => $old_email,
+			'workos_user_id' => $workos_user_id,
+		];
+	}
+
+	/**
+	 * Whether the request is a privileged admin acting on *another* account.
+	 *
+	 * This is the trust boundary for the admin-direct behavior: such a
+	 * caller can already manage every account, so we (a) commit the change
+	 * immediately without an emailed verification step and (b) surface the
+	 * real reason a change was rejected instead of the enumeration-safe
+	 * shape. A self-service change (initiator === target) — or any caller
+	 * without `edit_users` — gets neither: it goes through the verified
+	 * token flow and never learns which addresses are already registered.
+	 *
+	 * @param int $target_id Target user ID.
+	 *
+	 * @return bool
+	 */
+	private function is_admin_action( int $target_id ): bool {
+		return get_current_user_id() !== $target_id && current_user_can( 'edit_users' );
 	}
 
 	/**

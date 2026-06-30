@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.8] - 2026-06-30
+
+### Added
+
+- **Change email from the WorkOS Users page** (#33) — adds a "Change email" action to the WorkOS → Users admin page, alongside "Open in WorkOS" and "Send password reset". When a privileged user (`edit_users`) changes *another* account's email it now commits immediately, skipping the emailed verification step that self-service still uses; the admin path also skips rate limiting, sends no notification, surfaces real conflicts, and logs `email_change.admin_changed`. Removes the now-unused `change_email_admin_bypass_verification` option.
+
+### Fixed
+
+- **500 in admin password-reset when `profile` is empty** (#33) — an empty `profile` (the common case) fataled the endpoint instead of resolving to the default login profile. The `profile` sanitize callback no longer hands the request object back as the sanitized value.
+
 ## [1.0.7] - 2026-06-23
 
 ### Fixed

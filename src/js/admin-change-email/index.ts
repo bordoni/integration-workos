@@ -34,6 +34,7 @@ interface ChangeEmailConfig {
 		modalCancel: string;
 		sending: string;
 		success: string;
+		successImmediate: string;
 		errorGeneric: string;
 		invalidEmail: string;
 	};
@@ -44,6 +45,10 @@ interface SuccessResponse {
 	masked_new_email?: string;
 	expires_at?: number;
 	no_op?: boolean;
+	/** Set when an admin change committed immediately (no verification). */
+	committed?: boolean;
+	/** New address, returned only on an immediate admin commit. */
+	email?: string;
 }
 
 interface ErrorResponse {
@@ -211,8 +216,17 @@ async function sendChange( trigger: HTMLElement ): Promise< void > {
 		}
 
 		const ok = data as SuccessResponse;
-		const masked = ok.masked_new_email || __( 'the new address', 'integration-workos' );
-		const msg = sprintf( config.strings.success, masked );
+		// An admin acting on another account commits immediately; a
+		// self-service change is still pending a verification click.
+		let msg: string;
+		if ( ok.committed ) {
+			const addr = ok.email || __( 'the new address', 'integration-workos' );
+			msg = sprintf( config.strings.successImmediate, addr );
+		} else {
+			const masked =
+				ok.masked_new_email || __( 'the new address', 'integration-workos' );
+			msg = sprintf( config.strings.success, masked );
+		}
 		if ( form ) {
 			showInlineStatus( form, msg, 'success' );
 		} else {
