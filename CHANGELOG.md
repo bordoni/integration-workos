@@ -13,7 +13,7 @@
 
 ### Fixed
 
-- **500 in admin password-reset when `profile` is empty** (#32) — registering `sanitize_title` bare as the `profile` arg's `sanitize_callback` let WordPress pass the `WP_REST_Request` into its `$fallback_title` parameter, so an empty `profile` (the common case — the UI posts `profile: ""`) came back as the request object and fataled on the `(string)` cast in `send_reset()`. The callback now drops the extra args, so an empty profile resolves to the default login profile as intended.
+- **500 in admin password-reset when `profile` is empty** (#33) — registering `sanitize_title` bare as the `profile` arg's `sanitize_callback` let WordPress pass the `WP_REST_Request` into its `$fallback_title` parameter, so an empty `profile` (the common case — the UI posts `profile: ""`) came back as the request object and fataled on the `(string)` cast in `send_reset()`. The callback now drops the extra args, so an empty profile resolves to the default login profile as intended.
 
 ## [1.0.7] - 2026-06-23
 

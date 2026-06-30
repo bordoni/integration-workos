@@ -179,7 +179,7 @@ WorkOS is provided by WorkOS, Inc.
 
 * New: Change a user's email straight from the WorkOS → Users admin page. A native "Change email" action (beside "Open in WorkOS" and "Send password reset") opens a modal, posts the change, and refreshes the row in place. (#33)
 * New: Admin-direct email changes commit immediately. When a privileged user (`edit_users`) changes *another* account's email — from any admin surface — the change now lands at once with no emailed verification step; self-service changes keep the hashed-token verified flow. Forced changes skip rate limiting, send no notification (including WP core's "Notice of Email Change"), and log a distinct `email_change.admin_changed` event. Admins also see the real "already in use" conflict, while self-service stays enumeration-safe. The immediate-commit path is gated by the `edit_users` capability and the unused `change_email_admin_bypass_verification` option has been removed. (#33)
-* Fix: Admin password reset no longer 500s when the `profile` field is empty. Registering `sanitize_title` bare let WordPress hand the request object back as the sanitized value, which fataled on a string cast; the callback now resolves an empty profile to the default login profile as intended. (#32)
+* Fix: Admin password reset no longer 500s when the `profile` field is empty. Registering `sanitize_title` bare let WordPress hand the request object back as the sanitized value, which fataled on a string cast; the callback now resolves an empty profile to the default login profile as intended. (#33)
 
 = 1.0.7 - 2026-06-23 =
 
