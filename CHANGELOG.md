@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.7] - 2026-06-23
+
+### Fixed
+
+- **Active environment no longer reverts on settings save** (#34) — saving WorkOS settings no longer resets `workos_active_environment` to `staging` when the active environment field is absent from the form. The sanitizer now preserves the current active environment, including legacy `workos_global['active_environment']` fallback state.
+
 ## [1.0.6] - 2026-06-11
 
 ### Added
