@@ -45,10 +45,23 @@ $workos_meta_keys = [
 	'_workos_refresh_token',
 	'_workos_session_id',
 	'_workos_deactivated',
+	'_workos_first_login',
+	'_workos_pending_email_change',
 ];
 
 foreach ( $workos_meta_keys as $workos_key ) {
 	$wpdb->delete( $wpdb->usermeta, [ 'meta_key' => $workos_key ], [ '%s' ] ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+}
+
+// Attempt-lock records. One meta key per lock slug and one option row per
+// subject, so these are matched by prefix rather than listed.
+$wpdb->query( "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE '\_workos\_lock\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
+$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'workos\_lock\_%'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
+
+// Clear the scheduled lock cleanup.
+$workos_lock_gc = wp_next_scheduled( 'workos_lock_gc' );
+if ( $workos_lock_gc ) {
+	wp_unschedule_event( $workos_lock_gc, 'workos_lock_gc' );
 }
 
 // Drop custom tables.

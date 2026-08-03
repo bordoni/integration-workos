@@ -42,11 +42,13 @@ class Controller extends BaseController {
 		$this->container->singleton( ResolvingStore::class );
 		$this->container->singleton( Registry::class );
 		$this->container->singleton( GarbageCollector::class );
+		$this->container->singleton( ActivityLogger::class );
 		$this->container->singleton( UnlockHandler::class );
 		$this->container->singleton( RowActions::class );
 		$this->container->singleton( UserProfilePanel::class );
 
 		$this->container->get( GarbageCollector::class )->register();
+		$this->container->get( ActivityLogger::class )->register();
 		$this->container->get( UnlockHandler::class )->register();
 		$this->container->get( RowActions::class )->register();
 		$this->container->get( UserProfilePanel::class )->register();
