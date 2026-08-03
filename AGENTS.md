@@ -4,7 +4,7 @@
 
 Enterprise identity management for WordPress powered by WorkOS. SSO, directory sync, MFA, and user management.
 
-- **Version:** 1.0.8
+- **Version:** 1.0.9
 - **Namespace:** `WorkOS\`
 - **PHP Requirement:** 7.4+
 - **WordPress Requirement:** 5.9+
@@ -104,6 +104,24 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/PasswordResetAdmin/Shortcode.php` | `[workos:password-reset]` — toggles between admin-of-other (`user="id-or-email"`) and self-service (no `user`) modes based on its attributes. |
 | `src/WorkOS/Auth/PasswordResetAdmin/Assets.php` | Registers `workos-admin-password-reset` JS/CSS handles + localizes `workosPasswordReset` (REST URL, `wp_rest` nonce, masked-email-aware UI strings). Auto-enqueues on `users.php` / `user-edit.php` / `profile.php`. |
 | `src/js/admin-password-reset/index.ts` | Delegated `.workos-pwreset-trigger` click handler — POSTs to the admin endpoint and surfaces a transient admin notice. Same handler powers every trigger surface (WP Users row, user-edit panel, shortcode, WorkOS Users admin page row). |
+| **Attempt Locks** ([`docs/locks.md`](docs/locks.md)) | |
+| `src/WorkOS/Lock/Controller.php` | DI controller — binds the stores, registry, cleanup sweep, activity-log listener and admin surfaces. Honors the `locks_enabled` setting + `workos_locks_enabled` filter. |
+| `src/WorkOS/Lock/Contracts/Lockable.php` | The reusable contract: `check()` (read-only gate), `record()` (count one attempt), `release()` (clear), `status()`, and the `for_user`/`for_email`/`for_ip`/`for_key` subject builders. |
+| `src/WorkOS/Lock/Contracts/Store.php` | Persistence contract. Implementations must be durable — this layer exists precisely because cache is not. |
+| `src/WorkOS/Lock/BaseLock.php` | The whole engine. Subclasses supply a slug and policy only, so a concrete lock is ~30 lines. Strikes accumulate to a threshold, then a cooldown engages; the breach count outlives the cooldown so the ladder escalates, and decay forgives a quiet subject. IP subjects get a 4× threshold and a 15-minute cooldown ceiling because one address can front an entire audience behind a CDN. |
+| `src/WorkOS/Lock/State.php` | The persisted record: `strikes` (current run) vs `breaches` (retained across cooldowns — this is what makes the ladder escalate rather than repeat), plus `first_seen`, `locked_until`, `updated_at`. |
+| `src/WorkOS/Lock/Subject.php` | Who is being counted: `user`, `email`, `ip` or `key`. Email subjects resolve to a WP user when one owns the address. |
+| `src/WorkOS/Lock/Registry.php` | Slug → lock lookup (`workos_locks` filter to add or replace), plus `status_for_user()` / `release_all_for_user()` backing the admin and CLI. |
+| `src/WorkOS/Lock/Store/UserMetaStore.php` | `_workos_lock_{slug}` user meta. Preferred backend: travels with the user, survives every cache layer, visible on the user-edit screen. |
+| `src/WorkOS/Lock/Store/OptionStore.php` | `workos_lock_{slug}_{sha256}` option, autoload off, with an `expires_at` stamp. Used when no WP user owns the subject — the common case, since accounts exist in WorkOS before they exist locally. |
+| `src/WorkOS/Lock/Store/ResolvingStore.php` | Routes each subject to the right backend, and folds an option-row record onto the user when an address gains one, so counting is continuous across account creation. |
+| `src/WorkOS/Lock/GarbageCollector.php` | Daily `workos_lock_gc` sweep — prunes expired option rows and enforces a row ceiling (default 50 000, `workos_lock_row_ceiling`). |
+| `src/WorkOS/Lock/ActivityLogger.php` | Bridges `workos_lock_engaged` / `workos_lock_released` into the activity log. Subjects are logged as a kind plus a truncated hash. |
+| `src/WorkOS/Lock/Locks/*.php` | The six shipped locks: `otp_send`, `password_auth`, `password_reset`, `mfa_challenge`, `signup`, `token_guess`. |
+| `src/WorkOS/Lock/Admin/UnlockHandler.php` | `admin_post_workos_clear_locks` — nonced, gated on **`edit_users`** (not `edit_user($id)`, which would let a locked-out user clear their own lock). No REST route, no AJAX, no script bundle. |
+| `src/WorkOS/Lock/Admin/RowActions.php` | "Clear login locks" under the WorkOS column on `wp-admin/users.php` (priority 12), shown only when a lock is actually held. |
+| `src/WorkOS/Lock/Admin/UserProfilePanel.php` | Lock status table + clear button on the user-edit screen (priority 22). |
+| `src/WorkOS/CLI/LockCommand.php` | `wp workos lock list|status|clear|clear-user|gc`. |
 | **Auth — Change Email** ([`docs/change-email.md`](docs/change-email.md)) | |
 | `src/WorkOS/Auth/ChangeEmail/Controller.php` | DI controller — wires REST endpoints, JS/CSS, row action, profile panel, shortcode, and the frontend confirm route. Honors the `change_email_enabled` setting + `workos_change_email_enabled` filter. |
 | `src/WorkOS/Auth/ChangeEmail/RestApi.php` | Three endpoints: `POST /workos/v1/users/{id}/email-change` (initiate, `edit_user` cap), `…/email-change/confirm` (token-gated, race re-check), `…/email-change/cancel` (cancel-token *or* `edit_user` cap). Initiate branches on `is_admin_action()` (`edit_users` + initiator ≠ target): self-service is rate-limited, enumeration-safe, and verified via emailed token; admin-of-other commits immediately (no rate limit, no notification, WP core email-change notice suppressed), gets a real `409` conflict, and logs `email_change.admin_changed`. Shared `commit_change()` (WorkOS `update_user` → `wp_update_user` → rollback → transient → sync-hash refresh) backs both the confirm and admin-direct paths. Logs `email_change.*` events. |
@@ -336,6 +354,11 @@ tests/
     ├── LoginSessionTest.php                        # Login session tests
     ├── LoginTokensTest.php                         # Login tokens tests
     ├── LogoutRedirectTest.php                      # Logout redirect tests
+    ├── LockAdminUnlockTest.php                     # Registry helpers, row action, and the edit_users gate on the unlock action
+    ├── LockBaseLockTest.php                        # Engine: threshold, escalating ladder, retained breaches, decay, release, filters
+    ├── LockEndpointsTest.php                       # Failure-counting locks on sign-in and token redemption; delivery vs credential ledgers kept separate
+    ├── LockOtpSendTest.php                         # Code delivery end-to-end, incl. the refusal holding across a cache flush
+    ├── LockStoresTest.php                          # User-meta / option / resolving backends, migration on account creation, GC
     ├── OnboardingSyncTest.php                      # Onboarding sync tests
     ├── OptionsTest.php                             # Options classes tests
     ├── OrganizationManagerTest.php                 # Organization manager tests

@@ -16,6 +16,7 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **In-app flows**: self-serve sign-up with email verification, invitation acceptance, password reset (two-field new-password form with `wp.passwordStrength.meter` gating, optional auto-login on success, post-reset `redirect_url` validated same-host)
 - **Admin-triggered password reset** — send a WorkOS reset email on behalf of any linked user via `POST /wp-json/workos/v1/admin/users/{id}/password-reset` (gated by `edit_user($id)` so the same route covers self-service). Surfaced as a row action under the **WorkOS column** on `wp-admin/users.php`, a button on the user-edit screen, a per-row button on the WorkOS Users admin page, and a `[workos:password-reset]` shortcode. Successful sends are audited as `password_reset.admin_sent` in the activity log; emails point at the in-site React shell (`/workos/login/{slug}?token=…&redirect_to=…`) and the new password is mirrored to the linked WP user so `?fallback=1` / `wp_authenticate` / REST app passwords stay in sync. See [`docs/password-reset.md`](docs/password-reset.md).
 - **Change email** — WorkOS-verified, conflict-guarded email-change flow. Self-service via `[workos:change-email]` shortcode confirms a WP-side hashed token sent to the new address (with a cancel-link notice to the old address) before committing; an admin acting on *another* account commits immediately (gated by `edit_users`, no verification round-trip). Admin surfaces are a row action under the **WorkOS column** on `wp-admin/users.php`, a panel on the user-edit screen, and a "Change email" action on the **WorkOS → Users** admin page. A configurable conflict policy (`block`, `allow_orphan`, `merge_request`) keeps the new email from silently overwriting another local WP user. Commits to WorkOS first (via `update_user`) then mirrors into WP, with a 60-second in-progress transient that short-circuits the webhook fan-back. See [`docs/change-email.md`](docs/change-email.md).
+- **Attempt locks** — a reusable primitive bounding how often the same caller can repeat an action that costs something: a delivered code, a billed SMS, a record created upstream, a guess at a short-lived token. Counters persist in user meta — or a non-autoloaded option row when the address has no WP user yet, which is the common case since accounts exist in WorkOS before they exist locally — so they are unaffected by a cache flush, and repeats escalate through a cooldown ladder before a quiet period clears them. Six locks ship (`otp_send`, `password_auth`, `password_reset`, `mfa_challenge`, `signup`, `token_guess`); a new one is a ~30-line subclass of `BaseLock`. Layers on top of the burst limiter rather than replacing it. Operators can review and clear locks from the **WorkOS column** on `wp-admin/users.php`, a panel on the user-edit screen, or `wp workos lock`. See [`docs/locks.md`](docs/locks.md).
 - **Skeleton placeholders** on every AuthKit surface (wp-login.php takeover, `/workos/login/{profile}`, shortcode) — pre-hydration markup from PHP plus a React `FlowSkeleton` during bootstrap, mirroring the real card heights so swap-in is a flicker not a jump.
 - **MFA** — TOTP, SMS, WebAuthn/passkey with full enrollment + challenge UI; profile-level `mfa.enforce` (`never` / `if_required` / `always`) and factor allowlist
 - **Profile routing rules** — ordered `redirect_to` glob / `referrer_host` / `user_role` matchers pick the right profile per request
@@ -183,7 +184,11 @@ WorkOS-verified change-email flow (self-service token verification +
 admin-direct immediate commits + the WorkOS → Users / row-action /
 user-edit surfaces + configurable conflict policy + cancel link to old
 address), see
-[`docs/change-email.md`](docs/change-email.md).
+[`docs/change-email.md`](docs/change-email.md). For the attempt-lock
+primitive (the calling convention, subjects and where their counters are
+stored, the cooldown ladder, writing your own lock, the full filter
+reference, and the operator surfaces), see
+[`docs/locks.md`](docs/locks.md).
 
 ### Custom paths
 

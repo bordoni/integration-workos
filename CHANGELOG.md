@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.9] - 2026-08-03
+
+### Added
+
+- **Attempt locks** — a reusable primitive for bounding how often the same caller can repeat an action that costs something: a delivered message, a billed SMS, a record created upstream, or a guess at a short secret. Counters persist in user meta, or in a non-autoloaded option row when the address has no WordPress user behind it yet, so they are unaffected by a cache flush. Repeats escalate through a cooldown ladder (5 min → 15 min → 1 h → 6 h → 24 h) and a quiet period forgives the subject entirely. Six locks ship covering code delivery, password sign-in, reset delivery, multi-factor challenges, account creation and token redemption; a new lock is a ~30-line subclass. Complements rather than replaces the existing burst limiter, which still runs first. Fifteen filters, two actions, three activity-log events, and 63 new WPUnit tests across `tests/wpunit/Lock*Test.php`. See [`docs/locks.md`](docs/locks.md).
+- **`wp workos lock` commands** — `list`, `status`, `clear`, `clear-user` and `gc`, for inspecting and clearing locks without the admin UI.
+- **Clear login locks from the admin** — a row action on the Users list and a panel on the user-edit screen, shown only for users who actually hold a lock. Both are server-rendered `admin-post.php` requests gated on `edit_users`; no REST route, no script.
+- **Optional trusted proxy header** — sites behind a reverse proxy or CDN can name the header carrying the real client address via the `trusted_proxy_header` option or the `workos_trusted_proxy_header` filter. Empty by default, so behavior is unchanged unless configured.
+
+### Changed
+
+- **Anonymous headless login is now throttled** — the `admin-ajax.php` login handler reached password authentication without any of the throttling that guards the REST sign-in path. It also relayed the upstream failure message verbatim, which distinguished between an unknown account, a wrong password and an unverified address; it now answers uniformly.
+- **Email-change confirm and cancel count failed attempts** — both routes are public by design, since the emailed token is the whole credential, but nothing previously bounded how many tokens could be tried.
+- **Password reset rejects a throttled request before the response-time floor** — a caller who is already barred no longer waits out the fixed delay that exists to flatten timing differences.
+
+### Fixed
+
+- **Uninstall leaves less behind** — `_workos_first_login` and `_workos_pending_email_change` were never removed.
+
 ## [1.0.8] - 2026-06-30
 
 ### Added

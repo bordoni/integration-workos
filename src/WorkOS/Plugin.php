@@ -57,7 +57,7 @@ class Plugin {
 	 *
 	 * @var string
 	 */
-	private string $version = '1.0.8';
+	private string $version = '1.0.9';
 
 	/**
 	 * Container instance.
@@ -239,6 +239,23 @@ class Plugin {
 		$class = 'staging' === $env ? Options\Staging::class : Options\Production::class;
 
 		return $this->container->get( $class )->get( $key, $default_value );
+	}
+
+	/**
+	 * Get an attempt lock by slug.
+	 *
+	 * Returns null when nothing is registered under that slug, so callers
+	 * should treat a missing lock as "not throttled here" rather than an error
+	 * — a site is free to unregister one.
+	 *
+	 * See `docs/locks.md` for the calling convention.
+	 *
+	 * @param string $slug Lock slug, e.g. `otp_send`.
+	 *
+	 * @return Lock\Contracts\Lockable|null
+	 */
+	public function lock( string $slug ) {
+		return $this->container->get( Lock\Registry::class )->get( $slug );
 	}
 
 	/**

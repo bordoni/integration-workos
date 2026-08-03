@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.8
+Stable tag: 1.0.9
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,16 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.9 - 2026-08-03 =
+
+* New: Attempt locks — a reusable way to bound how often the same caller can repeat an action that costs something, such as a delivered code, a billed SMS, or a guess at a short-lived token. Counters persist in user meta (or an option row when the address has no WordPress user yet), so they survive a cache flush, and repeats escalate through a cooldown ladder before a quiet period clears them. Six locks ship covering code delivery, password sign-in, reset delivery, multi-factor challenges, account creation and token redemption. See `docs/locks.md`.
+* New: `wp workos lock list|status|clear|clear-user|gc` for inspecting and clearing locks from the command line.
+* New: "Clear login locks" action on the Users list and a panel on the user-edit screen, shown only for users who hold a lock. Requires the `edit_users` capability.
+* New: Optional `trusted_proxy_header` setting so sites behind a reverse proxy or CDN can resolve the real client address. Empty by default.
+* Tweak: The anonymous headless login handler is now throttled like the REST sign-in path, and returns a uniform message instead of relaying the upstream one.
+* Tweak: Email-change confirm and cancel now count failed token attempts.
+* Fix: Uninstall now removes the `_workos_first_login` and `_workos_pending_email_change` user meta it was leaving behind.
+
 = 1.0.8 - 2026-06-30 =
 
 * New: Change a user's email from the WorkOS → Users admin page, alongside "Open in WorkOS" and "Send password reset". (#33)
@@ -271,6 +281,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.9 =
+Adds attempt locks: repeated requests for one-time codes, reset links, multi-factor challenges and token redemptions are now bounded per account rather than only per burst, with counters that persist across a cache flush and escalate on repeats. Operators can review and clear locks from the Users list, the user-edit screen, or WP-CLI.
 
 = 1.0.8 =
 Adds a "Change email" action to the WorkOS → Users admin page and makes admin-of-other email changes commit immediately, while self-service keeps the verified token flow. Also fixes a 500 in the admin password-reset endpoint when the profile field is empty.
