@@ -46,7 +46,12 @@
 		"sort-packages": true
 	},
 	"scripts": {
-		"test:wpunit": "vendor/bin/codecept run wpunit",
+		"test:wpunit": [
+			"@test:wpunit:main",
+			"@test:wpunit:constants"
+		],
+		"test:wpunit:main": "vendor/bin/codecept run wpunit --skip-group constants",
+		"test:wpunit:constants": "vendor/bin/codecept run wpunit --group constants",
 		"lint": "phpcs",
 		"lint:fix": "phpcbf",
 		"phpstan": "phpstan analyse --memory-limit=1G",

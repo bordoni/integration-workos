@@ -314,6 +314,24 @@ On standalone dispatch there's no caller artifact, so `svn-deploy.yml` builds th
 
 Use the global `/slic` skill for first-time setup, running tests, and all slic CLI commands.
 
+**The suite must be run in two passes.** `ConfigSyncConstantsTest` is the one test that exercises
+the `wp-config.php` constant overrides, so it has to `define()` them — and a constant cannot be
+undefined for the rest of the process. Every later test that asserts behaviour when the plugin is
+*not* configured then sees those constants and fails, because `Config` prefers a constant over the
+database value.
+
+So run it the way CI does:
+
+```bash
+slic run wpunit --skip-group constants   # everything else
+slic run wpunit --group constants        # the constants test, in a fresh process
+```
+
+`composer test:wpunit` chains both. A single bare `slic run wpunit` reports four failures in
+`PasswordResetTest`, `RendererKsesTest`, `UserSyncPushTest` and `UserSyncResyncTest` — that is the
+leak above, not a real regression. Confirm any such failure by running the file on its own before
+chasing it.
+
 ### Test Structure
 
 Tests use Codeception 5 with wp-browser 4.x (`lucatume\WPBrowser`):
