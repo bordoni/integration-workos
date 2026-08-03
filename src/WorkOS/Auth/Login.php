@@ -162,9 +162,9 @@ class Login {
 			return $user; // Let WP handle the error.
 		}
 
-		// wp-login.php reaches this filter directly, bypassing the REST layer
-		// where sign-in throttling normally lives — so the same lock has to be
-		// applied by hand here.
+		// wp-login.php reaches this filter directly rather than through the REST
+		// layer where sign-in throttling normally lives, so the same lock has to
+		// be applied by hand here.
 		$lock = $this->locks->get( 'password_auth' );
 
 		$subjects = null !== $lock

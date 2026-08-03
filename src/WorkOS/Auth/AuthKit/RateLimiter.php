@@ -228,7 +228,7 @@ class RateLimiter {
 	 *
 	 * `REMOTE_ADDR` is set by the webserver and cannot be spoofed, so it is the
 	 * default and the only source trusted without configuration. Forwarding
-	 * headers are attacker-controlled in the general case — anyone can send an
+	 * headers are caller-supplied in the general case — anyone can send an
 	 * `X-Forwarded-For` — and trusting one unconditionally would let a caller
 	 * mint a fresh identity per request and slip every per-IP limit.
 	 *
