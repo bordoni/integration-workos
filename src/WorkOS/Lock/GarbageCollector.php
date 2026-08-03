@@ -57,7 +57,7 @@ class GarbageCollector {
 	 * @return void
 	 */
 	public function register(): void {
-		add_action( self::CRON_HOOK, [ $this, 'run' ] );
+		add_action( self::CRON_HOOK, [ $this, 'run_scheduled' ] );
 		add_action( 'init', [ $this, 'maybe_schedule' ] );
 	}
 
@@ -67,10 +67,22 @@ class GarbageCollector {
 	 * @return void
 	 */
 	public function unregister(): void {
-		remove_action( self::CRON_HOOK, [ $this, 'run' ] );
+		remove_action( self::CRON_HOOK, [ $this, 'run_scheduled' ] );
 		remove_action( 'init', [ $this, 'maybe_schedule' ] );
 
 		$this->unschedule();
+	}
+
+	/**
+	 * Cron entry point.
+	 *
+	 * Wraps {@see self::run()} because an action callback must not return a
+	 * value; the row count is useful to the CLI and to tests, not to `do_action`.
+	 *
+	 * @return void
+	 */
+	public function run_scheduled(): void {
+		$this->run();
 	}
 
 	/**
