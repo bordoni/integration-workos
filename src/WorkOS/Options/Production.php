@@ -54,6 +54,11 @@ class Production extends Options {
 			'change_email_confirm_path'               => 'workos/change-email',
 			'allow_magic_code_registration'           => true,
 			'allow_legacy_magic_code_registration'    => true,
+			// Attempt locks (see src/WorkOS/Lock and docs/locks.md).
+			'locks_enabled'                           => true,
+			// Header carrying the real client IP, for sites behind a proxy or
+			// CDN. Empty means REMOTE_ADDR only — see RateLimiter::client_ip().
+			'trusted_proxy_header'                    => '',
 		];
 	}
 }

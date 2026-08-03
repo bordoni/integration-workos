@@ -16,6 +16,7 @@ use WorkOS\Auth\AuthKit\Controller as AuthKitController;
 use WorkOS\Auth\Controller as AuthController;
 use WorkOS\Auth\PasswordResetAdmin\Controller as PasswordResetAdminController;
 use WorkOS\Auth\ChangeEmail\Controller as ChangeEmailController;
+use WorkOS\Lock\Controller as LockController;
 use WorkOS\REST\Controller as RESTController;
 use WorkOS\Webhook\Controller as WebhookController;
 use WorkOS\Sync\Controller as SyncController;
@@ -35,6 +36,10 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
+		// Registered first: the auth flows resolve locks during their own
+		// registration, so the registry and its storage must already exist.
+		$this->container->register( LockController::class );
+
 		$this->container->register( AdminController::class );
 		$this->container->register( AuthKitController::class );
 		$this->container->register( LoginProfilesAdminController::class );
