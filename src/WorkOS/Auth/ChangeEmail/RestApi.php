@@ -10,6 +10,7 @@ namespace WorkOS\Auth\ChangeEmail;
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\Email\AddressMask;
+use WorkOS\Lock\Registry as LockRegistry;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -63,6 +64,13 @@ class RestApi {
 	private RateLimiter $rate_limiter;
 
 	/**
+	 * Durable attempt-lock registry.
+	 *
+	 * @var LockRegistry
+	 */
+	private LockRegistry $locks;
+
+	/**
 	 * Token factory.
 	 *
 	 * @var TokenFactory
@@ -111,6 +119,7 @@ class RestApi {
 	 * @param ConflictResolver $conflicts    Conflict resolver.
 	 * @param Notifier         $notifier     Email notifier.
 	 * @param AddressMask      $masker       Email-address masker.
+	 * @param LockRegistry     $locks        Attempt-lock registry.
 	 */
 	public function __construct(
 		RateLimiter $rate_limiter,
@@ -118,7 +127,8 @@ class RestApi {
 		PendingChange $pending,
 		ConflictResolver $conflicts,
 		Notifier $notifier,
-		AddressMask $masker
+		AddressMask $masker,
+		LockRegistry $locks
 	) {
 		$this->rate_limiter = $rate_limiter;
 		$this->tokens       = $tokens;
@@ -126,6 +136,81 @@ class RestApi {
 		$this->conflicts    = $conflicts;
 		$this->notifier     = $notifier;
 		$this->masker       = $masker;
+		$this->locks        = $locks;
+	}
+
+	/**
+	 * Gate a token-bearing request, and count the attempt when it fails.
+	 *
+	 * The confirm and cancel routes are deliberately public — the token in the
+	 * emailed link is the whole credential, and the recipient is by definition
+	 * not signed in when they follow it. That makes the number of guesses
+	 * allowed the only thing standing between a token and a brute-force, and
+	 * until now nothing bounded it on these two routes.
+	 *
+	 * @param string $token Presented token; hashed before use as a subject.
+	 *
+	 * @return array{0: array<int, \WorkOS\Lock\Subject>, 1: true|WP_Error} Subjects, and the gate result.
+	 */
+	private function guard_token( string $token ): array {
+		$lock = $this->locks->get( 'token_guess' );
+
+		if ( null === $lock ) {
+			return [ [], true ];
+		}
+
+		$subjects = [
+			$lock->for_key( hash( 'sha256', $token ) ),
+			$lock->for_ip( $this->rate_limiter->client_ip() ),
+		];
+
+		foreach ( $subjects as $subject ) {
+			$result = $lock->check( $subject );
+
+			if ( is_wp_error( $result ) ) {
+				return [ $subjects, $result ];
+			}
+		}
+
+		return [ $subjects, true ];
+	}
+
+	/**
+	 * Count a failed token attempt.
+	 *
+	 * @param array<int, \WorkOS\Lock\Subject> $subjects Subjects returned by {@see self::guard_token()}.
+	 *
+	 * @return void
+	 */
+	private function record_token_failure( array $subjects ): void {
+		$lock = $this->locks->get( 'token_guess' );
+
+		if ( null === $lock ) {
+			return;
+		}
+
+		foreach ( $subjects as $subject ) {
+			$lock->record( $subject );
+		}
+	}
+
+	/**
+	 * Clear the token lock after a successful redemption.
+	 *
+	 * @param array<int, \WorkOS\Lock\Subject> $subjects Subjects returned by {@see self::guard_token()}.
+	 *
+	 * @return void
+	 */
+	private function release_token( array $subjects ): void {
+		$lock = $this->locks->get( 'token_guess' );
+
+		if ( null === $lock ) {
+			return;
+		}
+
+		foreach ( $subjects as $subject ) {
+			$lock->release( $subject );
+		}
 	}
 
 	/**
@@ -483,8 +568,15 @@ class RestApi {
 			);
 		}
 
+		[ $subjects, $gate ] = $this->guard_token( $token );
+		if ( is_wp_error( $gate ) ) {
+			return $gate;
+		}
+
 		$user = get_userdata( $target_id );
 		if ( ! $user instanceof WP_User ) {
+			$this->record_token_failure( $subjects );
+
 			return new WP_Error(
 				'workos_invalid_token',
 				__( 'This confirmation link is no longer valid.', 'integration-workos' ),
@@ -494,6 +586,8 @@ class RestApi {
 
 		$record = $this->pending->get( (int) $user->ID );
 		if ( null === $record ) {
+			$this->record_token_failure( $subjects );
+
 			return new WP_Error(
 				'workos_invalid_token',
 				__( 'This confirmation link is no longer valid.', 'integration-workos' ),
@@ -518,12 +612,16 @@ class RestApi {
 		}
 
 		if ( ! $this->pending->verify_confirm( $record, $token ) ) {
+			$this->record_token_failure( $subjects );
+
 			return new WP_Error(
 				'workos_invalid_token',
 				__( 'This confirmation link is no longer valid.', 'integration-workos' ),
 				[ 'status' => 400 ]
 			);
 		}
+
+		$this->release_token( $subjects );
 
 		$new_email = (string) $record['new_email'];
 
@@ -615,17 +713,27 @@ class RestApi {
 			return new WP_REST_Response( [ 'ok' => true ], 200 );
 		}
 
-		$token         = (string) $request->get_param( 'token' );
+		$token = (string) $request->get_param( 'token' );
+
+		[ $subjects, $gate ] = $this->guard_token( $token );
+		if ( is_wp_error( $gate ) ) {
+			return $gate;
+		}
+
 		$by_token      = '' !== $token && $this->pending->verify_cancel( $record, $token );
 		$by_capability = current_user_can( 'edit_user', $user->ID );
 
 		if ( ! $by_token && ! $by_capability ) {
+			$this->record_token_failure( $subjects );
+
 			return new WP_Error(
 				'workos_forbidden',
 				__( 'You do not have permission to cancel this email change.', 'integration-workos' ),
 				[ 'status' => 403 ]
 			);
 		}
+
+		$this->release_token( $subjects );
 
 		$this->pending->clear( (int) $user->ID );
 

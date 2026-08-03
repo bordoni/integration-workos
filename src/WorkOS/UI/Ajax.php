@@ -7,7 +7,9 @@
 
 namespace WorkOS\UI;
 
+use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\Auth\Login;
+use WorkOS\Lock\Registry as LockRegistry;
 use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
@@ -15,13 +17,39 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Handles the wp_ajax_nopriv_workos_headless_login action.
+ *
+ * This route reaches `authenticate_with_password` without going through
+ * {@see \WorkOS\REST\Auth\BaseEndpoint}, so none of the throttling that guards
+ * the REST sign-in path applies automatically — it has to be wired here by
+ * hand. The nonce is not a substitute: it is minted for anonymous visitors by
+ * the login-button script, so anyone can obtain one.
  */
 class Ajax {
 
 	/**
-	 * Constructor — registers AJAX hooks.
+	 * Burst limiter.
+	 *
+	 * @var RateLimiter
 	 */
-	public function __construct() {
+	private RateLimiter $rate_limiter;
+
+	/**
+	 * Durable attempt-lock registry.
+	 *
+	 * @var LockRegistry
+	 */
+	private LockRegistry $locks;
+
+	/**
+	 * Constructor — registers AJAX hooks.
+	 *
+	 * @param RateLimiter  $rate_limiter Burst limiter.
+	 * @param LockRegistry $locks        Attempt-lock registry.
+	 */
+	public function __construct( RateLimiter $rate_limiter, LockRegistry $locks ) {
+		$this->rate_limiter = $rate_limiter;
+		$this->locks        = $locks;
+
 		add_action( 'wp_ajax_workos_headless_login', [ $this, 'handle' ] );
 		add_action( 'wp_ajax_nopriv_workos_headless_login', [ $this, 'handle' ] );
 	}
@@ -43,10 +71,44 @@ class Ajax {
 			wp_send_json_error( [ 'message' => __( 'Email and password are required.', 'integration-workos' ) ] );
 		}
 
+		$ip = $this->rate_limiter->client_ip();
+
+		$burst = $this->rate_limiter->attempt( 'headless_login_ip', $ip, 10, MINUTE_IN_SECONDS );
+		if ( is_wp_error( $burst ) ) {
+			wp_send_json_error( [ 'message' => $burst->get_error_message() ], 429 );
+		}
+
+		$burst = $this->rate_limiter->attempt( 'headless_login_email', $email, 5, MINUTE_IN_SECONDS );
+		if ( is_wp_error( $burst ) ) {
+			wp_send_json_error( [ 'message' => $burst->get_error_message() ], 429 );
+		}
+
+		$lock     = $this->locks->get( 'password_auth' );
+		$subjects = null !== $lock ? [ $lock->for_email( $email ), $lock->for_ip( $ip ) ] : [];
+
+		foreach ( $subjects as $subject ) {
+			$gate = $lock->check( $subject );
+
+			if ( is_wp_error( $gate ) ) {
+				wp_send_json_error( [ 'message' => $gate->get_error_message() ], 429 );
+			}
+		}
+
 		$result = workos()->api()->authenticate_with_password( $email, $password );
 
 		if ( is_wp_error( $result ) ) {
-			wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+			foreach ( $subjects as $subject ) {
+				$lock->record( $subject );
+			}
+
+			// The upstream message distinguishes between causes of failure —
+			// unknown account, wrong password, unverified address — which is
+			// more than the caller needs and more than we should confirm.
+			wp_send_json_error( [ 'message' => __( 'Those credentials were not accepted.', 'integration-workos' ) ] );
+		}
+
+		foreach ( $subjects as $subject ) {
+			$lock->release( $subject );
 		}
 
 		$workos_user = $result['user'] ?? $result;

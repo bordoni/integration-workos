@@ -120,7 +120,8 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			$this->nonce,
 			new Radar(),
 			new RateLimiter(),
-			new LoginCompleter()
+			new LoginCompleter(),
+			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )
 		);
 
 		// Hook into rest_api_init *before* dispatching so WP accepts the

@@ -36,7 +36,7 @@ class LoginSessionTest extends WPTestCase {
 		] );
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
-		$this->login = new Login();
+		$this->login = new Login( \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class ), new \WorkOS\Auth\AuthKit\RateLimiter() );
 
 		remove_all_actions( 'user_register' );
 	}

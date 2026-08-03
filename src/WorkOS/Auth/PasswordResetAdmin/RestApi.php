@@ -12,6 +12,7 @@ use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\Email\AddressMask;
+use WorkOS\Lock\Registry as LockRegistry;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -67,23 +68,33 @@ class RestApi {
 	private AddressMask $masker;
 
 	/**
+	 * Durable attempt-lock registry.
+	 *
+	 * @var LockRegistry
+	 */
+	private LockRegistry $locks;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param ProfileRepository $profiles           Profile repository.
 	 * @param RateLimiter       $rate_limiter       Rate limiter.
 	 * @param RedirectValidator $redirect_validator Redirect validator.
 	 * @param AddressMask       $masker             Email-address masker.
+	 * @param LockRegistry      $locks              Attempt-lock registry.
 	 */
 	public function __construct(
 		ProfileRepository $profiles,
 		RateLimiter $rate_limiter,
 		RedirectValidator $redirect_validator,
-		AddressMask $masker
+		AddressMask $masker,
+		LockRegistry $locks
 	) {
 		$this->profiles           = $profiles;
 		$this->rate_limiter       = $rate_limiter;
 		$this->redirect_validator = $redirect_validator;
 		$this->masker             = $masker;
+		$this->locks              = $locks;
 	}
 
 	/**
@@ -219,6 +230,21 @@ class RestApi {
 			return $rate_ok;
 		}
 
+		// Shares the budget with the self-service reset route: the recipient
+		// gets the same mail either way, so triggering it from the admin screen
+		// should not be a way around the per-account limit. The capability
+		// check above already bounds *who* can reach this.
+		$lock     = $this->locks->get( 'password_reset' );
+		$subjects = null !== $lock ? [ $lock->for_user( (int) $user->ID ), $lock->for_ip( $ip ) ] : [];
+
+		foreach ( $subjects as $subject ) {
+			$gate = $lock->check( $subject );
+
+			if ( is_wp_error( $gate ) ) {
+				return $gate;
+			}
+		}
+
 		$redirect_url = $this->redirect_validator->validate(
 			(string) $request->get_param( 'redirect_url' ),
 			$profile
@@ -229,6 +255,14 @@ class RestApi {
 		$response = workos()->api()->send_password_reset( $email, $reset_url );
 		if ( is_wp_error( $response ) ) {
 			return $response;
+		}
+
+		foreach ( $subjects as $subject ) {
+			$recorded = $lock->record( $subject );
+
+			if ( is_wp_error( $recorded ) ) {
+				return $recorded;
+			}
 		}
 
 		EventLogger::log(

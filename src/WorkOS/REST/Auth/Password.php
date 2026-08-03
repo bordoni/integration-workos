@@ -123,11 +123,39 @@ class Password extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		$auth_lock     = $this->lock( 'password_auth' );
+		$auth_subjects = null !== $auth_lock
+			? [ $auth_lock->for_email( $email ), $auth_lock->for_ip( $ip ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'password_auth', $auth_subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
+		// A rejected password here can still cost a message: WorkOS answers an
+		// unverified account by dispatching a verification code, so the send is
+		// a side effect of the attempt rather than something this endpoint
+		// chooses. Gate that separately from the credential check.
+		$otp_lock     = $this->lock( 'otp_send' );
+		$otp_subjects = null !== $otp_lock
+			? [ $otp_lock->for_email( $email ), $otp_lock->for_ip( $ip ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'otp_send', $otp_subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$workos_response = workos()->api()->authenticate_with_password(
 			$email,
 			$password,
 			$this->get_radar_token( $request )
 		);
+
+		if ( is_wp_error( $workos_response ) ) {
+			$this->lock_record( 'otp_send', $otp_subjects );
+		}
 
 		if ( is_wp_error( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
 			// WorkOS rejected the password — fall back to WordPress authentication.
@@ -142,6 +170,16 @@ class Password extends BaseEndpoint {
 						// Email confirmation path: identity is verified via a magic code
 						// instead of syncing the plaintext password to WorkOS.
 						workos()->api()->send_magic_auth_code( $email, $this->get_radar_token( $request ) );
+
+						// The credentials were correct, so nothing owed to the
+						// sign-in lock — but a message just went out, and this
+						// branch is reachable as often as the form is resubmitted.
+						$this->lock_release( 'password_auth', $auth_subjects );
+
+						$lock_ok = $this->lock_record( 'otp_send', $otp_subjects );
+						if ( is_wp_error( $lock_ok ) ) {
+							return $lock_ok;
+						}
 
 						return new WP_REST_Response(
 							[
@@ -175,8 +213,14 @@ class Password extends BaseEndpoint {
 		);
 
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			$lock_ok = $this->lock_record( 'password_auth', $auth_subjects );
+
+			return is_wp_error( $lock_ok ) ? $lock_ok : $result;
 		}
+
+		// Signed in — clear the failure history so someone who mistypes their
+		// own password and then gets it right is never gradually locked out.
+		$this->lock_release( 'password_auth', $auth_subjects );
 
 		return new WP_REST_Response( $result, 200 );
 	}
@@ -227,6 +271,20 @@ class Password extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		$lock     = $this->lock( 'password_reset' );
+		$subjects = null !== $lock
+			? [ $lock->for_email( $email ), $lock->for_ip( $ip ) ]
+			: [];
+
+		// Checked ahead of the response floor below. A barred caller is told so
+		// outright, so there is no timing signal left to flatten — and making
+		// them wait would hold a PHP worker for most of a second per rejected
+		// request, which is the opposite of what a throttle is for.
+		$lock_ok = $this->lock_check( 'password_reset', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$redirect_url = ( new RedirectValidator() )->validate(
 			(string) $request->get_param( 'redirect_url' ),
 			$profile
@@ -245,6 +303,13 @@ class Password extends BaseEndpoint {
 			$this->build_password_reset_url( $profile, $redirect_url ),
 			$this->get_radar_token( $request )
 		);
+
+		// Counted regardless of what WorkOS made of the address, for the same
+		// reason the body below is constant.
+		$lock_ok = $this->lock_record( 'password_reset', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
 
 		$this->sleep_until_floor( $start_ns, self::RESPONSE_TIME_FLOOR_US );
 
@@ -304,6 +369,20 @@ class Password extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// The burst limiter above buckets this route by IP alone, which bounds
+		// one caller but not a distributed one working the same token. Count
+		// the token itself as well — hashed, so the raw value never reaches a
+		// storage key or a filter.
+		$lock     = $this->lock( 'token_guess' );
+		$subjects = null !== $lock
+			? [ $lock->for_key( hash( 'sha256', $token ) ), $lock->for_ip( $ip ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'token_guess', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$workos_response = workos()->api()->reset_password(
 			$token,
 			$new_password,
@@ -311,8 +390,12 @@ class Password extends BaseEndpoint {
 		);
 
 		if ( is_wp_error( $workos_response ) ) {
-			return $workos_response;
+			$lock_ok = $this->lock_record( 'token_guess', $subjects );
+
+			return is_wp_error( $lock_ok ) ? $lock_ok : $workos_response;
 		}
+
+		$this->lock_release( 'token_guess', $subjects );
 
 		$redirect_url = ( new RedirectValidator() )->validate(
 			(string) $request->get_param( 'redirect_url' ),

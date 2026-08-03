@@ -115,6 +115,19 @@ class Signup extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// Every accepted signup leaves a durable record upstream and sends a
+		// message, and nothing reclaims records that are never verified — so
+		// repeats cost more than the request itself.
+		$lock     = $this->lock( 'signup' );
+		$subjects = null !== $lock
+			? [ $lock->for_email( $email ), $lock->for_ip( $ip ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'signup', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$payload = array_filter(
 			[
 				'email'      => $email,
@@ -129,14 +142,30 @@ class Signup extends BaseEndpoint {
 
 		$user = workos()->api()->create_user( $payload, $this->get_radar_token( $request ) );
 
+		// Counted either way: a rejected create still reached WorkOS, and a
+		// caller retrying a rejection is exactly the pattern worth bounding.
+		$lock_ok = $this->lock_record( 'signup', $subjects );
+
 		if ( is_wp_error( $user ) ) {
-			return $user;
+			return is_wp_error( $lock_ok ) ? $lock_ok : $user;
 		}
 
 		// If the user still needs to verify their email, kick off the code
 		// email so the React shell can transition straight to the verify step.
 		if ( empty( $user['email_verified'] ) && ! empty( $user['id'] ) ) {
 			workos()->api()->send_verification_email( $user['id'] );
+
+			// The send is bound by the same per-address budget the dedicated
+			// code endpoint uses, so signing up repeatedly is not a way around it.
+			$otp_lock = $this->lock( 'otp_send' );
+
+			if ( null !== $otp_lock ) {
+				$this->lock_record( 'otp_send', [ $otp_lock->for_email( $email ), $otp_lock->for_ip( $ip ) ] );
+			}
+		}
+
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
 		}
 
 		return new WP_REST_Response(
@@ -191,6 +220,19 @@ class Signup extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// The burst limiter buckets this by IP only, which leaves one account's
+		// verification code open to guessing from a spread of addresses. Count
+		// the target account too.
+		$lock     = $this->lock( 'token_guess' );
+		$subjects = null !== $lock
+			? [ $lock->for_key( $user_id ), $lock->for_ip( $ip ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'token_guess', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$verify_response = workos()->api()->verify_email(
 			$user_id,
 			$code,
@@ -198,6 +240,11 @@ class Signup extends BaseEndpoint {
 		);
 
 		if ( is_wp_error( $verify_response ) ) {
+			$lock_ok = $this->lock_record( 'token_guess', $subjects );
+			if ( is_wp_error( $lock_ok ) ) {
+				return $lock_ok;
+			}
+
 			// Return a clean, generic error. Do NOT echo back the WorkOS
 			// response body (which may include the user_id we looked up)
 			// or the caller-supplied user_id — the caller already knows
@@ -209,6 +256,8 @@ class Signup extends BaseEndpoint {
 				[ 'status' => 400 ]
 			);
 		}
+
+		$this->lock_release( 'token_guess', $subjects );
 
 		// After email verification, WorkOS returns the user record. We do
 		// *not* log the user in automatically — the React shell transitions

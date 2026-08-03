@@ -85,7 +85,8 @@ class ChangeEmailRestApiTest extends WPTestCase {
 			$pending,
 			new ConflictResolver(),
 			$notifier,
-			$masker
+			$masker,
+			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )
 		);
 
 		add_action( 'rest_api_init', [ $rest, 'register_routes' ] );

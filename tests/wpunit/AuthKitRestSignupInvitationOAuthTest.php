@@ -108,10 +108,11 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$radar        = new Radar();
 		$rate_limiter = new RateLimiter();
 		$completer    = new LoginCompleter();
+		$locks        = \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class );
 
-		$signup     = new Signup( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
-		$invitation = new Invitation( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
-		$oauth      = new OAuth( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
+		$signup     = new Signup( $this->repository, $this->nonce, $radar, $rate_limiter, $completer, $locks );
+		$invitation = new Invitation( $this->repository, $this->nonce, $radar, $rate_limiter, $completer, $locks );
+		$oauth      = new OAuth( $this->repository, $this->nonce, $radar, $rate_limiter, $completer, $locks );
 
 		add_action( 'rest_api_init', [ $signup, 'register_routes' ] );
 		add_action( 'rest_api_init', [ $invitation, 'register_routes' ] );

@@ -103,8 +103,10 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$rate_limiter = new RateLimiter();
 		$completer    = new LoginCompleter();
 
-		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
-		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
+		$locks = \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class );
+
+		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, $completer, $locks );
+		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, $completer, $locks );
 
 		add_action( 'rest_api_init', [ $magic, 'register_routes' ] );
 		add_action( 'rest_api_init', [ $session, 'register_routes' ] );

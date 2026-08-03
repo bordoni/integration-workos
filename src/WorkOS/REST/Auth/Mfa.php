@@ -163,9 +163,28 @@ class Mfa extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// An SMS factor turns each challenge into a billed message, which makes
+		// this the most directly expensive thing the plugin exposes. The route
+		// has to stay reachable without a session — it runs mid-login, before
+		// one exists — so the factor is the only durable thing to count on.
+		$lock     = $this->lock( 'mfa_challenge' );
+		$subjects = null !== $lock
+			? [ $lock->for_key( $factor_id ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'mfa_challenge', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$result = workos()->api()->challenge_auth_factor( $factor_id );
 		if ( is_wp_error( $result ) ) {
 			return $result;
+		}
+
+		$lock_ok = $this->lock_record( 'mfa_challenge', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
 		}
 
 		return new WP_REST_Response(
@@ -218,6 +237,19 @@ class Mfa extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// Six digits, bounded above only by how many guesses are allowed. The
+		// burst limiter buckets by IP alone, so count the challenge as well —
+		// otherwise a spread of addresses works one challenge indefinitely.
+		$lock     = $this->lock( 'token_guess' );
+		$subjects = null !== $lock
+			? [ $lock->for_key( $challenge_id ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'token_guess', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$workos_response = workos()->api()->authenticate_with_totp(
 			$pending_auth_token,
 			$challenge_id,
@@ -235,8 +267,12 @@ class Mfa extends BaseEndpoint {
 		);
 
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			$lock_ok = $this->lock_record( 'token_guess', $subjects );
+
+			return is_wp_error( $lock_ok ) ? $lock_ok : $result;
 		}
+
+		$this->lock_release( 'token_guess', $subjects );
 
 		return new WP_REST_Response( $result, 200 );
 	}

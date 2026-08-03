@@ -97,6 +97,16 @@ class MagicCode extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		$lock     = $this->lock( 'otp_send' );
+		$subjects = null !== $lock
+			? [ $lock->for_email( $email ), $lock->for_ip( $ip ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'otp_send', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		// If email registration is disabled, only known accounts get a code.
 		// For unknown emails, skip the WorkOS call but still return success
 		// so account existence isn't exposed.
@@ -107,6 +117,15 @@ class MagicCode extends BaseEndpoint {
 				$email,
 				$this->get_radar_token( $request )
 			);
+		}
+
+		// Counted whether or not a code went out. Counting only real sends
+		// would make the lock engage sooner for addresses that have accounts,
+		// which is precisely the distinction the uniform 200 below exists to
+		// hide.
+		$lock_ok = $this->lock_record( 'otp_send', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
 		}
 
 		return new WP_REST_Response(
@@ -167,11 +186,25 @@ class MagicCode extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// A code is only six digits, so the number of guesses allowed is the
+		// entire security margin. Gate before spending one.
+		$lock     = $this->lock( 'token_guess' );
+		$subjects = null !== $lock
+			? [ $lock->for_email( $email ), $lock->for_ip( $ip ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'token_guess', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		// Ensure verify never creates accounts when registration is disabled.
 		// `send` skips unknown emails; this prevents race conditions or direct
 		// API calls from provisioning users. Return a generic invalid-code error
 		// to avoid account enumeration.
 		if ( ! $this->registration_allowed( $profile ) && ! get_user_by( 'email', $email ) ) {
+			$this->lock_record( 'token_guess', $subjects );
+
 			return new WP_Error(
 				'workos_authkit_invalid_code',
 				__( 'That code is invalid or has expired.', 'integration-workos' ),
@@ -196,8 +229,14 @@ class MagicCode extends BaseEndpoint {
 		);
 
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			$lock_ok = $this->lock_record( 'token_guess', $subjects );
+
+			return is_wp_error( $lock_ok ) ? $lock_ok : $result;
 		}
+
+		// Correct code — forget the failures entirely, so someone who mistypes
+		// twice and then succeeds carries nothing forward.
+		$this->lock_release( 'token_guess', $subjects );
 
 		return new WP_REST_Response( $result, 200 );
 	}

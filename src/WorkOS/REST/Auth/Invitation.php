@@ -161,6 +161,19 @@ class Invitation extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// The invitation token is the only credential this route accepts, so
+		// count guesses against the token itself and not just the caller's
+		// address. Hashed, so the raw token never reaches a storage key.
+		$lock     = $this->lock( 'token_guess' );
+		$subjects = null !== $lock
+			? [ $lock->for_key( hash( 'sha256', $token ) ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			: [];
+
+		$lock_ok = $this->lock_check( 'token_guess', $subjects );
+		if ( is_wp_error( $lock_ok ) ) {
+			return $lock_ok;
+		}
+
 		$workos_response = workos()->api()->authenticate_with_invitation(
 			$token,
 			$password,
@@ -177,8 +190,12 @@ class Invitation extends BaseEndpoint {
 		);
 
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			$lock_ok = $this->lock_record( 'token_guess', $subjects );
+
+			return is_wp_error( $lock_ok ) ? $lock_ok : $result;
 		}
+
+		$this->lock_release( 'token_guess', $subjects );
 
 		return new WP_REST_Response( $result, 200 );
 	}

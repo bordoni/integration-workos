@@ -10,6 +10,8 @@ namespace WorkOS\Auth;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Lock\Registry as LockRegistry;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -20,9 +22,29 @@ defined( 'ABSPATH' ) || exit;
 class Login {
 
 	/**
-	 * Constructor — registers hooks.
+	 * Durable attempt-lock registry.
+	 *
+	 * @var LockRegistry
 	 */
-	public function __construct() {
+	private LockRegistry $locks;
+
+	/**
+	 * Burst limiter, used here only for client-IP resolution.
+	 *
+	 * @var RateLimiter
+	 */
+	private RateLimiter $rate_limiter;
+
+	/**
+	 * Constructor — registers hooks.
+	 *
+	 * @param LockRegistry $locks        Attempt-lock registry.
+	 * @param RateLimiter  $rate_limiter Burst limiter.
+	 */
+	public function __construct( LockRegistry $locks, RateLimiter $rate_limiter ) {
+		$this->locks        = $locks;
+		$this->rate_limiter = $rate_limiter;
+
 		// AuthKit redirect mode: intercept wp-login.php.
 		add_action( 'login_init', [ $this, 'maybe_redirect_to_authkit' ] );
 
@@ -140,11 +162,36 @@ class Login {
 			return $user; // Let WP handle the error.
 		}
 
+		// wp-login.php reaches this filter directly, bypassing the REST layer
+		// where sign-in throttling normally lives — so the same lock has to be
+		// applied by hand here.
+		$lock = $this->locks->get( 'password_auth' );
+
+		$subjects = null !== $lock
+			? [ $lock->for_email( $email ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			: [];
+
+		foreach ( $subjects as $subject ) {
+			$gate = $lock->check( $subject );
+
+			if ( is_wp_error( $gate ) ) {
+				return $gate;
+			}
+		}
+
 		$result = workos()->api()->authenticate_with_password( $email, $password );
 
 		if ( is_wp_error( $result ) ) {
+			foreach ( $subjects as $subject ) {
+				$lock->record( $subject );
+			}
+
 			// Don't block fallback — just return $user to let WP try next.
 			return $user;
+		}
+
+		foreach ( $subjects as $subject ) {
+			$lock->release( $subject );
 		}
 
 		$workos_user = $result['user'] ?? $result;

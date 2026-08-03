@@ -226,20 +226,77 @@ class RateLimiter {
 	/**
 	 * Best-effort client IP extraction.
 	 *
-	 * Respects the standard WP proxy hint hierarchy without blindly trusting
-	 * X-Forwarded-For (a caller can spoof the header otherwise). When no
-	 * trusted IP can be determined, returns '0.0.0.0' so the caller still has
-	 * *something* stable to rate-limit against.
+	 * `REMOTE_ADDR` is set by the webserver and cannot be spoofed, so it is the
+	 * default and the only source trusted without configuration. Forwarding
+	 * headers are attacker-controlled in the general case — anyone can send an
+	 * `X-Forwarded-For` — and trusting one unconditionally would let a caller
+	 * mint a fresh identity per request and slip every per-IP limit.
+	 *
+	 * The trade runs the other way behind a reverse proxy or CDN, where
+	 * `REMOTE_ADDR` is the edge node and every visitor collapses into a single
+	 * bucket. That is the worse failure: per-IP limits then apply to the whole
+	 * audience at once. Sites in that position can name the header their edge
+	 * sets via the `trusted_proxy_header` option, which is only safe because
+	 * the edge overwrites it on ingress.
+	 *
+	 * When nothing resolves, returns '0.0.0.0' so callers still have a stable
+	 * string to bucket against.
 	 *
 	 * @return string IPv4 or IPv6 address string.
 	 */
 	public function client_ip(): string {
+		$header = (string) workos()->option( 'trusted_proxy_header', '' );
+
+		/**
+		 * Filters the request header trusted to carry the real client IP.
+		 *
+		 * Empty (the default) means REMOTE_ADDR only. Set this *only* when a
+		 * proxy in front of the site overwrites the named header on every
+		 * inbound request — otherwise it is caller-supplied and worthless.
+		 *
+		 * @param string $header Server variable name, e.g. `HTTP_X_FORWARDED_FOR`.
+		 */
+		$header = (string) apply_filters( 'workos_trusted_proxy_header', $header );
+
+		if ( '' !== $header ) {
+			$forwarded = $this->ip_from_header( $header );
+
+			if ( '' !== $forwarded ) {
+				return $forwarded;
+			}
+		}
+
 		// REMOTE_ADDR is set by the webserver and cannot be spoofed by callers.
 		$remote = isset( $_SERVER['REMOTE_ADDR'] )
 			? filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ), FILTER_VALIDATE_IP )
 			: false;
 
 		return is_string( $remote ) && '' !== $remote ? $remote : '0.0.0.0';
+	}
+
+	/**
+	 * Read a client IP from a configured forwarding header.
+	 *
+	 * `X-Forwarded-For` accumulates a comma-separated chain as a request passes
+	 * through each hop, appending on the right. The left-most entry is the
+	 * original client, so that is the one read here.
+	 *
+	 * @param string $header Server variable name.
+	 *
+	 * @return string Validated IP, or an empty string when the header is absent or unusable.
+	 */
+	private function ip_from_header( string $header ): string {
+		$header = strtoupper( preg_replace( '/[^A-Za-z0-9_]/', '', $header ) );
+
+		if ( '' === $header || ! isset( $_SERVER[ $header ] ) ) {
+			return '';
+		}
+
+		$raw   = sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) );
+		$parts = explode( ',', $raw );
+		$first = filter_var( trim( (string) reset( $parts ) ), FILTER_VALIDATE_IP );
+
+		return is_string( $first ) ? $first : '';
 	}
 
 	/**

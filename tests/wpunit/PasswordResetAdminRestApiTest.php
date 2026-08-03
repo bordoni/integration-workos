@@ -118,7 +118,8 @@ class PasswordResetAdminRestApiTest extends WPTestCase {
 			$this->repository,
 			new RateLimiter(),
 			new RedirectValidator(),
-			new AddressMask()
+			new AddressMask(),
+			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )
 		);
 
 		add_action( 'rest_api_init', [ $rest_api, 'register_routes' ] );
