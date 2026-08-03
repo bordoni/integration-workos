@@ -100,13 +100,22 @@ class GarbageCollector {
 	}
 
 	/**
-	 * Run both cleanup passes.
+	 * Run both cleanup passes against the current clock.
 	 *
 	 * @return int Total rows removed.
 	 */
 	public function run(): int {
-		$now = (int) apply_filters( 'workos_lock_current_time', time() );
+		return $this->run_at( (int) apply_filters( 'workos_lock_current_time', time() ) );
+	}
 
+	/**
+	 * Run both cleanup passes as of a given moment.
+	 *
+	 * @param int $now Timestamp to treat as "now".
+	 *
+	 * @return int Total rows removed.
+	 */
+	public function run_at( int $now ): int {
 		$removed = $this->options->prune_expired( $now );
 
 		/**

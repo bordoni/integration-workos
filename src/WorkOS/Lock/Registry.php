@@ -139,35 +139,18 @@ class Registry {
 		$cleared = 0;
 
 		foreach ( $this->all() as $lock ) {
-			$subject = $lock->for_user( $user_id );
-			$state   = $lock->status( $subject );
+			$released = false;
 
-			if ( $state->is_empty() ) {
-				continue;
-			}
-
-			$lock->release( $subject );
-			++$cleared;
-		}
-
-		$user = get_userdata( $user_id );
-
-		// The same person may also be counted by address — before their first
-		// successful login those counters live in an option row, not on the
-		// user — so clear that side too.
-		if ( $user && is_email( $user->user_email ) ) {
-			foreach ( $this->all() as $lock ) {
-				$subject = $lock->for_email( $user->user_email );
-
-				if ( $subject->is_user_backed() ) {
-					continue;
-				}
-
+			foreach ( $this->subjects_for_user( $lock, $user_id ) as $subject ) {
 				if ( $lock->status( $subject )->is_empty() ) {
 					continue;
 				}
 
 				$lock->release( $subject );
+				$released = true;
+			}
+
+			if ( $released ) {
 				++$cleared;
 			}
 		}
@@ -186,36 +169,48 @@ class Registry {
 		$statuses = [];
 
 		foreach ( $this->all() as $slug => $lock ) {
-			$state = $lock->status( $lock->for_user( $user_id ) );
-
-			if ( ! $state->is_empty() ) {
-				$statuses[ $slug ] = $state;
-			}
-		}
-
-		$user = get_userdata( $user_id );
-
-		if ( $user && is_email( $user->user_email ) ) {
-			foreach ( $this->all() as $slug => $lock ) {
-				if ( isset( $statuses[ $slug ] ) ) {
-					continue;
-				}
-
-				$subject = $lock->for_email( $user->user_email );
-
-				if ( $subject->is_user_backed() ) {
-					continue;
-				}
-
+			foreach ( $this->subjects_for_user( $lock, $user_id ) as $subject ) {
 				$state = $lock->status( $subject );
 
 				if ( ! $state->is_empty() ) {
-					$statuses[ $slug ] = $state;
+					$statuses[ (string) $slug ] = $state;
+					break;
 				}
 			}
 		}
 
 		return $statuses;
+	}
+
+	/**
+	 * Every subject under which a given user might be counted.
+	 *
+	 * A person is reachable two ways: by user ID, and by the address on their
+	 * account. Both matter, because counting starts before the WordPress user
+	 * exists — accounts are created upstream and only mirrored here on a
+	 * successful login — so an operator looking at a user needs to see what was
+	 * recorded against their address beforehand as well.
+	 *
+	 * Reading the address subject also triggers the migration in
+	 * {@see \WorkOS\Lock\Store\ResolvingStore::read()}, which folds any earlier
+	 * record onto the user.
+	 *
+	 * @param Lockable $lock    Lock to build subjects for.
+	 * @param int      $user_id WP user ID.
+	 *
+	 * @return array<int, \WorkOS\Lock\Subject>
+	 */
+	private function subjects_for_user( Lockable $lock, int $user_id ): array {
+		$subjects = [];
+		$user     = get_userdata( $user_id );
+
+		if ( $user && is_email( $user->user_email ) ) {
+			$subjects[] = $lock->for_email( $user->user_email );
+		}
+
+		$subjects[] = $lock->for_user( $user_id );
+
+		return $subjects;
 	}
 
 	/**

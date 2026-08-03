@@ -153,8 +153,16 @@ class Password extends BaseEndpoint {
 			$this->get_radar_token( $request )
 		);
 
-		if ( is_wp_error( $workos_response ) ) {
-			$this->lock_record( 'otp_send', $otp_subjects );
+		// Only count this against the delivery budget when the rejection is the
+		// kind that dispatches a code. A plain wrong password sends nothing, and
+		// counting it here would bar people from their own account with a
+		// message about codes they were never sent.
+		if ( $this->triggered_verification_email( $workos_response ) ) {
+			$lock_ok = $this->lock_record( 'otp_send', $otp_subjects );
+
+			if ( is_wp_error( $lock_ok ) ) {
+				return $lock_ok;
+			}
 		}
 
 		if ( is_wp_error( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
@@ -609,5 +617,30 @@ class Password extends BaseEndpoint {
 		if ( $remaining > 0 ) {
 			usleep( $remaining );
 		}
+	}
+
+	/**
+	 * Whether a rejected sign-in caused a verification code to be sent.
+	 *
+	 * WorkOS answers an attempt against an address it has not yet verified by
+	 * refusing the sign-in *and* dispatching a code. The send is a side effect
+	 * of the attempt rather than something this endpoint asked for, so it has
+	 * to be recognised from the refusal in order to be counted.
+	 *
+	 * Any other refusal — a wrong password above all — sends nothing.
+	 *
+	 * @param mixed $response Response from the authentication call.
+	 *
+	 * @return bool
+	 */
+	private function triggered_verification_email( $response ): bool {
+		if ( ! is_wp_error( $response ) ) {
+			return false;
+		}
+
+		$body = $response->get_error_data()['body'] ?? [];
+		$code = is_array( $body ) ? (string) ( $body['code'] ?? '' ) : '';
+
+		return '' !== $code && false !== strpos( $code, 'email_verification' );
 	}
 }

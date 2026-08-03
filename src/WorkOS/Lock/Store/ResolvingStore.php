@@ -66,13 +66,35 @@ class ResolvingStore implements Store {
 	/**
 	 * Read stored state from whichever backend owns this subject.
 	 *
+	 * When a subject has become user-backed since it was last written — an
+	 * address that had no WordPress user at the time and has one now — the
+	 * earlier record is moved across on first read. Without that step the
+	 * counters would silently reset the moment an account appeared, and the
+	 * orphaned row would go on reporting a lock that no longer applied.
+	 *
 	 * @param string  $slug    Lock slug.
 	 * @param Subject $subject Subject.
 	 *
 	 * @return State|null
 	 */
 	public function read( string $slug, Subject $subject ): ?State {
-		return $this->backend_for( $subject )->read( $slug, $subject );
+		$backend = $this->backend_for( $subject );
+		$state   = $backend->read( $slug, $subject );
+
+		if ( null !== $state || $backend !== $this->user_meta ) {
+			return $state;
+		}
+
+		$orphaned = $this->options->read( $slug, $subject );
+
+		if ( null === $orphaned ) {
+			return null;
+		}
+
+		$this->user_meta->write( $slug, $subject, $orphaned, 0 );
+		$this->options->delete( $slug, $subject );
+
+		return $orphaned;
 	}
 
 	/**
@@ -98,7 +120,11 @@ class ResolvingStore implements Store {
 	 * @return void
 	 */
 	public function delete( string $slug, Subject $subject ): void {
-		$this->backend_for( $subject )->delete( $slug, $subject );
+		// Both backends, not just the current one: a subject that changed hands
+		// may still have a record on the other side, and "clear this" has to
+		// mean it.
+		$this->user_meta->delete( $slug, $subject );
+		$this->options->delete( $slug, $subject );
 	}
 
 	/**
