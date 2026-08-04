@@ -108,11 +108,16 @@ class Signup extends BaseEndpoint {
 			);
 		}
 
+		// Counted against the mailbox, not the address, even though this
+		// limit guards account creation rather than a send. Creating an
+		// account mails it, so `alice+1@`, `alice+2@` and `alice+3@` would
+		// otherwise be three accounts' worth of verification mail landing in
+		// one inbox.
 		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'signup_ip', $ip, self::RATE_LIMIT_CREATE_IP ],
-				[ 'signup_email', $email, self::RATE_LIMIT_CREATE_EMAIL ],
+				[ 'signup_email', $this->canonicalizer->canonical( $email ), self::RATE_LIMIT_CREATE_EMAIL ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

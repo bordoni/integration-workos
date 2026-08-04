@@ -83,11 +83,15 @@ class MagicCode extends BaseEndpoint {
 			);
 		}
 
+		// Count against the mailbox, not the string typed: tag and dot
+		// variants of one inbox would otherwise each get an allowance.
+		$mailbox = $this->canonicalizer->canonical( $email );
+
 		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'magic_send_ip', $ip, TieredRateLimiter::REQUEST_IP ],
-				[ 'magic_send_email', $email, TieredRateLimiter::REQUEST_SUBJECT ],
+				[ 'magic_send_email', $mailbox, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -99,7 +103,7 @@ class MagicCode extends BaseEndpoint {
 		$send_ok = $this->rate_limit(
 			[
 				[ self::BUCKET_OTP_SEND_IP, $ip, TieredRateLimiter::SEND_IP ],
-				[ self::BUCKET_OTP_SEND_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
+				[ self::BUCKET_OTP_SEND_RECIPIENT, $mailbox, TieredRateLimiter::SEND_RECIPIENT ],
 			]
 		);
 		if ( is_wp_error( $send_ok ) ) {
@@ -157,10 +161,10 @@ class MagicCode extends BaseEndpoint {
 		$code               = (string) $request->get_param( 'code' );
 		$pending_auth_token = (string) $request->get_param( 'pending_authentication_token' );
 
-		if ( '' === $email || '' === $code ) {
+		if ( '' === $email || ! is_email( $email ) || '' === $code ) {
 			return new WP_Error(
 				'workos_authkit_invalid_input',
-				__( 'An email and code are required.', 'integration-workos' ),
+				__( 'A valid email and code are required.', 'integration-workos' ),
 				[ 'status' => 400 ]
 			);
 		}
@@ -169,6 +173,10 @@ class MagicCode extends BaseEndpoint {
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'magic_verify_ip', $ip, TieredRateLimiter::REQUEST_IP ],
+				// Code guessing is counted against the address as typed, not
+				// the mailbox: this route sends nothing, and the thing being
+				// guessed belongs to whichever account WorkOS resolves, which
+				// it keys on the exact address.
 				[ 'magic_verify_email', $email, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);

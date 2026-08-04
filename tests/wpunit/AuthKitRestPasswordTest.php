@@ -16,6 +16,7 @@ use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\Email\AddressCanonicalizer;
 use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\Password;
@@ -123,6 +124,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			new Radar(),
 			new TieredRateLimiter( new DatabaseRateLimiter() ),
 			new ClientIp(),
+			new AddressCanonicalizer(),
 			new LoginCompleter()
 		);
 
@@ -1400,5 +1402,49 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		);
 
 		$this->assertSame( 429, $response->get_status() );
+	}
+
+	/**
+	 * The two subjects on this route diverge on purpose.
+	 *
+	 * Password guessing is counted against the address as typed, so two
+	 * addresses that are separate WorkOS accounts keep separate budgets and
+	 * an attacker on one can't lock the other out. Mail is counted against
+	 * the mailbox, so tag variants of one inbox share a send allowance.
+	 */
+	public function test_guessing_counts_per_address_while_sends_count_per_mailbox(): void {
+		$limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
+		$canon   = ( new AddressCanonicalizer() )->canonical( 'alice+work@gmail.com' );
+
+		// The guessing bucket is keyed on the exact address, so the tag
+		// variant is untouched by attempts against the bare address.
+		for ( $i = 0; $i < 5; $i++ ) {
+			$this->assertTrue(
+				$limiter->attempt( 'password_email', 'alice@gmail.com', TieredRateLimiter::REQUEST_SUBJECT ),
+				"Attempt {$i} on the bare address should be allowed."
+			);
+		}
+		$this->assertInstanceOf(
+			\WP_Error::class,
+			$limiter->attempt( 'password_email', 'alice@gmail.com', TieredRateLimiter::REQUEST_SUBJECT )
+		);
+		$this->assertTrue(
+			$limiter->attempt( 'password_email', 'alice+work@gmail.com', TieredRateLimiter::REQUEST_SUBJECT ),
+			'A separate account must keep its own guessing budget.'
+		);
+
+		// The send bucket is keyed on the mailbox, so both variants spend it.
+		for ( $i = 0; $i < 3; $i++ ) {
+			$this->assertTrue( $limiter->attempt( 'password_otp_recipient', $canon, TieredRateLimiter::SEND_RECIPIENT ) );
+		}
+		$this->assertSame(
+			$canon,
+			( new AddressCanonicalizer() )->canonical( 'alice@gmail.com' ),
+			'Both variants must reduce to the same mailbox.'
+		);
+		$this->assertInstanceOf(
+			\WP_Error::class,
+			$limiter->attempt( 'password_otp_recipient', $canon, TieredRateLimiter::SEND_RECIPIENT )
+		);
 	}
 }

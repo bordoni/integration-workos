@@ -25,20 +25,19 @@ use WP_Error;
 class RateLimiterTest extends WPTestCase {
 
 	/**
-	 * Build a limiter and clear the bucket this test uses.
+	 * Build a limiter.
 	 *
-	 * @param string $class  Limiter implementation.
-	 * @param int    $window Window length the test will use.
+	 * No bucket clearing needed: the suite flushes the object cache and
+	 * opens a transaction before each test, then rolls back, so counters
+	 * cannot survive in either store.
+	 *
+	 * @param string $class Limiter implementation.
 	 *
 	 * @return RateLimiter
 	 */
-	private function limiter( string $class, int $window = 60 ): RateLimiter {
+	private function limiter( string $class ): RateLimiter {
 		/** @var RateLimiter $limiter */
-		$limiter = new $class();
-		$limiter->reset( 'test_bucket', '192.168.0.1', $window );
-		$limiter->reset( 'test_bucket', '10.0.0.1', $window );
-
-		return $limiter;
+		return new $class();
 	}
 
 	/**

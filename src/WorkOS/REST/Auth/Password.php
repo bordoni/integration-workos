@@ -120,6 +120,14 @@ class Password extends BaseEndpoint {
 			);
 		}
 
+		// Two subjects, deliberately different. Mail is counted against the
+		// mailbox, since tag and dot variants of one inbox would otherwise
+		// each get an allowance. Password guessing is counted against the
+		// address as typed, because that is what WorkOS keys an account on:
+		// `alice@` and `alice+work@` can both be registered, and merging
+		// them would let an attacker on one spend the other's budget.
+		$mailbox = $this->canonicalizer->canonical( $email );
+
 		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
@@ -138,7 +146,7 @@ class Password extends BaseEndpoint {
 		$reserved = $this->rate_limit(
 			[
 				[ self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP ],
-				[ self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
+				[ self::BUCKET_PASSWORD_OTP_RECIPIENT, $mailbox, TieredRateLimiter::SEND_RECIPIENT ],
 			]
 		);
 		if ( is_wp_error( $reserved ) ) {
@@ -194,7 +202,7 @@ class Password extends BaseEndpoint {
 		// so the reserved OTP slot goes back.
 		if ( ! $this->triggered_verification_email( $workos_response ) ) {
 			$this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP );
-			$this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT );
+			$this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_RECIPIENT, $mailbox, TieredRateLimiter::SEND_RECIPIENT );
 		}
 
 		// `complete()` handles the `organization_selection_required` error
@@ -248,11 +256,13 @@ class Password extends BaseEndpoint {
 			);
 		}
 
+		$mailbox = $this->canonicalizer->canonical( $email );
+
 		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'pw_reset_ip', $ip, TieredRateLimiter::REQUEST_IP ],
-				[ 'pw_reset_email', $email, TieredRateLimiter::REQUEST_SUBJECT ],
+				[ 'pw_reset_email', $mailbox, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -264,7 +274,7 @@ class Password extends BaseEndpoint {
 		$send_ok = $this->rate_limit(
 			[
 				[ self::BUCKET_OTP_SEND_IP, $ip, TieredRateLimiter::SEND_IP ],
-				[ self::BUCKET_OTP_SEND_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
+				[ self::BUCKET_OTP_SEND_RECIPIENT, $mailbox, TieredRateLimiter::SEND_RECIPIENT ],
 			]
 		);
 		if ( is_wp_error( $send_ok ) ) {

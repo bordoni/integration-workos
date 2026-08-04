@@ -73,12 +73,12 @@ Every public auth route is throttled by requester. A subset also counts as a sen
 
 | Endpoint | Request subject | Request policy | Send policy |
 |---|---|---|---|
-| `POST /auth/password/authenticate` | email | shared | yes, reserved — see [Reserve and refund](#reserve-and-refund) |
-| `POST /auth/password/reset/start` | email | shared | yes (`otp_send`) |
+| `POST /auth/password/authenticate` | email, exact | shared | yes, reserved — see [Reserve and refund](#reserve-and-refund) |
+| `POST /auth/password/reset/start` | mailbox | shared | yes (`otp_send`) |
 | `POST /auth/password/reset/confirm` | — | shared (IP only) | no |
-| `POST /auth/magic/send` | email | shared | yes (`otp_send`) |
-| `POST /auth/magic/verify` | email | shared | no |
-| `POST /auth/signup/create` | email | `Signup` constants | no — see below |
+| `POST /auth/magic/send` | mailbox | shared | yes (`otp_send`) |
+| `POST /auth/magic/verify` | email, exact | shared | no |
+| `POST /auth/signup/create` | mailbox | `Signup` constants | no — see below |
 | `POST /auth/signup/verify` | — | `Signup` constants (IP only) | no |
 | `POST /auth/mfa/challenge` | factor ID | shared | no |
 | `POST /auth/mfa/verify` | — | shared (IP only) | no |
@@ -88,7 +88,7 @@ Every public auth route is throttled by requester. A subset also counts as a sen
 | `POST /users/{id}/email-change` | user ID | — | yes |
 | `POST /admin/users/{id}/password-reset` | user ID | shared | no |
 
-"Shared" means `REQUEST_IP` plus, where there is a subject, `REQUEST_SUBJECT`.
+"Shared" means `REQUEST_IP` plus, where there is a subject, `REQUEST_SUBJECT`. "Exact" and "mailbox" are the two email keyings described under [Which mailbox](#which-mailbox).
 
 `magic_send` and `pw_reset` share the `otp_send` bucket prefix, so rotating between those two endpoints buys an attacker nothing. `password` uses its own `password_otp` prefix: it reserves before it knows whether a send happens, and sharing would let heavy magic-code use lock an account out of password sign-in.
 
@@ -105,10 +105,11 @@ WorkOS decides: authenticating an account whose email is unverified makes it mai
 So that path claims the slot before the call and hands it back when the outcome shows nothing was sent:
 
 ```php
+$mailbox  = $this->canonicalizer->canonical( $email );
 $reserved = $this->rate_limit(
     [
         [ self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP ],
-        [ self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
+        [ self::BUCKET_PASSWORD_OTP_RECIPIENT, $mailbox, TieredRateLimiter::SEND_RECIPIENT ],
     ]
 );
 if ( is_wp_error( $reserved ) ) {
@@ -119,7 +120,7 @@ $workos_response = workos()->api()->authenticate_with_password( /* … */ );
 
 if ( ! $this->triggered_verification_email( $workos_response ) ) {
     $this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP );
-    $this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT );
+    $this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_RECIPIENT, $mailbox, TieredRateLimiter::SEND_RECIPIENT );
 }
 ```
 
@@ -153,6 +154,34 @@ A real environment variable of the same name works too. When the header holds a 
 
 When nothing usable is found, resolution returns `0.0.0.0` so a bucket still has a stable subject.
 
+### Which mailbox
+
+A per-recipient limit is only as good as the key it counts against. `alice@gmail.com`, `alice+1@gmail.com`, and `a.l.i.c.e@gmail.com` are three strings and one inbox, so email subjects are reduced to a mailbox by `WorkOS\Email\AddressCanonicalizer` before they become a bucket key. The canonical form is a key only; the address passed to WorkOS is always what the caller typed.
+
+Both rewrites are opt-in per provider, and the reason is the asymmetry of guessing wrong:
+
+- Collapsing two real mailboxes into one bucket lets either exhaust the other's allowance. On a corporate or self-hosted domain `business+brian@corp.com` is routinely its own mailbox with its own owner, so a blanket rule turns a spam control into a way to lock a colleague out.
+- Splitting one real mailbox across several buckets lets a caller earn an allowance per tag, but the per-IP send limits still cap the total mail one caller can cause.
+
+The second is recoverable; the first denies service to someone who did nothing wrong. So `+` is stripped only on domains known to treat it as a tag (Google, Outlook and its consumer domains, Fastmail), and dots are ignored only on Google. This is not over-caution: [RFC 5233](https://www.rfc-editor.org/rfc/rfc5233.html) states that the encoding of detailed addresses is "site and/or implementation specific", and RFC 5321 leaves local-part semantics to the destination host. Among big providers the convention is genuinely not universal, with Yahoo and iCloud offering disposable addresses instead of tags and Proton using a different separator.
+
+#### Mailbox or account
+
+Two different questions get keyed on an address, and they don't want the same answer:
+
+- **Guessing limits** (`password_email`, `magic_verify_email`) bound attempts to guess a password or a code for one account. The right subject is the account, and WorkOS keys accounts on the exact address.
+- **Mail-causing limits** (both `*_recipient` buckets, plus `magic_send_email`, `pw_reset_email`, and `signup_email`) bound how much mail an inbox receives. The right subject is the mailbox, so the canonical form is correct.
+
+The split is not "request limits versus send limits". `pw_reset_email`, `magic_send_email`, and `signup_email` are per-request limits on routes whose whole effect is mail, so they belong with the mailbox group even though they sit next to the guessing limits in code.
+
+The two groups therefore use different subjects, even where they sit side by side in the same `rate_limit()` call. Nothing stops someone registering `alice@gmail.com` and `alice+work@gmail.com` as separate accounts, since WorkOS treats them as distinct users, while Gmail delivers both to one inbox. Keying guessing on the exact address means an attacker hammering one cannot spend the other's sign-in budget; keying mail on the mailbox means they cannot double the volume aimed at that single inbox.
+
+Guessing limits use the address as typed, which needs no account lookup, because the exact address is already the identifier WorkOS resolves. If you touch this, the neighbouring buckets look like the same kind of thing and are not: `signup_email` would let `alice+1@`, `alice+2@` and `alice+3@` create three accounts that all mail one inbox, and `pw_reset_email` and `magic_send_email` sit on routes that exist to send. All three stay canonical.
+
+Conditioning on whether the address is already known to us was considered and rejected. It would cost a user lookup on every unauthenticated request, ahead of the limit that exists to avoid work; it would make the bucket key depend on whether an account exists; and pre-authentication we can only see WordPress users, so an account that exists only in WorkOS would key differently depending on sync state. Recognising an address as registered also says nothing about whether its inbox is shared, which is the only thing the send limit cares about.
+
+The lists are fixed, not configurable. A self-hosted server that does treat `+` as a tag is invisible to us and will get a counter per tag, which is the milder of the two failures and is bounded by the per-IP send limits. Adding a domain is a code change, in `AddressCanonicalizer`.
+
 ### Storage
 
 `ObjectCacheRateLimiter` is used when WordPress reports a persistent object cache. On a real backend `wp_cache_incr` is an atomic in-place increment, so two concurrent requests get distinct counts and a limit cannot be overspent.
@@ -165,9 +194,11 @@ To check which one a site is using:
 wp eval 'var_dump( wp_using_ext_object_cache() );'
 ```
 
+This is worth checking per environment rather than assuming. A site can ship an object-cache plugin and still run without one: Object Cache Pro is inert unless the `object-cache.php` drop-in is in place and `WP_REDIS_DISABLED` is not set. When it is inert, the transient path is what runs, and the concurrent-burst gap described above is open.
+
 ## Adding a send path
 
-1. Take the slot before sending, with `SEND_IP` and `SEND_RECIPIENT`.
+1. Take the slot before sending, with `SEND_IP` and `SEND_RECIPIENT`, keyed on the canonical mailbox rather than the address as typed.
 2. Reuse `BaseEndpoint::BUCKET_OTP_SEND_IP` / `_RECIPIENT` unless the path has a reason not to share the allowance. Bucket names are constants so the sharing survives a rename.
 3. Charge it before any "should we actually send?" branch, so a `429` never depends on whether the account exists.
 4. If you only learn afterwards that nothing went out, refund both buckets.
@@ -206,5 +237,6 @@ That is what was removed. One policy, one place, applied to every path that mail
 - `src/WorkOS/RateLimit/` — the module.
 - `src/WorkOS/REST/Auth/BaseEndpoint.php` — the `rate_limit()` helper endpoints call.
 - `src/WorkOS/Http/ClientIp.php` — caller identity, shared with the logs.
+- `src/WorkOS/Email/AddressCanonicalizer.php` — which strings mean one mailbox.
 - [`docs/change-email.md`](change-email.md) — the change-email flow's use of the send policy.
 - [`docs/password-reset.md`](password-reset.md) — the reset endpoints.
