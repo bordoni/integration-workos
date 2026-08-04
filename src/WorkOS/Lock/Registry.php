@@ -8,6 +8,7 @@
 namespace WorkOS\Lock;
 
 use WorkOS\Lock\Contracts\Lockable;
+use WorkOS\Lock\Locks\EmailChangeLock;
 use WorkOS\Lock\Locks\MfaChallengeLock;
 use WorkOS\Lock\Locks\OtpSendLock;
 use WorkOS\Lock\Locks\PasswordAuthLock;
@@ -151,7 +152,7 @@ class Registry {
 	 *
 	 * Backs the operator unlock and the CLI. Clears all locks rather than one,
 	 * because an operator helping a stuck user should not have to work out
-	 * which of six locks engaged.
+	 * which of the locks engaged.
 	 *
 	 * @param int $user_id WP user ID.
 	 *
@@ -248,6 +249,7 @@ class Registry {
 			new MfaChallengeLock( $this->store, $this->clock, $this->addresses ),
 			new SignupLock( $this->store, $this->clock, $this->addresses ),
 			new TokenGuessLock( $this->store, $this->clock, $this->addresses ),
+			new EmailChangeLock( $this->store, $this->clock, $this->addresses ),
 		];
 	}
 }

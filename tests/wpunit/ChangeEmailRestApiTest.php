@@ -8,6 +8,10 @@
 namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
+use WorkOS\App;
+use WorkOS\Config;
+use WorkOS\Lock\Registry;
+use WorkOS\Options\Production;
 use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\RateLimiter;
 use WorkOS\RateLimit\TransientStore;
@@ -54,7 +58,7 @@ class ChangeEmailRestApiTest extends WPTestCase {
 	public function setUp(): void {
 		parent::setUp();
 
-		\WorkOS\Config::set_active_environment( 'production' );
+		Config::set_active_environment( 'production' );
 		update_option(
 			'workos_production',
 			[
@@ -72,7 +76,7 @@ class ChangeEmailRestApiTest extends WPTestCase {
 				'change_email_notify_old_address'         => true,
 			]
 		);
-		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+		App::container()->get( Production::class )->reset();
 
 		$this->reset_rate_limit_buckets();
 
@@ -90,7 +94,7 @@ class ChangeEmailRestApiTest extends WPTestCase {
 			new ConflictResolver(),
 			$notifier,
 			$masker,
-			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )
+			App::container()->get( Registry::class )
 		);
 
 		add_action( 'rest_api_init', [ $rest, 'register_routes' ] );
@@ -127,8 +131,8 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		wp_set_current_user( 0 );
 
 		delete_option( 'workos_production' );
-		\WorkOS\Config::set_active_environment( 'staging' );
-		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+		Config::set_active_environment( 'staging' );
+		App::container()->get( Production::class )->reset();
 
 		parent::tearDown();
 	}
@@ -356,7 +360,7 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$this->assertCount( 2, $this->mail_captured, 'One initiation sends two messages.' );
 
 		// One attempt per initiation, not one per message or per address.
-		$lock = \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )->get( 'otp_send' );
+		$lock = App::container()->get( Registry::class )->get( 'email_change' );
 
 		$this->assertSame(
 			1,
@@ -366,7 +370,7 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		// The burst window is cleared between requests; only the durable lock
 		// carries history across, and it does not care that every request
 		// named a different address.
-		for ( $i = 1; $i < 5; $i++ ) {
+		for ( $i = 1; $i < 3; $i++ ) {
 			$this->reset_rate_limit_buckets();
 
 			$this->dispatch(

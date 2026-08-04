@@ -23,15 +23,10 @@ defined( 'ABSPATH' ) || exit;
  * there the concern is not spam but that every dispatch is another live code
  * to phish, and the password being presented may itself be compromised.
  *
- * The authenticated change-email flow draws on this lock too, keyed per
- * account rather than per address: the destination is whatever the caller
- * typed, so the account doing the asking is the thing to count — a signed-in
- * user could otherwise spray addresses and use our sending domain to spam
- * others, one fresh recipient counter at a time.
- *
  * Subjects come from {@see BaseLock::for_email()}, so the count survives
  * a fresh page, a different send endpoint, and the address being re-spelled —
- * `alice+2@` does not restart it.
+ * `alice+2@` does not restart it. The authenticated change-email flow keeps
+ * its own per-account lock, {@see EmailChangeLock}.
  */
 class OtpSendLock extends BaseLock {
 

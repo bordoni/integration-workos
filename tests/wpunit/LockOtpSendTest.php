@@ -8,6 +8,10 @@
 namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
+use WorkOS\App;
+use WorkOS\Config;
+use WorkOS\Lock\Registry;
+use WorkOS\Options\Production;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
@@ -64,7 +68,7 @@ class LockOtpSendTest extends WPTestCase {
 	public function setUp(): void {
 		parent::setUp();
 
-		\WorkOS\Config::set_active_environment( 'production' );
+		Config::set_active_environment( 'production' );
 		update_option(
 			'workos_production',
 			[
@@ -73,7 +77,7 @@ class LockOtpSendTest extends WPTestCase {
 				'environment_id' => 'environment_test',
 			]
 		);
-		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+		App::container()->get( Production::class )->reset();
 
 		$this->repository = new ProfileRepository();
 		$this->repository->register_post_type();
@@ -100,7 +104,7 @@ class LockOtpSendTest extends WPTestCase {
 			new RateLimiter( new TransientStore(), new SystemClock() ),
 			new ClientIp(),
 			new LoginCompleter(),
-			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )
+			App::container()->get( Registry::class )
 		);
 
 		add_action( 'rest_api_init', [ $magic, 'register_routes' ] );
@@ -130,7 +134,7 @@ class LockOtpSendTest extends WPTestCase {
 		wp_set_current_user( 0 );
 		delete_option( 'workos_production' );
 		delete_option( 'workos_active_environment' );
-		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+		App::container()->get( Production::class )->reset();
 
 		parent::tearDown();
 	}
@@ -313,7 +317,7 @@ class LockOtpSendTest extends WPTestCase {
 
 		$this->assertSame( 429, $this->request_code( 'stuck@example.com' )->get_status() );
 
-		$lock = \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )->get( 'otp_send' );
+		$lock = App::container()->get( Registry::class )->get( 'otp_send' );
 		$lock->release( $lock->for_email( 'stuck@example.com' ) );
 		$this->flush_burst_limiter();
 

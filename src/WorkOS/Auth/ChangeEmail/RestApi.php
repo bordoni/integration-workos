@@ -371,7 +371,7 @@ class RestApi {
 		// The caller is authenticated and the sends go wherever they point, so
 		// the durable lock counts the account, not the address: one attempt per
 		// initiation, however many messages it produces or spellings it tries.
-		$send_lock     = ! $is_admin_action ? $this->locks->get( 'otp_send' ) : null;
+		$send_lock     = ! $is_admin_action ? $this->locks->get( 'email_change' ) : null;
 		$send_subjects = null !== $send_lock ? [ $send_lock->for_user( (int) $user->ID ) ] : [];
 
 		// Rate limits throttle self-service abuse; the capability-gated admin

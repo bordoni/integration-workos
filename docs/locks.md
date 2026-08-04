@@ -12,12 +12,13 @@ It is written for two audiences in parallel: a developer wiring a lock into a ne
 
 | Lock | Slug | Counts | Default allowance | Applied in |
 | --- | --- | --- | --- | --- |
-| One-time code delivery | `otp_send` | Requests that may send a code | 5 per recipient | `/auth/magic/send`, `/auth/password/authenticate` (verification refusals), `/auth/signup/create`, `/users/{id}/email-change` (per account) |
+| One-time code delivery | `otp_send` | Requests that may send a code | 5 per recipient | `/auth/magic/send`, `/auth/password/authenticate` (verification refusals), `/auth/signup/create` |
 | Password sign-in | `password_auth` | Failures only | 10 per account | `/auth/password/authenticate`, `admin-ajax.php` headless login, the `authenticate` filter |
 | Password reset delivery | `password_reset` | Requests that send a link | 5 per recipient | `/auth/password/reset/start`, `/admin/users/{id}/password-reset` |
 | Multi-factor challenge | `mfa_challenge` | Challenges issued | 5 per factor | `/auth/mfa/challenge` |
 | Account creation | `signup` | Create attempts | 3 per address | `/auth/signup/create` |
 | Code and token redemption | `token_guess` | Failures only | 10 per token | reset confirm, signup verify, magic verify, MFA verify, invitation accept, email-change confirm/cancel |
+| Email change requests | `email_change` | Initiations that send mail | 3 per account | `/users/{id}/email-change` (self-service only) |
 
 Every lock returns the same refusal as the burst limiter — `WP_Error( 'workos_rate_limited', …, [ 'status' => 429, 'retry_after' => N, 'lock' => $slug ] )` — so clients and the login UI need no special handling for the two.
 
@@ -356,5 +357,5 @@ wp workos lock gc
 ## Related
 
 - [`docs/password-reset.md`](password-reset.md) — the reset flows these locks guard.
-- [`docs/change-email.md`](change-email.md) — initiate draws on `otp_send` per account; confirm and cancel are covered by `token_guess`.
+- [`docs/change-email.md`](change-email.md) — initiate is capped by `email_change`; confirm and cancel are covered by `token_guess`.
 - `src/WorkOS/RateLimit/RateLimiter.php` — the burst limiter that runs first.
