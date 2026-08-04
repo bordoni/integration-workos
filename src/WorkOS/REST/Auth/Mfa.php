@@ -8,6 +8,7 @@
 namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -31,10 +32,6 @@ defined( 'ABSPATH' ) || exit;
  *  - POST /auth/mfa/factor/delete   — remove an enrolled factor.
  */
 class Mfa extends BaseEndpoint {
-
-	private const RATE_LIMIT_IP_ATTEMPTS     = 10;
-	private const RATE_LIMIT_FACTOR_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW          = 60;
 
 	/**
 	 * Register routes.
@@ -155,8 +152,8 @@ class Mfa extends BaseEndpoint {
 		// single IP and collecting a fresh OTP on each one.
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'mfa_challenge_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'mfa_challenge_factor', $factor_id, self::RATE_LIMIT_FACTOR_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'mfa_challenge_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
+				[ 'mfa_challenge_factor', $factor_id, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -211,7 +208,7 @@ class Mfa extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'mfa_verify_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'mfa_verify_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

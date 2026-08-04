@@ -10,7 +10,7 @@ namespace WorkOS\Auth\PasswordResetAdmin;
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Email\AddressMask;
 use WP_Error;
 use WP_REST_Request;
@@ -34,10 +34,6 @@ class RestApi {
 
 	public const NAMESPACE = 'workos/v1';
 
-	private const RATE_LIMIT_IP_ATTEMPTS   = 10;
-	private const RATE_LIMIT_USER_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW        = 60;
-
 	/**
 	 * Profile repository.
 	 *
@@ -48,9 +44,9 @@ class RestApi {
 	/**
 	 * Rate limiter.
 	 *
-	 * @var RateLimiter
+	 * @var TieredRateLimiter
 	 */
-	private RateLimiter $rate_limiter;
+	private TieredRateLimiter $rate_limiter;
 
 	/**
 	 * Redirect URL validator.
@@ -70,13 +66,13 @@ class RestApi {
 	 * Constructor.
 	 *
 	 * @param ProfileRepository $profiles           Profile repository.
-	 * @param RateLimiter       $rate_limiter       Rate limiter.
+	 * @param TieredRateLimiter $rate_limiter       Rate limiter.
 	 * @param RedirectValidator $redirect_validator Redirect validator.
 	 * @param AddressMask       $masker             Email-address masker.
 	 */
 	public function __construct(
 		ProfileRepository $profiles,
-		RateLimiter $rate_limiter,
+		TieredRateLimiter $rate_limiter,
 		RedirectValidator $redirect_validator,
 		AddressMask $masker
 	) {
@@ -199,22 +195,15 @@ class RestApi {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limiter->attempt(
-			'pw_reset_admin_ip',
-			$ip,
-			self::RATE_LIMIT_IP_ATTEMPTS,
-			self::RATE_LIMIT_WINDOW
-		);
+		$ip = $this->rate_limiter->client_ip();
+		// No send policy here: this route needs `edit_user` on the target and
+		// mails that account's own address, so the recipient is never
+		// caller-chosen.
+		$rate_ok = $this->rate_limiter->attempt( 'pw_reset_admin_ip', $ip, TieredRateLimiter::REQUEST_IP );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}
-		$rate_ok = $this->rate_limiter->attempt(
-			'pw_reset_admin_user',
-			(string) $user->ID,
-			self::RATE_LIMIT_USER_ATTEMPTS,
-			self::RATE_LIMIT_WINDOW
-		);
+		$rate_ok = $this->rate_limiter->attempt( 'pw_reset_admin_user', (string) $user->ID, TieredRateLimiter::REQUEST_SUBJECT );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}

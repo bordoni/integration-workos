@@ -7,6 +7,7 @@
 
 namespace WorkOS\REST\Auth;
 
+use WorkOS\RateLimit\TieredRateLimiter;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -23,9 +24,6 @@ defined( 'ABSPATH' ) || exit;
  * invitation token to complete the flow.
  */
 class Invitation extends BaseEndpoint {
-
-	private const RATE_LIMIT_IP_ATTEMPTS = 10;
-	private const RATE_LIMIT_WINDOW      = 60;
 
 	/**
 	 * Register routes.
@@ -76,7 +74,7 @@ class Invitation extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'invitation_lookup_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'invitation_lookup_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -154,7 +152,7 @@ class Invitation extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'invitation_accept_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'invitation_accept_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

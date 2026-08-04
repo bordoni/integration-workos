@@ -30,8 +30,11 @@ defined( 'ABSPATH' ) || exit;
  */
 class OAuth extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS = 20;
-	private const RATE_LIMIT_WINDOW      = 60;
+	/**
+	 * Looser than the shared request policy: building an authorize URL
+	 * sends nothing and costs no WorkOS call.
+	 */
+	private const RATE_LIMIT_URL_IP = [ [ 20, MINUTE_IN_SECONDS ] ];
 
 	/**
 	 * Mapping of profile method constants to WorkOS provider identifiers.
@@ -100,7 +103,7 @@ class OAuth extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'oauth_url_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'oauth_url_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_URL_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

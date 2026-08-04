@@ -12,7 +12,7 @@ use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WP_Error;
 use WP_REST_Request;
 
@@ -32,6 +32,16 @@ abstract class BaseEndpoint {
 
 	public const NAMESPACE = 'workos/v1';
 	public const BASE      = '/auth';
+
+	/**
+	 * Buckets for endpoints that mail a caller-chosen address.
+	 *
+	 * Shared on purpose: every route counting against the same pair means
+	 * rotating between them earns an attacker no extra mail. Splitting
+	 * them per endpoint multiplies what one inbox can be sent.
+	 */
+	protected const BUCKET_OTP_SEND_IP        = 'otp_send_ip';
+	protected const BUCKET_OTP_SEND_RECIPIENT = 'otp_send_recipient';
 
 	/**
 	 * Profile repository.
@@ -57,9 +67,9 @@ abstract class BaseEndpoint {
 	/**
 	 * Rate limiter.
 	 *
-	 * @var RateLimiter
+	 * @var TieredRateLimiter
 	 */
-	protected RateLimiter $rate_limiter;
+	protected TieredRateLimiter $rate_limiter;
 
 	/**
 	 * Login completer.
@@ -74,14 +84,14 @@ abstract class BaseEndpoint {
 	 * @param ProfileRepository $profiles        Profile repository.
 	 * @param Nonce             $nonce           Nonce helper.
 	 * @param Radar             $radar           Radar helper.
-	 * @param RateLimiter       $rate_limiter    Rate limiter.
+	 * @param TieredRateLimiter $rate_limiter    Rate limiter.
 	 * @param LoginCompleter    $login_completer Login completer.
 	 */
 	public function __construct(
 		ProfileRepository $profiles,
 		Nonce $nonce,
 		Radar $radar,
-		RateLimiter $rate_limiter,
+		TieredRateLimiter $rate_limiter,
 		LoginCompleter $login_completer
 	) {
 		$this->profiles        = $profiles;
@@ -173,20 +183,21 @@ abstract class BaseEndpoint {
 	 * Apply rate limits for a request.
 	 *
 	 * Provide one entry per subject that should be throttled (e.g. IP and
-	 * email). Each entry is `[bucket, subject, limit, window_seconds]`.
-	 * First bucket to exceed wins and returns a 429.
+	 * email). Each entry is `[bucket, subject, policy]`, where policy is a
+	 * tier list from {@see TieredRateLimiter}. First bucket to exceed wins
+	 * and returns a 429.
 	 *
-	 * @param array<int, array{0:string,1:string,2:int,3:int}> $rules Rate-limit rules.
+	 * @param array<int, array{0:string,1:string,2:array}> $rules Rate-limit rules.
 	 *
 	 * @return true|WP_Error
 	 */
 	protected function rate_limit( array $rules ) {
 		foreach ( $rules as $rule ) {
-			[ $bucket, $subject, $limit, $window ] = $rule;
+			[ $bucket, $subject, $policy ] = $rule;
 			if ( '' === $subject ) {
 				continue;
 			}
-			$result = $this->rate_limiter->attempt( $bucket, $subject, $limit, $window );
+			$result = $this->rate_limiter->attempt( $bucket, $subject, $policy );
 			if ( is_wp_error( $result ) ) {
 				return $result;
 			}

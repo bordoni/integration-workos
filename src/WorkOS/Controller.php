@@ -20,6 +20,7 @@ use WorkOS\REST\Controller as RESTController;
 use WorkOS\Webhook\Controller as WebhookController;
 use WorkOS\Sync\Controller as SyncController;
 use WorkOS\Organization\Controller as OrganizationController;
+use WorkOS\RateLimit\Controller as RateLimitController;
 use WorkOS\CLI\Controller as CLIController;
 use WorkOS\UI\Controller as UIController;
 use WorkOS\ActivityLog\Controller as ActivityLogController;
@@ -35,6 +36,9 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
+		// Ahead of the features that resolve a rate limiter at construction.
+		$this->container->register( RateLimitController::class );
+
 		$this->container->register( AdminController::class );
 		$this->container->register( AuthKitController::class );
 		$this->container->register( LoginProfilesAdminController::class );

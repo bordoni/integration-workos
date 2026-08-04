@@ -156,7 +156,7 @@ See [Admin-direct vs. self-service](#admin-direct-vs-self-service) for the full 
 | 403 | `workos_forbidden` | Caller lacks `edit_user` on the target, or `workos_change_email_can_initiate` returned `false` |
 | 404 | `workos_user_not_found` | No WP user with that ID |
 | 409 | `workos_change_email_conflict` | New address already belongs to another account — **admin-of-other only**; self-service gets the enumeration-safe `200` instead |
-| 429 | (rate-limit) | Per-IP or per-user initiate window exhausted (defaults: 10/IP/hr, 3/user/hr) — **self-service only**; admin-of-other actions bypass rate limiting |
+| 429 | (rate-limit) | Per-IP or per-user initiate window exhausted (see [Rate limiting](#rate-limiting)) — **self-service only**; admin-of-other actions bypass rate limiting |
 
 > **Note:** An admin-of-other initiate commits in-request, so it can also return the `502` / `500` `workos_commit_failed` errors documented under [confirm](#post-wp-jsonworkosv1usersidemail-changeconfirm--confirm).
 
@@ -241,22 +241,31 @@ If there is no pending change to cancel, the endpoint still returns `200 { ok: t
 
 ## Settings
 
-Stored under the active environment (`workos()->option(...)`); defaults are listed below.
+Stored under the active environment (`workos()->option(...)`); defaults are listed below. Rate limits are not settings — see [Rate limiting](#rate-limiting).
 
 | Option | Default | Purpose |
 |---|---|---|
 | `change_email_enabled` | `true` | Master switch. Also filterable: `workos_change_email_enabled`. |
 | `change_email_conflict_policy` | `'block'` | `block` \| `allow_orphan` \| `merge_request`. |
 | `change_email_token_lifetime` | `3600` | Seconds. Clamped to `[300, 86400]`. |
-| `change_email_rate_limit_user_count` | `3` | Initiate attempts per user. |
-| `change_email_rate_limit_user_window` | `3600` | Window in seconds. |
-| `change_email_rate_limit_ip_count` | `10` | Initiate attempts per IP. |
-| `change_email_rate_limit_ip_window` | `3600` | Window in seconds. |
 | `change_email_notify_old_address` | `true` | Send the "change requested" + "change confirmed" notices to the old address. |
 | `change_email_require_reauth` | `true` | Reserved for the AuthKit step-up flow. |
 | `change_email_confirm_path` | `'workos/change-email'` | Rewrite path for the confirm route. Slash-trimmed; restricted to `[a-zA-Z0-9/_-]`. |
 
 > An admin acting on another account commits without email verification by default — that's [admin-direct behavior](#admin-direct-vs-self-service), gated by the `edit_users` capability, not a setting. The earlier `change_email_admin_bypass_verification` option has been removed.
+
+## Rate limiting
+
+Initiate is a send path: it mails the new address and a notice to the current one. It therefore uses the shared send policy from `WorkOS\RateLimit\TieredRateLimiter`, the same one guarding magic-code send, password reset, and the sign-in verification code:
+
+| Subject | Bucket | Limit |
+|---|---|---|
+| Target account | `change_email_init_recipient` | 3 per 5 min, 5 per hour, 10 per 8 hours |
+| Caller IP | `change_email_init_ip` | 10 per 5 min, 30 per hour, 100 per 8 hours |
+
+Windows are layered because a single window is burstable across its boundary by construction: spend the maximum, wait for the rollover, spend it again. The short tier keeps a mistyped address usable; the longer tiers are the actual ceiling.
+
+These are class constants, not settings. The earlier `change_email_rate_limit_*` options have been removed — four per-feature knobs nobody tuned, and a stored `0` silently meant "unlimited". To retune, edit the policy constants; the change applies to every send path at once, which is the point. See [`docs/rate-limiting.md`](rate-limiting.md) for the full model.
 
 ## Conflict policies
 
@@ -619,7 +628,7 @@ Templates live in `templates/change-email/` and are loaded by `WorkOS\Email\Mail
 | Single-use | Pending meta deleted on confirm/cancel/expiry; a second confirm finds no record. |
 | Expiry enforced | `expires_at` checked before `hash_equals`; expired records are cleared as a side-effect. |
 | Enumeration-safe initiate | Conflict-blocked responses share the same shape as success responses. |
-| Rate limiting | Two `RateLimiter::attempt()` calls per initiate (per-IP, per-user). |
+| Rate limiting | Two `TieredRateLimiter::attempt()` calls per initiate (per-IP, per-user). |
 | Old-address notice | Default-on with a one-click cancel link. |
 | CSRF / nonce | `X-WP-Nonce` required on every endpoint; capability checks on initiate and on the capability-mode cancel path. |
 | Audit log | Every state transition is written to `{$wpdb->prefix}workos_activity_log`. |

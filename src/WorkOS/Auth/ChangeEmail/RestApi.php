@@ -8,7 +8,7 @@
 namespace WorkOS\Auth\ChangeEmail;
 
 use WorkOS\ActivityLog\EventLogger;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Email\AddressMask;
 use WP_Error;
 use WP_REST_Request;
@@ -28,8 +28,9 @@ defined( 'ABSPATH' ) || exit;
  * which the WP cap mapper grants both for self (the user's own ID) and
  * for admins acting on another account.
  *
- * Rate limits are applied separately to per-IP and per-user buckets on
- * the initiate path so a flood from one IP can't block legitimate users.
+ * Initiate is rate-limited on separate per-IP and per-user buckets so a
+ * flood from one IP can't block legitimate users, using the shared send
+ * policy: it mails two addresses, so it counts as a send path.
  *
  * Verification is plugin-side: we generate a hashed token, email the
  * plaintext to the new address, then the confirm endpoint:
@@ -48,19 +49,16 @@ defined( 'ABSPATH' ) || exit;
  */
 class RestApi {
 
-	public const NAMESPACE                = 'workos/v1';
-	public const TRANSIENT_PREFIX         = '_workos_email_change_in_progress_';
-	public const TRANSIENT_TTL            = 60;
-	private const RATE_LIMIT_DEFAULT_USER = 3;
-	private const RATE_LIMIT_DEFAULT_IP   = 10;
-	private const RATE_LIMIT_DEFAULT_WIN  = 3600;
+	public const NAMESPACE        = 'workos/v1';
+	public const TRANSIENT_PREFIX = '_workos_email_change_in_progress_';
+	public const TRANSIENT_TTL    = 60;
 
 	/**
 	 * Rate limiter.
 	 *
-	 * @var RateLimiter
+	 * @var TieredRateLimiter
 	 */
-	private RateLimiter $rate_limiter;
+	private TieredRateLimiter $rate_limiter;
 
 	/**
 	 * Token factory.
@@ -105,15 +103,15 @@ class RestApi {
 	 * that helper requires a `Profile` (which doesn't apply to the
 	 * change-email flow). The same same-host policy is enforced.
 	 *
-	 * @param RateLimiter      $rate_limiter Rate limiter.
-	 * @param TokenFactory     $tokens       Token factory.
-	 * @param PendingChange    $pending      Pending-change storage.
-	 * @param ConflictResolver $conflicts    Conflict resolver.
-	 * @param Notifier         $notifier     Email notifier.
-	 * @param AddressMask      $masker       Email-address masker.
+	 * @param TieredRateLimiter $rate_limiter Rate limiter.
+	 * @param TokenFactory      $tokens       Token factory.
+	 * @param PendingChange     $pending      Pending-change storage.
+	 * @param ConflictResolver  $conflicts    Conflict resolver.
+	 * @param Notifier          $notifier     Email notifier.
+	 * @param AddressMask       $masker       Email-address masker.
 	 */
 	public function __construct(
-		RateLimiter $rate_limiter,
+		TieredRateLimiter $rate_limiter,
 		TokenFactory $tokens,
 		PendingChange $pending,
 		ConflictResolver $conflicts,
@@ -275,17 +273,22 @@ class RestApi {
 		// Rate limits throttle self-service abuse; the capability-gated admin
 		// path bypasses them so a legitimate cleanup sweep isn't blocked.
 		if ( ! $is_admin_action ) {
-			$ip          = $this->rate_limiter->client_ip();
-			$user_count  = (int) workos()->option( 'change_email_rate_limit_user_count', self::RATE_LIMIT_DEFAULT_USER );
-			$user_window = (int) workos()->option( 'change_email_rate_limit_user_window', self::RATE_LIMIT_DEFAULT_WIN );
-			$ip_count    = (int) workos()->option( 'change_email_rate_limit_ip_count', self::RATE_LIMIT_DEFAULT_IP );
-			$ip_window   = (int) workos()->option( 'change_email_rate_limit_ip_window', self::RATE_LIMIT_DEFAULT_WIN );
-
-			$rate_ok = $this->rate_limiter->attempt( 'change_email_init_ip', $ip, $ip_count, $ip_window );
+			// Recipient is the target account, not $new_email: initiate mails
+			// both the new address and a notice to the current one, and the
+			// account is what's common to them.
+			$rate_ok = $this->rate_limiter->attempt(
+				'change_email_init_ip',
+				$this->rate_limiter->client_ip(),
+				TieredRateLimiter::SEND_IP
+			);
 			if ( is_wp_error( $rate_ok ) ) {
 				return $rate_ok;
 			}
-			$rate_ok = $this->rate_limiter->attempt( 'change_email_init_user', (string) $user->ID, $user_count, $user_window );
+			$rate_ok = $this->rate_limiter->attempt(
+				'change_email_init_recipient',
+				(string) $user->ID,
+				TieredRateLimiter::SEND_RECIPIENT
+			);
 			if ( is_wp_error( $rate_ok ) ) {
 				return $rate_ok;
 			}
