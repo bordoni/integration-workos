@@ -15,11 +15,14 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Where a lock's counters live.
  *
- * Implementations must be *durable*. This is the difference between a lock and
- * the burst limiter it sits behind: transients and object-cache groups are
- * cache, and a flush or an eviction silently resets every counter. Lock state
- * has to survive that, so implementations write to user meta or the options
- * table and never to a cache layer.
+ * How long state survives is the implementation's defining trade. The shipped
+ * stores write to user meta and the options table, so lock state outlives the
+ * cache flushes and evictions that reset the burst limiter in front of it —
+ * that is what makes the locks the layer with long memory. A swapped-in
+ * backend (via the `workos_lock_store` filter) may choose differently: a
+ * cache-backed store is a legitimate option on infrastructure where flushes
+ * and eviction are controlled, with the understanding that any state it loses
+ * hands the full allowance back.
  *
  * Implementations are also responsible for their own expiry semantics. User
  * meta has none, so state is cleaned up when it decays; option rows carry an

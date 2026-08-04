@@ -17,9 +17,9 @@ defined( 'ABSPATH' ) || exit;
  *
  * Not atomic: two concurrent requests can read the same value and both
  * write the same increment, so a burst can slip one or two past a limit.
- * The layered windows in {@see OutboundEmailRateLimiter} are what bound
- * that — an hour-long window cannot be raced open the way a single short
- * one can.
+ * The durable attempt locks behind the limiter are what bound that — they
+ * count in the database, where a race can shave a request past a window
+ * but repetition still accumulates.
  */
 final class TransientStore implements CounterStore {
 
@@ -33,22 +33,6 @@ final class TransientStore implements CounterStore {
 	 */
 	public function increment( string $key, int $ttl ): int {
 		$hits = $this->get( $key ) + 1;
-
-		set_transient( $key, $hits, $ttl );
-
-		return $hits;
-	}
-
-	/**
-	 * Subtract one from a counter and return its new value.
-	 *
-	 * @param string $key Opaque counter key.
-	 * @param int    $ttl Seconds until the counter should disappear.
-	 *
-	 * @return int The value after decrementing, never below zero.
-	 */
-	public function decrement( string $key, int $ttl ): int {
-		$hits = max( 0, $this->get( $key ) - 1 );
 
 		set_transient( $key, $hits, $ttl );
 

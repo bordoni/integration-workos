@@ -55,25 +55,6 @@ final class ObjectCacheStore implements CounterStore {
 	}
 
 	/**
-	 * Subtract one from a counter and return its new value.
-	 *
-	 * @param string $key Opaque counter key.
-	 * @param int    $ttl Seconds until the counter should disappear.
-	 *
-	 * @return int The value after decrementing, never below zero.
-	 */
-	public function decrement( string $key, int $ttl ): int {
-		$count = wp_cache_decr( $key, 1, self::GROUP );
-
-		if ( false === $count ) {
-			$count = max( 0, $this->get( $key ) - 1 );
-			wp_cache_set( $key, $count, self::GROUP, $ttl );
-		}
-
-		return max( 0, (int) $count );
-	}
-
-	/**
 	 * Read a counter without changing it.
 	 *
 	 * @param string $key Opaque counter key.

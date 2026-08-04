@@ -36,20 +36,6 @@ interface CounterStore {
 	public function increment( string $key, int $ttl ): int;
 
 	/**
-	 * Subtract one from a counter and return its new value.
-	 *
-	 * Refunds a reservation that turned out not to be spent. Floors at zero,
-	 * so an unmatched release cannot drive a counter negative and hand out
-	 * free headroom.
-	 *
-	 * @param string $key Opaque counter key.
-	 * @param int    $ttl Seconds until the counter should disappear.
-	 *
-	 * @return int The value after decrementing.
-	 */
-	public function decrement( string $key, int $ttl ): int;
-
-	/**
 	 * Read a counter without changing it.
 	 *
 	 * @param string $key Opaque counter key.

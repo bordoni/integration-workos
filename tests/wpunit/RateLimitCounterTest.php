@@ -9,7 +9,6 @@ namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\RateLimit\RateLimiter;
-use WorkOS\RateLimit\Reservation;
 use WorkOS\RateLimit\TransientStore;
 use WorkOS\Time\FrozenClock;
 use WP_Error;
@@ -18,7 +17,6 @@ use WP_Error;
  * Fixed-window counting, and the reservations built on it.
  *
  * @covers \WorkOS\RateLimit\RateLimiter
- * @covers \WorkOS\RateLimit\Reservation
  * @covers \WorkOS\RateLimit\TransientStore
  */
 class RateLimitCounterTest extends WPTestCase {
@@ -134,105 +132,5 @@ class RateLimitCounterTest extends WPTestCase {
 		$this->clock->travel( 60 );
 
 		$this->assertTrue( $this->limiter->attempt( 'test_roll', '192.168.0.1', 3, 60 ) );
-	}
-
-	/**
-	 * A longer window keeps counting after a shorter one has rolled over.
-	 */
-	public function test_a_long_window_survives_a_short_rollover(): void {
-		$tiers = [ [ 100, 60 ], [ 4, HOUR_IN_SECONDS ] ];
-
-		for ( $i = 0; $i < 4; $i++ ) {
-			$this->assertInstanceOf( Reservation::class, $this->limiter->reserve( 'test_tiered', 'alice@example.com', $tiers ) );
-		}
-
-		$this->clock->travel( 60 );
-
-		// The minute tier has room again; the hour tier is spent.
-		$this->assertInstanceOf( WP_Error::class, $this->limiter->reserve( 'test_tiered', 'alice@example.com', $tiers ) );
-	}
-
-	/**
-	 * Releasing an unspent reservation returns the slot.
-	 */
-	public function test_release_returns_the_slot(): void {
-		$tiers = [ [ 3, 300 ] ];
-
-		$slots = [];
-		for ( $i = 0; $i < 3; $i++ ) {
-			$slots[] = $this->limiter->reserve( 'test_release', 'alice@example.com', $tiers );
-		}
-		$this->assertInstanceOf( WP_Error::class, $this->limiter->reserve( 'test_release', 'alice@example.com', $tiers ) );
-
-		$slots[0]->release();
-
-		$this->assertInstanceOf( Reservation::class, $this->limiter->reserve( 'test_release', 'alice@example.com', $tiers ) );
-	}
-
-	/**
-	 * Releasing twice would credit a window charged only once.
-	 */
-	public function test_release_is_idempotent(): void {
-		$tiers = [ [ 3, 300 ] ];
-
-		$slots = [];
-		for ( $i = 0; $i < 3; $i++ ) {
-			$slots[] = $this->limiter->reserve( 'test_idem', 'alice@example.com', $tiers );
-		}
-
-		$slots[0]->release();
-		$slots[0]->release();
-
-		$this->assertInstanceOf( Reservation::class, $this->limiter->reserve( 'test_idem', 'alice@example.com', $tiers ) );
-		$this->assertInstanceOf( WP_Error::class, $this->limiter->reserve( 'test_idem', 'alice@example.com', $tiers ) );
-	}
-
-	/**
-	 * A refused reservation leaves no charge behind.
-	 *
-	 * The short tier refuses first, so the longer tiers it already incremented
-	 * have to be handed back or a rejected request still costs the caller.
-	 */
-	public function test_a_refused_reservation_is_not_charged(): void {
-		$tiers = [ [ 2, 300 ], [ 10, HOUR_IN_SECONDS ] ];
-
-		$slots = [];
-		for ( $i = 0; $i < 2; $i++ ) {
-			$slots[] = $this->limiter->reserve( 'test_refused', 'alice@example.com', $tiers );
-		}
-
-		$this->assertInstanceOf( WP_Error::class, $this->limiter->reserve( 'test_refused', 'alice@example.com', $tiers ) );
-		$this->assertInstanceOf( WP_Error::class, $this->limiter->reserve( 'test_refused', 'alice@example.com', $tiers ) );
-
-		// Freeing one real charge is enough. It would not be if the two
-		// refusals had each left a charge on the hour tier.
-		$slots[0]->release();
-
-		$this->assertInstanceOf( Reservation::class, $this->limiter->reserve( 'test_refused', 'alice@example.com', $tiers ) );
-	}
-
-	/**
-	 * A refund lands in the window it was charged to.
-	 *
-	 * Reserve, let the boundary pass while the work is in flight, then release.
-	 * The credit belongs to the window that was charged, not to whichever is
-	 * current, or the old one stays spent and the new one is gifted a slot.
-	 */
-	public function test_release_credits_the_window_it_charged(): void {
-		$tiers = [ [ 2, 60 ] ];
-
-		$slot = $this->limiter->reserve( 'test_straddle', 'alice@example.com', $tiers );
-		$this->assertInstanceOf( Reservation::class, $slot );
-
-		$this->clock->travel( 60 );
-
-		// Fill the new window.
-		$this->assertInstanceOf( Reservation::class, $this->limiter->reserve( 'test_straddle', 'alice@example.com', $tiers ) );
-		$this->assertInstanceOf( Reservation::class, $this->limiter->reserve( 'test_straddle', 'alice@example.com', $tiers ) );
-		$this->assertInstanceOf( WP_Error::class, $this->limiter->reserve( 'test_straddle', 'alice@example.com', $tiers ) );
-
-		$slot->release();
-
-		$this->assertInstanceOf( WP_Error::class, $this->limiter->reserve( 'test_straddle', 'alice@example.com', $tiers ) );
 	}
 }

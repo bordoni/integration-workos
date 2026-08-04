@@ -28,8 +28,8 @@ defined( 'ABSPATH' ) || exit;
  * counter that somehow outlives its TTL can only poison a slot that never
  * comes round again. Storage and atomicity belong to {@see CounterStore}.
  *
- * This class limits *requesters*. Limiting *recipients* of mail is a
- * separate concern with a separate class, {@see OutboundEmailRateLimiter}.
+ * This class limits requesters over seconds. The durable attempt locks in
+ * {@see \WorkOS\Lock} sit behind it and remember over hours.
  */
 class RateLimiter {
 
@@ -82,125 +82,6 @@ class RateLimiter {
 		$hits = $this->store->increment( $this->key( $bucket, $subject, $window_seconds, $now ), $this->ttl( $window_seconds, $now ) );
 
 		return $this->verdict( $hits, $limit, $window_seconds, $now );
-	}
-
-	/**
-	 * Claim one slot across every window, up front.
-	 *
-	 * Counting *before* the action is what makes this safe under
-	 * concurrency. A read-only check followed by a later debit leaves a gap
-	 * as wide as the action itself, and every request arriving inside that
-	 * gap reads the same count and passes — which is the whole trick a
-	 * threaded request tool plays.
-	 *
-	 * All or nothing: if any window refuses, the slots already taken in the
-	 * others are handed back before returning.
-	 *
-	 * @param string                         $bucket  Operation identifier.
-	 * @param string                         $subject Thing being limited.
-	 * @param array<int, array{0:int,1:int}> $tiers   List of [limit, window_seconds].
-	 *
-	 * @return Reservation|WP_Error A handle to hand back if the work doesn't happen.
-	 */
-	public function reserve( string $bucket, string $subject, array $tiers ) {
-		$now     = $this->clock->now();
-		$refusal = null;
-
-		foreach ( $tiers as $tier ) {
-			[ $limit, $window ] = $tier;
-
-			if ( ! $this->countable( $subject, $limit, $window ) ) {
-				continue;
-			}
-
-			$hits    = $this->store->increment( $this->key( $bucket, $subject, $window, $now ), $this->ttl( $window, $now ) );
-			$verdict = $this->verdict( $hits, $limit, $window, $now );
-
-			if ( is_wp_error( $verdict ) && null === $refusal ) {
-				$refusal = $verdict;
-			}
-		}
-
-		if ( null !== $refusal ) {
-			$this->give_back( $bucket, $subject, $tiers, $now );
-
-			return $refusal;
-		}
-
-		return new Reservation( $this, $bucket, $subject, $tiers, $now );
-	}
-
-	/**
-	 * Hand back a reservation that was not spent.
-	 *
-	 * Prefer {@see Reservation::release()}; this is the plumbing behind it.
-	 *
-	 * @param Reservation $reservation Slot to return.
-	 *
-	 * @return void
-	 */
-	public function release( Reservation $reservation ): void {
-		$this->give_back(
-			$reservation->bucket(),
-			$reservation->subject(),
-			$reservation->tiers(),
-			$reservation->instant()
-		);
-	}
-
-	/**
-	 * Decrement every window, as of a given instant.
-	 *
-	 * Takes the instant rather than reading the clock so a refund always
-	 * lands in the window that was charged, even when the work either side
-	 * of it straddled a window boundary.
-	 *
-	 * @param string                         $bucket  Operation identifier.
-	 * @param string                         $subject Thing being limited.
-	 * @param array<int, array{0:int,1:int}> $tiers   List of [limit, window_seconds].
-	 * @param int                            $now     Instant the slot was claimed at.
-	 *
-	 * @return void
-	 */
-	private function give_back( string $bucket, string $subject, array $tiers, int $now ): void {
-		foreach ( $tiers as $tier ) {
-			[ $limit, $window ] = $tier;
-
-			if ( ! $this->countable( $subject, $limit, $window ) ) {
-				continue;
-			}
-
-			$this->store->decrement(
-				$this->key( $bucket, $subject, $window, $now ),
-				$this->ttl( $window, $now )
-			);
-		}
-	}
-
-	/**
-	 * Count an event against every window. No verdict — the caller has acted.
-	 *
-	 * @param string                         $bucket  Operation identifier.
-	 * @param string                         $subject Thing being limited.
-	 * @param array<int, array{0:int,1:int}> $tiers   List of [limit, window_seconds].
-	 *
-	 * @return void
-	 */
-	public function consume( string $bucket, string $subject, array $tiers ): void {
-		$now = $this->clock->now();
-
-		foreach ( $tiers as $tier ) {
-			[ $limit, $window ] = $tier;
-
-			if ( ! $this->countable( $subject, $limit, $window ) ) {
-				continue;
-			}
-
-			$this->store->increment(
-				$this->key( $bucket, $subject, $window, $now ),
-				$this->ttl( $window, $now )
-			);
-		}
 	}
 
 	/**

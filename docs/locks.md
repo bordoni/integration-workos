@@ -284,13 +284,13 @@ It now appears in `wp workos lock list`, in the user-edit panel, and in the oper
 | Hook | Type | Arguments | Purpose |
 | --- | --- | --- | --- |
 | `workos_locks_enabled` | filter | `$enabled` | Master switch. False leaves the burst limiter in place. |
-| `workos_locks` | filter | `$locks`, `$store`, `$clock` | Register or replace locks. |
+| `workos_locks` | filter | `$locks`, `$store`, `$clock`, `$addresses` | Register or replace locks. |
 | `workos_lock_enabled` | filter | `$enabled`, `$subject`, `$slug` | Disable one lock. |
 | `workos_lock_threshold` | filter | `$threshold`, `$subject`, `$slug` | Attempts before a cooldown. |
 | `workos_lock_cooldowns` | filter | `$ladder`, `$subject`, `$slug` | The ladder, in seconds. |
 | `workos_lock_decay` | filter | `$seconds`, `$subject`, `$slug` | Quiet period before forgiveness. |
 | `workos_lock_subject` | filter | `$subject`, `$slug` | Rewrite a subject before it is counted. |
-| `workos_lock_store` | filter | `$store`, `$subject` | Override the chosen backend. |
+| `workos_lock_store` | filter | `$store`, `$subject` | Override the chosen backend, durable or not — see `Lock\Contracts\Store`. |
 | `workos_lock_state` | filter | `$state`, `$subject`, `$slug` | Inspect or adjust loaded state. |
 | `workos_lock_row_ceiling` | filter | `$ceiling` | Maximum option rows retained. |
 | `workos_trusted_proxy_header` | filter | `$header` | Header carrying the real client IP. |
@@ -356,5 +356,5 @@ wp workos lock gc
 ## Related
 
 - [`docs/password-reset.md`](password-reset.md) — the reset flows these locks guard.
-- [`docs/change-email.md`](change-email.md) — the confirm and cancel routes covered by `token_guess`.
+- [`docs/change-email.md`](change-email.md) — initiate draws on `otp_send` per account; confirm and cancel are covered by `token_guess`.
 - `src/WorkOS/RateLimit/RateLimiter.php` — the burst limiter that runs first.

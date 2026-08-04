@@ -88,7 +88,7 @@ That single condition is the trust boundary. A caller who clears it can already 
 | --- | --- | --- |
 | Commit timing | On confirm, after the emailed token is clicked | **Immediately**, in the initiate request |
 | Verification email | Sent to the new address | Not sent |
-| Rate limiting | Per-IP + per-user windows enforced | Skipped |
+| Rate limiting | Per-IP + per-user windows, plus the durable `otp_send` lock per account | Skipped |
 | Old-address cancel notice | Sent (unless opted out) | Not sent |
 | WP core "Notice of Email Change" | Sent | Suppressed for this commit |
 | Conflict response | Enumeration-safe `200` (same shape as success) | Real `409 workos_change_email_conflict` |
@@ -156,7 +156,7 @@ See [Admin-direct vs. self-service](#admin-direct-vs-self-service) for the full 
 | 403 | `workos_forbidden` | Caller lacks `edit_user` on the target, or `workos_change_email_can_initiate` returned `false` |
 | 404 | `workos_user_not_found` | No WP user with that ID |
 | 409 | `workos_change_email_conflict` | New address already belongs to another account — **admin-of-other only**; self-service gets the enumeration-safe `200` instead |
-| 429 | (rate-limit) | Per-IP or per-user initiate window exhausted (defaults: 10/IP/hr, 3/user/hr) — **self-service only**; admin-of-other actions bypass rate limiting |
+| 429 | (rate-limit) | Per-IP or per-user initiate window exhausted (defaults: 10/IP/hr, 3/user/hr), or the durable `otp_send` lock engaged (5 initiations per account, escalating cooldowns; see [`docs/locks.md`](locks.md)) — **self-service only**; admin-of-other actions bypass both |
 
 > **Note:** An admin-of-other initiate commits in-request, so it can also return the `502` / `500` `workos_commit_failed` errors documented under [confirm](#post-wp-jsonworkosv1usersidemail-changeconfirm--confirm).
 
