@@ -8,6 +8,7 @@
 namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
+use WorkOS\Email\AddressCanonicalizer;
 use WorkOS\Lock\BaseLock;
 use WorkOS\Lock\Store\OptionStore;
 use WorkOS\Lock\Store\ResolvingStore;
@@ -66,7 +67,7 @@ class LockBaseLockTest extends WPTestCase {
 	private function make_lock(): BaseLock {
 		$store = new ResolvingStore( new UserMetaStore(), new OptionStore() );
 
-		return new class( $store, $this->clock ) extends BaseLock {
+		return new class( $store, $this->clock, new AddressCanonicalizer() ) extends BaseLock {
 			public function slug(): string {
 				return 'test_lock';
 			}

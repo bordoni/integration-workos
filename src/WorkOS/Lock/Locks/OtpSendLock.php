@@ -12,17 +12,26 @@ use WorkOS\Lock\BaseLock;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Bounds how often a single address can be sent a one-time code.
+ * Bounds how often a single recipient can be sent a one-time code.
  *
- * Every send costs a message, and the recipient does not choose to receive it —
- * the address is supplied by whoever made the request. Repeated sends to the
- * same address are therefore never useful past the first few: the code is
- * already in the inbox, and the rest is noise charged to the sending domain's
- * reputation.
+ * Two caller postures share this lock, and it guards something different in
+ * each. An anonymous caller names any address they like (magic send, signup),
+ * so the cap keeps this site's sending domain from being used to spam an
+ * inbox whose owner never asked us to contact them. A caller who already
+ * holds a correct password (the verification refusal on password sign-in,
+ * the fallback confirmation code) can only reach the account's own inbox —
+ * there the concern is not spam but that every dispatch is another live code
+ * to phish, and the password being presented may itself be compromised.
  *
- * Deliberately tighter than the other locks, and the counters are per address
- * rather than per session so re-submitting from a fresh page does not reset
- * them.
+ * The authenticated change-email flow draws on this lock too, keyed per
+ * account rather than per address: the destination is whatever the caller
+ * typed, so the account doing the asking is the thing to count — a signed-in
+ * user could otherwise spray addresses and use our sending domain to spam
+ * others, one fresh recipient counter at a time.
+ *
+ * Subjects come from {@see BaseLock::for_email()}, so the count survives
+ * a fresh page, a different send endpoint, and the address being re-spelled —
+ * `alice+2@` does not restart it.
  */
 class OtpSendLock extends BaseLock {
 

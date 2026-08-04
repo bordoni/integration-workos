@@ -8,6 +8,7 @@
 namespace WorkOS\Lock;
 
 use WorkOS\Lock\Contracts\Lockable;
+use WorkOS\Email\AddressCanonicalizer;
 use WorkOS\Lock\Contracts\Store;
 use WorkOS\Time\Clock;
 use WP_Error;
@@ -61,14 +62,23 @@ abstract class BaseLock implements Lockable {
 	protected Clock $clock;
 
 	/**
+	 * Collapses address spellings for recipient subjects.
+	 *
+	 * @var AddressCanonicalizer
+	 */
+	protected AddressCanonicalizer $addresses;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Store $store Persistence backend.
-	 * @param Clock $clock Time source.
+	 * @param Store                $store     Persistence backend.
+	 * @param Clock                $clock     Time source.
+	 * @param AddressCanonicalizer $addresses Address canonicalizer.
 	 */
-	public function __construct( Store $store, Clock $clock ) {
-		$this->store = $store;
-		$this->clock = $clock;
+	public function __construct( Store $store, Clock $clock, AddressCanonicalizer $addresses ) {
+		$this->store     = $store;
+		$this->clock     = $clock;
+		$this->addresses = $addresses;
 	}
 
 	/**
@@ -171,10 +181,24 @@ abstract class BaseLock implements Lockable {
 	/**
 	 * Build a subject for an email address.
 	 *
-	 * When a WordPress user owns the address the subject becomes user-backed
-	 * and its counters land in user meta. When none does — the common case for
-	 * an account that exists in WorkOS but has never completed a login here —
-	 * it falls back to an option row.
+	 * An address a WordPress user owns is counted as that account: the subject
+	 * is user-backed, its counters land in user meta, they survive the address
+	 * changing, and an operator can see and clear them from the profile screen.
+	 * The lookup uses the address as given, so a match means the account
+	 * genuinely owns that exact address.
+	 *
+	 * An address nobody owns — the common case for an account that exists in
+	 * WorkOS but has never completed a login here — is keyed on its canonical
+	 * form in an option row. `alice@`, `a.l.i.c.e@` and `alice+1@gmail.com` are
+	 * one inbox, and counting them separately would hand out a fresh counter
+	 * per spelling. Collapsing costs nothing: anyone who can type a variant can
+	 * type the address itself, so per-spelling counters protected nobody.
+	 *
+	 * The subject value is the canonical form in both cases; ownership only
+	 * decides where the counter lives. That keeps the identity stable across
+	 * the account appearing, so counters recorded before the user existed are
+	 * found and folded in by {@see Store\ResolvingStore::read()} no matter
+	 * which spelling the account registered with.
 	 *
 	 * @param string $email Raw email address.
 	 *
@@ -190,7 +214,9 @@ abstract class BaseLock implements Lockable {
 		$user    = get_user_by( 'email', $email );
 		$user_id = $user instanceof WP_User ? (int) $user->ID : 0;
 
-		return $this->filter_subject( new Subject( Subject::TYPE_EMAIL, $email, $user_id ) );
+		return $this->filter_subject(
+			new Subject( Subject::TYPE_EMAIL, $this->addresses->canonical( $email ), $user_id )
+		);
 	}
 
 	/**

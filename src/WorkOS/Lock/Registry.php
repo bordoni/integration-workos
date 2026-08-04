@@ -14,6 +14,7 @@ use WorkOS\Lock\Locks\PasswordAuthLock;
 use WorkOS\Lock\Locks\PasswordResetLock;
 use WorkOS\Lock\Locks\SignupLock;
 use WorkOS\Lock\Locks\TokenGuessLock;
+use WorkOS\Email\AddressCanonicalizer;
 use WorkOS\Lock\Store\ResolvingStore;
 use WorkOS\Time\Clock;
 
@@ -46,6 +47,13 @@ class Registry {
 	private Clock $clock;
 
 	/**
+	 * Address canonicalizer handed to every lock.
+	 *
+	 * @var AddressCanonicalizer
+	 */
+	private AddressCanonicalizer $addresses;
+
+	/**
 	 * Built locks, keyed by slug.
 	 *
 	 * @var array<string, Lockable>|null
@@ -55,12 +63,14 @@ class Registry {
 	/**
 	 * Constructor.
 	 *
-	 * @param ResolvingStore $store Persistence backend.
-	 * @param Clock          $clock Time source handed to every lock.
+	 * @param ResolvingStore       $store Persistence backend.
+	 * @param Clock                $clock Time source handed to every lock.
+	 * @param AddressCanonicalizer $addresses Address canonicalizer handed to every lock.
 	 */
-	public function __construct( ResolvingStore $store, Clock $clock ) {
-		$this->store = $store;
-		$this->clock = $clock;
+	public function __construct( ResolvingStore $store, Clock $clock, AddressCanonicalizer $addresses ) {
+		$this->store     = $store;
+		$this->clock     = $clock;
+		$this->addresses = $addresses;
 	}
 
 	/**
@@ -88,8 +98,9 @@ class Registry {
 		 * @param array<string, Lockable> $locks Locks keyed by slug.
 		 * @param ResolvingStore          $store Shared persistence backend, for constructing new locks.
 		 * @param Clock                   $clock Shared time source, for constructing new locks.
+		 * @param AddressCanonicalizer    $addresses Shared address canonicalizer, for constructing new locks.
 		 */
-		$filtered = apply_filters( 'workos_locks', $locks, $this->store, $this->clock );
+		$filtered = apply_filters( 'workos_locks', $locks, $this->store, $this->clock, $this->addresses );
 
 		$this->locks = [];
 
@@ -231,12 +242,12 @@ class Registry {
 	 */
 	private function default_locks(): array {
 		return [
-			new OtpSendLock( $this->store, $this->clock ),
-			new PasswordAuthLock( $this->store, $this->clock ),
-			new PasswordResetLock( $this->store, $this->clock ),
-			new MfaChallengeLock( $this->store, $this->clock ),
-			new SignupLock( $this->store, $this->clock ),
-			new TokenGuessLock( $this->store, $this->clock ),
+			new OtpSendLock( $this->store, $this->clock, $this->addresses ),
+			new PasswordAuthLock( $this->store, $this->clock, $this->addresses ),
+			new PasswordResetLock( $this->store, $this->clock, $this->addresses ),
+			new MfaChallengeLock( $this->store, $this->clock, $this->addresses ),
+			new SignupLock( $this->store, $this->clock, $this->addresses ),
+			new TokenGuessLock( $this->store, $this->clock, $this->addresses ),
 		];
 	}
 }

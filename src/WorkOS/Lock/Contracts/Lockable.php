@@ -60,7 +60,11 @@ interface Lockable {
 	public function for_user( int $user_id ): Subject;
 
 	/**
-	 * Build a subject for an email address, resolving a local user when one owns it.
+	 * Build a subject for an email address.
+	 *
+	 * Resolves to the owning account when a WP user holds the exact address,
+	 * and keys on the canonical form when none does, so unowned spellings of
+	 * one inbox share a single counter.
 	 *
 	 * @param string $email Raw email address.
 	 *

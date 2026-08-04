@@ -155,7 +155,7 @@ class Signup extends BaseEndpoint {
 		if ( empty( $user['email_verified'] ) && ! empty( $user['id'] ) ) {
 			workos()->api()->send_verification_email( $user['id'] );
 
-			// The send is bound by the same per-address budget the dedicated
+			// The send counts against the same per-recipient cap the dedicated
 			// code endpoint uses, so signing up repeatedly is not a way around it.
 			$otp_lock = $this->lock( 'otp_send' );
 
