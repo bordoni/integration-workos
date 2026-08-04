@@ -10,7 +10,7 @@ namespace WorkOS\Auth;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\Lock\Registry as LockRegistry;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
@@ -29,21 +29,21 @@ class Login {
 	private LockRegistry $locks;
 
 	/**
-	 * Burst limiter, used here only for client-IP resolution.
+	 * Client IP resolver.
 	 *
-	 * @var RateLimiter
+	 * @var ClientIp
 	 */
-	private RateLimiter $rate_limiter;
+	private ClientIp $client_ip;
 
 	/**
 	 * Constructor — registers hooks.
 	 *
-	 * @param LockRegistry $locks        Attempt-lock registry.
-	 * @param RateLimiter  $rate_limiter Burst limiter.
+	 * @param LockRegistry $locks     Attempt-lock registry.
+	 * @param ClientIp     $client_ip Client IP resolver.
 	 */
-	public function __construct( LockRegistry $locks, RateLimiter $rate_limiter ) {
-		$this->locks        = $locks;
-		$this->rate_limiter = $rate_limiter;
+	public function __construct( LockRegistry $locks, ClientIp $client_ip ) {
+		$this->locks     = $locks;
+		$this->client_ip = $client_ip;
 
 		// AuthKit redirect mode: intercept wp-login.php.
 		add_action( 'login_init', [ $this, 'maybe_redirect_to_authkit' ] );
@@ -168,7 +168,7 @@ class Login {
 		$lock = $this->locks->get( 'password_auth' );
 
 		$subjects = null !== $lock
-			? [ $lock->for_email( $email ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			? [ $lock->for_email( $email ), $lock->for_ip( $this->client_ip->get() ) ]
 			: [];
 
 		foreach ( $subjects as $subject ) {

@@ -13,6 +13,7 @@ use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
+use WorkOS\Http\ClientIp;
 use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\REST\Auth\MagicCode;
 use WP_REST_Request;
@@ -95,6 +96,7 @@ class LockOtpSendTest extends WPTestCase {
 			$this->nonce,
 			new Radar(),
 			new RateLimiter(),
+			new ClientIp(),
 			new LoginCompleter(),
 			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )
 		);

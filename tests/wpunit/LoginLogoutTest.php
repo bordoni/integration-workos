@@ -52,7 +52,7 @@ class LoginLogoutTest extends WPTestCase {
 		remove_all_filters( 'authenticate' );
 		remove_all_actions( 'wp_logout' );
 
-		$this->login = new Login( \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class ), new \WorkOS\Auth\AuthKit\RateLimiter() );
+		$this->login = new Login( \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class ), \WorkOS\App::container()->get( \WorkOS\Http\ClientIp::class ) );
 	}
 
 	/**

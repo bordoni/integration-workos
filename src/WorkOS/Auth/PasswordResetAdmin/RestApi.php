@@ -11,6 +11,7 @@ use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\Email\AddressMask;
 use WorkOS\Lock\Registry as LockRegistry;
 use WP_Error;
@@ -54,6 +55,13 @@ class RestApi {
 	private RateLimiter $rate_limiter;
 
 	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	private ClientIp $client_ip;
+
+	/**
 	 * Redirect URL validator.
 	 *
 	 * @var RedirectValidator
@@ -79,6 +87,7 @@ class RestApi {
 	 *
 	 * @param ProfileRepository $profiles           Profile repository.
 	 * @param RateLimiter       $rate_limiter       Rate limiter.
+	 * @param ClientIp          $client_ip    Client IP resolver.
 	 * @param RedirectValidator $redirect_validator Redirect validator.
 	 * @param AddressMask       $masker             Email-address masker.
 	 * @param LockRegistry      $locks              Attempt-lock registry.
@@ -86,12 +95,14 @@ class RestApi {
 	public function __construct(
 		ProfileRepository $profiles,
 		RateLimiter $rate_limiter,
+		ClientIp $client_ip,
 		RedirectValidator $redirect_validator,
 		AddressMask $masker,
 		LockRegistry $locks
 	) {
 		$this->profiles           = $profiles;
 		$this->rate_limiter       = $rate_limiter;
+		$this->client_ip          = $client_ip;
 		$this->redirect_validator = $redirect_validator;
 		$this->masker             = $masker;
 		$this->locks              = $locks;
@@ -210,7 +221,7 @@ class RestApi {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limiter->attempt(
 			'pw_reset_admin_ip',
 			$ip,

@@ -155,7 +155,7 @@ class Mfa extends BaseEndpoint {
 		// single IP and collecting a fresh OTP on each one.
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'mfa_challenge_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'mfa_challenge_ip', $this->client_ip->get(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
 				[ 'mfa_challenge_factor', $factor_id, self::RATE_LIMIT_FACTOR_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
 			]
 		);
@@ -169,7 +169,7 @@ class Mfa extends BaseEndpoint {
 		// one exists — so the factor is the only durable thing to count on.
 		$lock     = $this->lock( 'mfa_challenge' );
 		$subjects = null !== $lock
-			? [ $lock->for_key( $factor_id ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			? [ $lock->for_key( $factor_id ), $lock->for_ip( $this->client_ip->get() ) ]
 			: [];
 
 		$lock_ok = $this->lock_check( 'mfa_challenge', $subjects );
@@ -230,7 +230,7 @@ class Mfa extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'mfa_verify_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'mfa_verify_ip', $this->client_ip->get(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -242,7 +242,7 @@ class Mfa extends BaseEndpoint {
 		// otherwise a spread of addresses works one challenge indefinitely.
 		$lock     = $this->lock( 'token_guess' );
 		$subjects = null !== $lock
-			? [ $lock->for_key( $challenge_id ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			? [ $lock->for_key( $challenge_id ), $lock->for_ip( $this->client_ip->get() ) ]
 			: [];
 
 		$lock_ok = $this->lock_check( 'token_guess', $subjects );

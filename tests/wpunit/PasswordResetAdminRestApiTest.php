@@ -10,6 +10,7 @@ namespace WorkOS\Tests\Wpunit;
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WorkOS\Http\ClientIp;
 use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WorkOS\Auth\PasswordResetAdmin\RestApi;
@@ -117,6 +118,7 @@ class PasswordResetAdminRestApiTest extends WPTestCase {
 		$rest_api = new RestApi(
 			$this->repository,
 			new RateLimiter(),
+			new ClientIp(),
 			new RedirectValidator(),
 			new AddressMask(),
 			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )

@@ -9,6 +9,7 @@ namespace WorkOS\UI;
 
 use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\Auth\Login;
+use WorkOS\Http\ClientIp;
 use WorkOS\Lock\Registry as LockRegistry;
 use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
@@ -41,12 +42,21 @@ class Ajax {
 	private LockRegistry $locks;
 
 	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	private ClientIp $client_ip;
+
+	/**
 	 * Constructor — registers AJAX hooks.
 	 *
 	 * @param RateLimiter  $rate_limiter Burst limiter.
 	 * @param LockRegistry $locks        Attempt-lock registry.
+	 * @param ClientIp     $client_ip    Client IP resolver.
 	 */
-	public function __construct( RateLimiter $rate_limiter, LockRegistry $locks ) {
+	public function __construct( RateLimiter $rate_limiter, LockRegistry $locks, ClientIp $client_ip ) {
+		$this->client_ip    = $client_ip;
 		$this->rate_limiter = $rate_limiter;
 		$this->locks        = $locks;
 
@@ -71,7 +81,7 @@ class Ajax {
 			wp_send_json_error( [ 'message' => __( 'Email and password are required.', 'integration-workos' ) ] );
 		}
 
-		$ip = $this->rate_limiter->client_ip();
+		$ip = $this->client_ip->get();
 
 		$burst = $this->rate_limiter->attempt( 'headless_login_ip', $ip, 10, MINUTE_IN_SECONDS );
 		if ( is_wp_error( $burst ) ) {

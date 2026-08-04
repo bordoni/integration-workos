@@ -76,7 +76,7 @@ class Invitation extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'invitation_lookup_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'invitation_lookup_ip', $this->client_ip->get(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -154,7 +154,7 @@ class Invitation extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'invitation_accept_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'invitation_accept_ip', $this->client_ip->get(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -166,7 +166,7 @@ class Invitation extends BaseEndpoint {
 		// address. Hashed, so the raw token never reaches a storage key.
 		$lock     = $this->lock( 'token_guess' );
 		$subjects = null !== $lock
-			? [ $lock->for_key( hash( 'sha256', $token ) ), $lock->for_ip( $this->rate_limiter->client_ip() ) ]
+			? [ $lock->for_key( hash( 'sha256', $token ) ), $lock->for_ip( $this->client_ip->get() ) ]
 			: [];
 
 		$lock_ok = $this->lock_check( 'token_guess', $subjects );

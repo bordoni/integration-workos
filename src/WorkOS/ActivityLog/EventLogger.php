@@ -8,7 +8,7 @@
 namespace WorkOS\ActivityLog;
 
 use WorkOS\App;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -192,17 +192,9 @@ class EventLogger {
 	/**
 	 * Get the client IP address.
 	 *
-	 * Shares the rate limiter's resolution so an audit row records only an
-	 * address the site can vouch for: `REMOTE_ADDR`, or a forwarding header an
-	 * operator has explicitly named as trusted.
-	 *
 	 * @return string Empty when nothing usable resolves.
 	 */
 	private static function get_ip_address(): string {
-		$ip = App::container()->get( RateLimiter::class )->client_ip();
-
-		// The limiter buckets unknown callers under a placeholder; an audit row
-		// should say nothing rather than name an address.
-		return '0.0.0.0' === $ip ? '' : $ip;
+		return App::container()->get( ClientIp::class )->for_record();
 	}
 }

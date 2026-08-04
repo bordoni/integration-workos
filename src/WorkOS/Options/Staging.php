@@ -57,7 +57,7 @@ class Staging extends Options {
 			// Attempt locks (see src/WorkOS/Lock and docs/locks.md).
 			'locks_enabled'                           => true,
 			// Header carrying the real client IP, for sites behind a proxy or
-			// CDN. Empty means REMOTE_ADDR only — see RateLimiter::client_ip().
+			// CDN. Empty means REMOTE_ADDR only — see ClientIp::get().
 			'trusted_proxy_header'                    => '',
 		];
 	}

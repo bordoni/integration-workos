@@ -7,7 +7,7 @@
 
 namespace WorkOS\Sync;
 
-use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+use WorkOS\Http\ClientIp;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -17,9 +17,20 @@ defined( 'ABSPATH' ) || exit;
 class AuditLog {
 
 	/**
-	 * Constructor — register event hooks.
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
 	 */
-	public function __construct() {
+	private ClientIp $client_ip;
+
+	/**
+	 * Constructor — register event hooks.
+	 *
+	 * @param ClientIp $client_ip Client IP resolver.
+	 */
+	public function __construct( ClientIp $client_ip ) {
+		$this->client_ip = $client_ip;
+
 		// Authentication events.
 		add_action( 'wp_login', [ $this, 'log_login' ], 10, 2 );
 		add_action( 'wp_logout', [ $this, 'log_logout' ] );
@@ -318,8 +329,6 @@ class AuditLog {
 	 * @return string
 	 */
 	private function get_client_ip(): string {
-		$ip           = SuperGlobals::get_server_var( 'REMOTE_ADDR' ) ?? '0.0.0.0';
-		$validated_ip = filter_var( $ip, FILTER_VALIDATE_IP );
-		return $validated_ip ? $validated_ip : '0.0.0.0';
+		return $this->client_ip->get();
 	}
 }

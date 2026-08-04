@@ -15,6 +15,7 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
+use WorkOS\Http\ClientIp;
 use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\REST\Auth\Password;
 
@@ -120,6 +121,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			$this->nonce,
 			new Radar(),
 			new RateLimiter(),
+			new ClientIp(),
 			new LoginCompleter(),
 			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )
 		);

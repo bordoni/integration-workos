@@ -9,6 +9,7 @@ namespace WorkOS\Auth\ChangeEmail;
 
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\Email\AddressMask;
 use WorkOS\Lock\Registry as LockRegistry;
 use WP_Error;
@@ -64,6 +65,13 @@ class RestApi {
 	private RateLimiter $rate_limiter;
 
 	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	private ClientIp $client_ip;
+
+	/**
 	 * Durable attempt-lock registry.
 	 *
 	 * @var LockRegistry
@@ -114,6 +122,7 @@ class RestApi {
 	 * change-email flow). The same same-host policy is enforced.
 	 *
 	 * @param RateLimiter      $rate_limiter Rate limiter.
+	 * @param ClientIp         $client_ip    Client IP resolver.
 	 * @param TokenFactory     $tokens       Token factory.
 	 * @param PendingChange    $pending      Pending-change storage.
 	 * @param ConflictResolver $conflicts    Conflict resolver.
@@ -123,6 +132,7 @@ class RestApi {
 	 */
 	public function __construct(
 		RateLimiter $rate_limiter,
+		ClientIp $client_ip,
 		TokenFactory $tokens,
 		PendingChange $pending,
 		ConflictResolver $conflicts,
@@ -131,6 +141,7 @@ class RestApi {
 		LockRegistry $locks
 	) {
 		$this->rate_limiter = $rate_limiter;
+		$this->client_ip    = $client_ip;
 		$this->tokens       = $tokens;
 		$this->pending      = $pending;
 		$this->conflicts    = $conflicts;
@@ -161,7 +172,7 @@ class RestApi {
 
 		$subjects = [
 			$lock->for_key( hash( 'sha256', $token ) ),
-			$lock->for_ip( $this->rate_limiter->client_ip() ),
+			$lock->for_ip( $this->client_ip->get() ),
 		];
 
 		foreach ( $subjects as $subject ) {
@@ -360,7 +371,7 @@ class RestApi {
 		// Rate limits throttle self-service abuse; the capability-gated admin
 		// path bypasses them so a legitimate cleanup sweep isn't blocked.
 		if ( ! $is_admin_action ) {
-			$ip          = $this->rate_limiter->client_ip();
+			$ip          = $this->client_ip->get();
 			$user_count  = (int) workos()->option( 'change_email_rate_limit_user_count', self::RATE_LIMIT_DEFAULT_USER );
 			$user_window = (int) workos()->option( 'change_email_rate_limit_user_window', self::RATE_LIMIT_DEFAULT_WIN );
 			$ip_count    = (int) workos()->option( 'change_email_rate_limit_ip_count', self::RATE_LIMIT_DEFAULT_IP );
