@@ -12,6 +12,7 @@ use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Email\AddressMask;
+use WorkOS\Http\ClientIp;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -49,6 +50,13 @@ class RestApi {
 	private TieredRateLimiter $rate_limiter;
 
 	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	private ClientIp $client_ip;
+
+	/**
 	 * Redirect URL validator.
 	 *
 	 * @var RedirectValidator
@@ -67,17 +75,20 @@ class RestApi {
 	 *
 	 * @param ProfileRepository $profiles           Profile repository.
 	 * @param TieredRateLimiter $rate_limiter       Rate limiter.
+	 * @param ClientIp          $client_ip          Client IP resolver.
 	 * @param RedirectValidator $redirect_validator Redirect validator.
 	 * @param AddressMask       $masker             Email-address masker.
 	 */
 	public function __construct(
 		ProfileRepository $profiles,
 		TieredRateLimiter $rate_limiter,
+		ClientIp $client_ip,
 		RedirectValidator $redirect_validator,
 		AddressMask $masker
 	) {
 		$this->profiles           = $profiles;
 		$this->rate_limiter       = $rate_limiter;
+		$this->client_ip          = $client_ip;
 		$this->redirect_validator = $redirect_validator;
 		$this->masker             = $masker;
 	}
@@ -195,7 +206,7 @@ class RestApi {
 			);
 		}
 
-		$ip = $this->rate_limiter->client_ip();
+		$ip = $this->client_ip->get();
 		// No send policy here: this route needs `edit_user` on the target and
 		// mails that account's own address, so the recipient is never
 		// caller-chosen.

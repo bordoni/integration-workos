@@ -81,13 +81,6 @@ class TieredRateLimiterTest extends WPTestCase {
 				unset( $this->counts[ $bucket . '|' . $subject . '|' . $window ] );
 			}
 
-			public function client_ip(): string {
-				return '203.0.113.7';
-			}
-
-			public function normalize_email( string $email ): string {
-				return strtolower( trim( $email ) );
-			}
 		};
 
 		$this->limiter = new TieredRateLimiter( $this->fake );
@@ -201,14 +194,6 @@ class TieredRateLimiterTest extends WPTestCase {
 		}
 
 		$this->assertSame( [], $this->fake->windows_seen );
-	}
-
-	/**
-	 * Request helpers pass straight through to the wrapped limiter.
-	 */
-	public function test_helpers_delegate(): void {
-		$this->assertSame( '203.0.113.7', $this->limiter->client_ip() );
-		$this->assertSame( 'alice@example.com', $this->limiter->normalize_email( '  Alice@Example.COM ' ) );
 	}
 
 	/**

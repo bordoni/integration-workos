@@ -11,6 +11,7 @@ use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WorkOS\Auth\PasswordResetAdmin\RestApi;
@@ -118,6 +119,7 @@ class PasswordResetAdminRestApiTest extends WPTestCase {
 		$rest_api = new RestApi(
 			$this->repository,
 			new TieredRateLimiter( new DatabaseRateLimiter() ),
+			new ClientIp(),
 			new RedirectValidator(),
 			new AddressMask()
 		);

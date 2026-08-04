@@ -103,7 +103,7 @@ class OAuth extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'oauth_url_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_URL_IP ],
+				[ 'oauth_url_ip', $this->client_ip->get(), self::RATE_LIMIT_URL_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

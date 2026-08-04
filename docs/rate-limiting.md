@@ -28,6 +28,8 @@ Everything lives in `src/WorkOS/RateLimit/`:
 | `TieredRateLimiter` | Stacks windows into a policy. Owns the policy constants. |
 | `Controller` | Binds the implementation and the wrapper. |
 
+Client IP resolution lives outside this module, in `WorkOS\Http\ClientIp`, because the activity log and the audit log need the same answer. See [Who the caller is](#who-the-caller-is).
+
 ```mermaid
 flowchart LR
     E[Endpoint] --> T[TieredRateLimiter]
@@ -105,8 +107,8 @@ So that path claims the slot before the call and hands it back when the outcome 
 ```php
 $reserved = $this->rate_limit(
     [
-        [ 'password_otp_ip', $ip, TieredRateLimiter::SEND_IP ],
-        [ 'password_otp_recipient', $email, TieredRateLimiter::SEND_RECIPIENT ],
+        [ self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP ],
+        [ self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
     ]
 );
 if ( is_wp_error( $reserved ) ) {
@@ -116,8 +118,8 @@ if ( is_wp_error( $reserved ) ) {
 $workos_response = workos()->api()->authenticate_with_password( /* … */ );
 
 if ( ! $this->triggered_verification_email( $workos_response ) ) {
-    $this->rate_limiter->refund( 'password_otp_ip', $ip, TieredRateLimiter::SEND_IP );
-    $this->rate_limiter->refund( 'password_otp_recipient', $email, TieredRateLimiter::SEND_RECIPIENT );
+    $this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP );
+    $this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT );
 }
 ```
 
@@ -135,6 +137,22 @@ One consequence worth knowing: windows are aligned to the clock rather than star
 
 Tiers are charged shortest window first, and the first exhausted tier returns immediately. A burst stopped by the short tier therefore never inflates the longer ones. A refused attempt still counts against the tier that refused it, so hammering keeps that window pinned until it rolls.
 
+### Who the caller is
+
+Every per-IP bucket is only as good as the address behind it, so resolution has one owner: `WorkOS\Http\ClientIp`, shared by rate limiting, the activity log, and the audit log.
+
+By default that is `REMOTE_ADDR` and nothing else. The webserver sets it and a caller cannot forge it.
+
+Behind a CDN, `REMOTE_ADDR` is the edge, so every visitor collapses into one bucket and the proxy's own header carries the real client. That header is authoritative only if the request actually arrived through the proxy: if the origin is reachable directly, the header is caller-supplied, and trusting it is worse than ignoring it, because anyone can mint a fresh bucket per request by changing a string. So it is never auto-detected. An operator names it, asserting that the origin only accepts proxied traffic:
+
+```php
+define( 'WORKOS_CLIENT_IP_HEADER', 'CF-Connecting-IP' );
+```
+
+A real environment variable of the same name works too. When the header holds a list, the **right-most public** entry wins: `X-Forwarded-For` appends on each hop, so entries to the right were written by infrastructure and everything to the left is whatever the client sent. Private and reserved entries are skipped while walking leftwards, and an entirely private list (a local proxy in development) falls back to the right-most valid entry.
+
+When nothing usable is found, resolution returns `0.0.0.0` so a bucket still has a stable subject.
+
 ### Storage
 
 `ObjectCacheRateLimiter` is used when WordPress reports a persistent object cache. On a real backend `wp_cache_incr` is an atomic in-place increment, so two concurrent requests get distinct counts and a limit cannot be overspent.
@@ -150,7 +168,7 @@ wp eval 'var_dump( wp_using_ext_object_cache() );'
 ## Adding a send path
 
 1. Take the slot before sending, with `SEND_IP` and `SEND_RECIPIENT`.
-2. Reuse the `otp_send` prefix unless the path has a reason not to share the allowance.
+2. Reuse `BaseEndpoint::BUCKET_OTP_SEND_IP` / `_RECIPIENT` unless the path has a reason not to share the allowance. Bucket names are constants so the sharing survives a rename.
 3. Charge it before any "should we actually send?" branch, so a `429` never depends on whether the account exists.
 4. If you only learn afterwards that nothing went out, refund both buckets.
 
@@ -187,5 +205,6 @@ That is what was removed. One policy, one place, applied to every path that mail
 
 - `src/WorkOS/RateLimit/` — the module.
 - `src/WorkOS/REST/Auth/BaseEndpoint.php` — the `rate_limit()` helper endpoints call.
+- `src/WorkOS/Http/ClientIp.php` — caller identity, shared with the logs.
 - [`docs/change-email.md`](change-email.md) — the change-email flow's use of the send policy.
 - [`docs/password-reset.md`](password-reset.md) — the reset endpoints.

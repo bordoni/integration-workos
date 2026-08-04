@@ -48,6 +48,17 @@ class Config {
 	];
 
 	/**
+	 * Map of plain-string setting names to their PHP constant overrides.
+	 *
+	 * Read straight from the constant or environment rather than synced into
+	 * an option row: these are deployment facts, not editorial settings, and
+	 * nothing in the admin edits them.
+	 */
+	private const STRING_CONSTANT_MAP = [
+		'client_ip_header' => 'WORKOS_CLIENT_IP_HEADER',
+	];
+
+	/**
 	 * Get the active environment.
 	 *
 	 * @return string 'production' or 'staging'.
@@ -165,6 +176,29 @@ class Config {
 		$generic_const = self::CONSTANT_MAP[ $setting ] ?? '';
 
 		return $generic_const && defined( $generic_const ) && '' !== constant( $generic_const );
+	}
+
+	/**
+	 * Read a plain-string deployment setting.
+	 *
+	 * Constant first, matching how every other override here resolves, then a
+	 * real environment variable for containerised installs.
+	 *
+	 * @param string $setting  Key from {@see self::STRING_CONSTANT_MAP}.
+	 * @param string $fallback Value when unset.
+	 *
+	 * @return string
+	 */
+	public static function string_setting( string $setting, string $fallback ): string {
+		$name = self::STRING_CONSTANT_MAP[ $setting ] ?? '';
+
+		if ( '' === $name ) {
+			return $fallback;
+		}
+
+		$value = defined( $name ) ? constant( $name ) : getenv( $name );
+
+		return is_string( $value ) && '' !== $value ? $value : $fallback;
 	}
 
 	/**

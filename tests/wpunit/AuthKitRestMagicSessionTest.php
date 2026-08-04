@@ -16,6 +16,7 @@ use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\MagicCode;
 use WorkOS\REST\Auth\Session;
@@ -104,8 +105,8 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$rate_limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
 		$completer    = new LoginCompleter();
 
-		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
-		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
+		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, new ClientIp(), $completer );
+		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, new ClientIp(), $completer );
 
 		add_action( 'rest_api_init', [ $magic, 'register_routes' ] );
 		add_action( 'rest_api_init', [ $session, 'register_routes' ] );

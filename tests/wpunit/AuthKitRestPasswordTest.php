@@ -16,6 +16,7 @@ use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\Password;
 
@@ -121,6 +122,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			$this->nonce,
 			new Radar(),
 			new TieredRateLimiter( new DatabaseRateLimiter() ),
+			new ClientIp(),
 			new LoginCompleter()
 		);
 
@@ -812,7 +814,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		$send_ok       = [ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ];
 
 		$limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
-		$ip      = $limiter->client_ip();
+		$ip      = ( new ClientIp() )->get();
 
 		for ( $i = 0; $i < 10; $i++ ) {
 			// The endpoint's own 10/min IP bucket would mask the hourly one;

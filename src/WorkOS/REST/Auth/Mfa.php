@@ -152,7 +152,7 @@ class Mfa extends BaseEndpoint {
 		// single IP and collecting a fresh OTP on each one.
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'mfa_challenge_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
+				[ 'mfa_challenge_ip', $this->client_ip->get(), TieredRateLimiter::REQUEST_IP ],
 				[ 'mfa_challenge_factor', $factor_id, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
@@ -208,7 +208,7 @@ class Mfa extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'mfa_verify_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
+				[ 'mfa_verify_ip', $this->client_ip->get(), TieredRateLimiter::REQUEST_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

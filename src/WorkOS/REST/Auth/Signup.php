@@ -108,7 +108,7 @@ class Signup extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'signup_ip', $ip, self::RATE_LIMIT_CREATE_IP ],
@@ -185,7 +185,7 @@ class Signup extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'signup_verify_ip', $ip, self::RATE_LIMIT_VERIFY_IP ],

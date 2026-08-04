@@ -169,58 +169,6 @@ class RateLimiterTest extends WPTestCase {
 		}
 	}
 
-	/**
-	 * Email normalization lowercases and trims; non-emails return empty.
-	 *
-	 * @param string $class Limiter implementation.
-	 */
-	#[DataProvider( 'limiter_provider' )]
-	public function test_normalize_email( string $class ): void {
-		$limiter = $this->limiter( $class );
-
-		$this->assertSame( 'alice@example.com', $limiter->normalize_email( '  Alice@Example.COM ' ) );
-		$this->assertSame( '', $limiter->normalize_email( 'not-an-email' ) );
-		$this->assertSame( '', $limiter->normalize_email( '' ) );
-	}
-
-	/**
-	 * client_ip falls back to 0.0.0.0 when REMOTE_ADDR is unset.
-	 *
-	 * @param string $class Limiter implementation.
-	 */
-	#[DataProvider( 'limiter_provider' )]
-	public function test_client_ip_returns_fallback_when_unset( string $class ): void {
-		$limiter  = $this->limiter( $class );
-		$previous = $_SERVER['REMOTE_ADDR'] ?? null;
-		unset( $_SERVER['REMOTE_ADDR'] );
-
-		$this->assertSame( '0.0.0.0', $limiter->client_ip() );
-
-		if ( null !== $previous ) {
-			$_SERVER['REMOTE_ADDR'] = $previous;
-		}
-	}
-
-	/**
-	 * client_ip uses REMOTE_ADDR when set to a valid IP.
-	 *
-	 * @param string $class Limiter implementation.
-	 */
-	#[DataProvider( 'limiter_provider' )]
-	public function test_client_ip_uses_remote_addr( string $class ): void {
-		$limiter                = $this->limiter( $class );
-		$previous               = $_SERVER['REMOTE_ADDR'] ?? null;
-		$_SERVER['REMOTE_ADDR'] = '203.0.113.4';
-
-		$this->assertSame( '203.0.113.4', $limiter->client_ip() );
-
-		if ( null === $previous ) {
-			unset( $_SERVER['REMOTE_ADDR'] );
-		} else {
-			$_SERVER['REMOTE_ADDR'] = $previous;
-		}
-	}
-
 	// -------------------------------------------------------------------------
 	// Providers
 	// -------------------------------------------------------------------------

@@ -12,6 +12,7 @@ use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
+use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WP_Error;
 use WP_REST_Request;
@@ -72,6 +73,13 @@ abstract class BaseEndpoint {
 	protected TieredRateLimiter $rate_limiter;
 
 	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	protected ClientIp $client_ip;
+
+	/**
 	 * Login completer.
 	 *
 	 * @var LoginCompleter
@@ -85,6 +93,7 @@ abstract class BaseEndpoint {
 	 * @param Nonce             $nonce           Nonce helper.
 	 * @param Radar             $radar           Radar helper.
 	 * @param TieredRateLimiter $rate_limiter    Rate limiter.
+	 * @param ClientIp          $client_ip       Client IP resolver.
 	 * @param LoginCompleter    $login_completer Login completer.
 	 */
 	public function __construct(
@@ -92,12 +101,14 @@ abstract class BaseEndpoint {
 		Nonce $nonce,
 		Radar $radar,
 		TieredRateLimiter $rate_limiter,
+		ClientIp $client_ip,
 		LoginCompleter $login_completer
 	) {
 		$this->profiles        = $profiles;
 		$this->nonce           = $nonce;
 		$this->radar           = $radar;
 		$this->rate_limiter    = $rate_limiter;
+		$this->client_ip       = $client_ip;
 		$this->login_completer = $login_completer;
 	}
 

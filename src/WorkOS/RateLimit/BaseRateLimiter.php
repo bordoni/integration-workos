@@ -166,35 +166,4 @@ abstract class BaseRateLimiter implements RateLimiter {
 
 		return self::KEY_PREFIX . $safe_bucket . '_' . $window . '_' . intdiv( $now, $window ) . '_' . $hash;
 	}
-
-	/**
-	 * Best-effort client IP extraction.
-	 *
-	 * Respects the standard WP proxy hint hierarchy without blindly trusting
-	 * X-Forwarded-For (a caller can spoof the header otherwise). When no
-	 * trusted IP can be determined, returns '0.0.0.0' so the caller still has
-	 * *something* stable to rate-limit against.
-	 *
-	 * @return string IPv4 or IPv6 address string.
-	 */
-	public function client_ip(): string {
-		// REMOTE_ADDR is set by the webserver and cannot be spoofed by callers.
-		$remote = isset( $_SERVER['REMOTE_ADDR'] )
-			? filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ), FILTER_VALIDATE_IP )
-			: false;
-
-		return is_string( $remote ) && '' !== $remote ? $remote : '0.0.0.0';
-	}
-
-	/**
-	 * Normalize an email for consistent per-email bucketing.
-	 *
-	 * @param string $email Raw email string.
-	 *
-	 * @return string Lowercased, trimmed email; empty string if not an email.
-	 */
-	public function normalize_email( string $email ): string {
-		$email = strtolower( trim( $email ) );
-		return is_email( $email ) ? $email : '';
-	}
 }

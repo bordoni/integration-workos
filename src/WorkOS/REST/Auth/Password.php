@@ -120,7 +120,7 @@ class Password extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'password_ip', $ip, TieredRateLimiter::REQUEST_IP ],
@@ -248,7 +248,7 @@ class Password extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'pw_reset_ip', $ip, TieredRateLimiter::REQUEST_IP ],
@@ -338,7 +338,7 @@ class Password extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'pw_reset_confirm_ip', $ip, TieredRateLimiter::REQUEST_IP ],
