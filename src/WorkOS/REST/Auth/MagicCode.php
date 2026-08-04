@@ -20,9 +20,6 @@ defined( 'ABSPATH' ) || exit;
  */
 class MagicCode extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS    = 10;
-	private const RATE_LIMIT_EMAIL_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW         = 60;
 
 	/**
 	 * Register routes.
@@ -86,13 +83,8 @@ class MagicCode extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'magic_send_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'magic_send_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'magic_send', $ip, $email );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}
@@ -101,12 +93,17 @@ class MagicCode extends BaseEndpoint {
 		// For unknown emails, skip the WorkOS call but still return success
 		// so account existence isn't exposed.
 		if ( $this->registration_allowed( $profile ) || get_user_by( 'email', $email ) ) {
-			// Fire-and-forget on the WorkOS call: delivery errors land in the
-			// plugin log rather than being surfaced to the client.
-			workos()->api()->send_magic_auth_code(
-				$email,
-				$this->get_radar_token( $request )
-			);
+			// Silent when the limit is reached: a 429 here would confirm the
+			// address is real, which is what the uniform 200 above denies.
+			if ( ! is_wp_error( $this->outbound_email->reserve( $email ) ) ) {
+
+				// Fire-and-forget on the WorkOS call: delivery errors land in the
+				// plugin log rather than being surfaced to the client.
+				workos()->api()->send_magic_auth_code(
+					$email,
+					$this->get_radar_token( $request )
+				);
+			}
 		}
 
 		return new WP_REST_Response(
@@ -156,13 +153,8 @@ class MagicCode extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'magic_verify_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'magic_verify_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'magic_verify', $ip, $email );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}

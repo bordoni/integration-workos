@@ -12,7 +12,9 @@ use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Http\ClientIp;
+use WorkOS\RateLimit\OutboundEmailRateLimiter;
+use WorkOS\RateLimit\HttpRateLimit;
 use WP_Error;
 use WP_REST_Request;
 
@@ -55,11 +57,25 @@ abstract class BaseEndpoint {
 	protected Radar $radar;
 
 	/**
-	 * Rate limiter.
+	 * Per-requester limits for this endpoint.
 	 *
-	 * @var RateLimiter
+	 * @var HttpRateLimit
 	 */
-	protected RateLimiter $rate_limiter;
+	protected HttpRateLimit $http_rate_limit;
+
+	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	protected ClientIp $client_ip;
+
+	/**
+	 * Per-recipient limiter for mail we cause to be sent.
+	 *
+	 * @var OutboundEmailRateLimiter
+	 */
+	protected OutboundEmailRateLimiter $outbound_email;
 
 	/**
 	 * Login completer.
@@ -71,23 +87,29 @@ abstract class BaseEndpoint {
 	/**
 	 * Constructor.
 	 *
-	 * @param ProfileRepository $profiles        Profile repository.
-	 * @param Nonce             $nonce           Nonce helper.
-	 * @param Radar             $radar           Radar helper.
-	 * @param RateLimiter       $rate_limiter    Rate limiter.
-	 * @param LoginCompleter    $login_completer Login completer.
+	 * @param ProfileRepository        $profiles        Profile repository.
+	 * @param Nonce                    $nonce           Nonce helper.
+	 * @param Radar                    $radar           Radar helper.
+	 * @param HttpRateLimit            $http_rate_limit Per-requester limits.
+	 * @param ClientIp                 $client_ip       Client IP resolver.
+	 * @param OutboundEmailRateLimiter $outbound_email  Per-recipient mail limiter.
+	 * @param LoginCompleter           $login_completer Login completer.
 	 */
 	public function __construct(
 		ProfileRepository $profiles,
 		Nonce $nonce,
 		Radar $radar,
-		RateLimiter $rate_limiter,
+		HttpRateLimit $http_rate_limit,
+		ClientIp $client_ip,
+		OutboundEmailRateLimiter $outbound_email,
 		LoginCompleter $login_completer
 	) {
 		$this->profiles        = $profiles;
 		$this->nonce           = $nonce;
 		$this->radar           = $radar;
-		$this->rate_limiter    = $rate_limiter;
+		$this->http_rate_limit = $http_rate_limit;
+		$this->client_ip       = $client_ip;
+		$this->outbound_email  = $outbound_email;
 		$this->login_completer = $login_completer;
 	}
 
@@ -102,7 +124,7 @@ abstract class BaseEndpoint {
 	 * Public permission check used for anonymous auth routes.
 	 *
 	 * Always returns true — access control is enforced per-request via
-	 * {@see self::verify_nonce()} and {@see self::rate_limit()}. The
+	 * {@see self::verify_nonce()} and {@see HttpRateLimit}. The
 	 * method exists so we can pass `[ $this, 'public_permission' ]` to
 	 * `register_rest_route()` without magic-method complexity.
 	 *
@@ -164,32 +186,6 @@ abstract class BaseEndpoint {
 				__( 'Your login session has expired. Please refresh and try again.', 'integration-workos' ),
 				[ 'status' => 403 ]
 			);
-		}
-
-		return true;
-	}
-
-	/**
-	 * Apply rate limits for a request.
-	 *
-	 * Provide one entry per subject that should be throttled (e.g. IP and
-	 * email). Each entry is `[bucket, subject, limit, window_seconds]`.
-	 * First bucket to exceed wins and returns a 429.
-	 *
-	 * @param array<int, array{0:string,1:string,2:int,3:int}> $rules Rate-limit rules.
-	 *
-	 * @return true|WP_Error
-	 */
-	protected function rate_limit( array $rules ) {
-		foreach ( $rules as $rule ) {
-			[ $bucket, $subject, $limit, $window ] = $rule;
-			if ( '' === $subject ) {
-				continue;
-			}
-			$result = $this->rate_limiter->attempt( $bucket, $subject, $limit, $window );
-			if ( is_wp_error( $result ) ) {
-				return $result;
-			}
 		}
 
 		return true;

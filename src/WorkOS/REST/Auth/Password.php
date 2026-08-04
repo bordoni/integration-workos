@@ -23,9 +23,6 @@ defined( 'ABSPATH' ) || exit;
  */
 class Password extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS    = 10;
-	private const RATE_LIMIT_EMAIL_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW         = 60;
 
 	/**
 	 * Minimum observable response time for reset_start, in microseconds.
@@ -112,15 +109,19 @@ class Password extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'password_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'password_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'password', $ip, $email );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
+		}
+
+		// WorkOS mails a code as a side effect of authenticating an unverified
+		// account, so the slot is claimed before the call rather than after it.
+		// Anything below that turns out not to have sent gives it back, which
+		// is what stops a mistyped password counting as a send.
+		$mail_slot = $this->outbound_email->reserve( $email );
+		if ( is_wp_error( $mail_slot ) ) {
+			return $mail_slot;
 		}
 
 		$workos_response = workos()->api()->authenticate_with_password(
@@ -128,6 +129,12 @@ class Password extends BaseEndpoint {
 			$password,
 			$this->get_radar_token( $request )
 		);
+
+		if ( $this->is_email_verification_required( $workos_response ) ) {
+			// The fallback below can't help an unverified account, and its retry
+			// would mail a second code for the one request.
+			return $this->email_verification_required_error();
+		}
 
 		if ( is_wp_error( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
 			// WorkOS rejected the password — fall back to WordPress authentication.
@@ -140,7 +147,8 @@ class Password extends BaseEndpoint {
 				if ( $workos_user_id ) {
 					if ( workos()->option( 'wp_password_fallback_email_confirmation', false ) ) {
 						// Email confirmation path: identity is verified via a magic code
-						// instead of syncing the plaintext password to WorkOS.
+						// instead of syncing the plaintext password to WorkOS. Spends
+						// the slot reserved above.
 						workos()->api()->send_magic_auth_code( $email, $this->get_radar_token( $request ) );
 
 						return new WP_REST_Response(
@@ -164,6 +172,16 @@ class Password extends BaseEndpoint {
 				}
 			}
 		}
+
+		// The retry inside the fallback can land on the same unverified-account
+		// response and mail its own code, so it spends the reservation too.
+		if ( $this->is_email_verification_required( $workos_response ) ) {
+			return $this->email_verification_required_error();
+		}
+
+		// Everything from here sent nothing. Give the slot back so ordinary
+		// sign-ins, right or wrong, never count against the send limit.
+		$mail_slot->release();
 
 		// `complete()` handles the `organization_selection_required` error
 		// transparently when the profile has a pinned org. Pass the WP_Error
@@ -216,13 +234,8 @@ class Password extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'pw_reset_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'pw_reset_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'pw_reset', $ip, $email );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}
@@ -240,11 +253,16 @@ class Password extends BaseEndpoint {
 		// flattens both paths to the same observable wall-clock.
 		$start_ns = hrtime( true );
 
-		workos()->api()->send_password_reset(
-			$email,
-			$this->build_password_reset_url( $profile, $redirect_url ),
-			$this->get_radar_token( $request )
-		);
+		// Silent when the limit is reached: a 429 would break the uniform
+		// response this route uses to deny enumeration.
+		if ( ! is_wp_error( $this->outbound_email->reserve( $email ) ) ) {
+
+			workos()->api()->send_password_reset(
+				$email,
+				$this->build_password_reset_url( $profile, $redirect_url ),
+				$this->get_radar_token( $request )
+			);
+		}
 
 		$this->sleep_until_floor( $start_ns, self::RESPONSE_TIME_FLOOR_US );
 
@@ -294,12 +312,8 @@ class Password extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'pw_reset_confirm_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'pw_reset_confirm', $ip );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}
@@ -412,6 +426,41 @@ class Password extends BaseEndpoint {
 		// `wp_set_password()` hashes the password and invalidates all
 		// existing sessions for the user — exactly what we want here.
 		wp_set_password( $new_password, $wp_user_id );
+	}
+
+	/**
+	 * The 403 returned when WorkOS has mailed a verification code instead of
+	 * signing the user in.
+	 *
+	 * @return WP_Error
+	 */
+	private function email_verification_required_error(): WP_Error {
+		return new WP_Error(
+			'workos_authkit_email_verification_required',
+			__( 'Check your email for a verification code to finish signing in.', 'integration-workos' ),
+			[ 'status' => 403 ]
+		);
+	}
+
+	/**
+	 * Did WorkOS reject this authenticate because the address is unverified?
+	 *
+	 * WorkOS mails a code as part of that same response, so this is how we
+	 * learn after the fact that the request cost an inbox an email.
+	 *
+	 * @param mixed $workos_response Response or WP_Error from the API client.
+	 *
+	 * @return bool
+	 */
+	private function is_email_verification_required( $workos_response ): bool {
+		if ( ! is_wp_error( $workos_response ) ) {
+			return false;
+		}
+
+		$data = $workos_response->get_error_data();
+		$body = is_array( $data ) && isset( $data['body'] ) && is_array( $data['body'] ) ? $data['body'] : [];
+
+		return 'email_verification_required' === (string) ( $body['code'] ?? '' );
 	}
 
 	/**

@@ -30,8 +30,14 @@ defined( 'ABSPATH' ) || exit;
  */
 class OAuth extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS = 20;
-	private const RATE_LIMIT_WINDOW      = 60;
+	/**
+	 * Requests allowed per window from one address.
+	 *
+	 * Looser than the default posture: building a redirect URL costs
+	 * nothing, and one login screen asks for several, so the default
+	 * would bite real users first.
+	 */
+	private const URL_PER_IP = 20;
 
 	/**
 	 * Mapping of profile method constants to WorkOS provider identifiers.
@@ -98,11 +104,7 @@ class OAuth extends BaseEndpoint {
 			);
 		}
 
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'oauth_url_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$rate_ok = $this->http_rate_limit->for_request( 'oauth_url', $this->client_ip->get(), '', self::URL_PER_IP );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}

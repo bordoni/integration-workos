@@ -15,9 +15,15 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Email\AddressCanonicalizer;
+use WorkOS\Http\ClientIp;
+use WorkOS\RateLimit\HttpRateLimit;
+use WorkOS\RateLimit\OutboundEmailRateLimiter;
+use WorkOS\RateLimit\RateLimiter;
+use WorkOS\RateLimit\TransientStore;
 use WorkOS\REST\Auth\MagicCode;
 use WorkOS\REST\Auth\Session;
+use WorkOS\Time\SystemClock;
 
 /**
  * REST dispatch coverage for /auth/magic/* and /auth/{nonce,session}/*.
@@ -100,11 +106,13 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$this->nonce = new Nonce();
 
 		$radar        = new Radar();
-		$rate_limiter = new RateLimiter();
+		$rate_limiter = new RateLimiter( new TransientStore(), new SystemClock() );
+		$http         = new HttpRateLimit( $rate_limiter, 10, 5, 60 );
+		$outbound     = new OutboundEmailRateLimiter( $rate_limiter, new AddressCanonicalizer(), 3, 10, 20 );
 		$completer    = new LoginCompleter();
 
-		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
-		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
+		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $http, new ClientIp(), $outbound, $completer );
+		$session = new Session( $this->repository, $this->nonce, $radar, $http, new ClientIp(), $outbound, $completer );
 
 		add_action( 'rest_api_init', [ $magic, 'register_routes' ] );
 		add_action( 'rest_api_init', [ $session, 'register_routes' ] );

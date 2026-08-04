@@ -8,7 +8,12 @@
 namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Email\AddressCanonicalizer;
+use WorkOS\Http\ClientIp;
+use WorkOS\RateLimit\HttpRateLimit;
+use WorkOS\RateLimit\OutboundEmailRateLimiter;
+use WorkOS\RateLimit\RateLimiter;
+use WorkOS\RateLimit\TransientStore;
 use WorkOS\Auth\ChangeEmail\ConflictResolver;
 use WorkOS\Auth\ChangeEmail\Notifier;
 use WorkOS\Auth\ChangeEmail\PendingChange;
@@ -18,6 +23,7 @@ use WorkOS\Email\AddressMask;
 use WorkOS\Email\Mailer;
 use WP_REST_Request;
 use WP_REST_Response;
+use WorkOS\Time\SystemClock;
 
 /**
  * Coverage for `POST /workos/v1/users/{id}/email-change` and the
@@ -80,7 +86,9 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$notifier = new Notifier( $mailer, $masker );
 
 		$rest = new RestApi(
-			new RateLimiter(),
+			new RateLimiter( new TransientStore(), new SystemClock() ),
+			new ClientIp(),
+			new OutboundEmailRateLimiter( new RateLimiter( new TransientStore(), new SystemClock() ), new AddressCanonicalizer(), 3, 10, 20 ),
 			$tokens,
 			$pending,
 			new ConflictResolver(),

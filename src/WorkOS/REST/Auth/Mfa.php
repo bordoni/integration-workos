@@ -32,9 +32,6 @@ defined( 'ABSPATH' ) || exit;
  */
 class Mfa extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS     = 10;
-	private const RATE_LIMIT_FACTOR_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW          = 60;
 
 	/**
 	 * Register routes.
@@ -153,12 +150,7 @@ class Mfa extends BaseEndpoint {
 		// IP-only limit: a user with multiple enrolled factors could
 		// otherwise be targeted by rotating `factor_id` values from a
 		// single IP and collecting a fresh OTP on each one.
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'mfa_challenge_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'mfa_challenge_factor', $factor_id, self::RATE_LIMIT_FACTOR_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$rate_ok = $this->http_rate_limit->for_request( 'mfa_challenge', $this->client_ip->get(), $factor_id );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}
@@ -209,11 +201,7 @@ class Mfa extends BaseEndpoint {
 			);
 		}
 
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'mfa_verify_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$rate_ok = $this->http_rate_limit->for_request( 'mfa_verify', $this->client_ip->get() );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}

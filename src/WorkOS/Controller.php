@@ -16,6 +16,8 @@ use WorkOS\Auth\AuthKit\Controller as AuthKitController;
 use WorkOS\Auth\Controller as AuthController;
 use WorkOS\Auth\PasswordResetAdmin\Controller as PasswordResetAdminController;
 use WorkOS\Auth\ChangeEmail\Controller as ChangeEmailController;
+use WorkOS\RateLimit\Controller as RateLimitController;
+use WorkOS\Time\Controller as TimeController;
 use WorkOS\REST\Controller as RESTController;
 use WorkOS\Webhook\Controller as WebhookController;
 use WorkOS\Sync\Controller as SyncController;
@@ -35,6 +37,11 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
+		// Order matters here: the rate limiter needs a Clock and a
+		// CounterStore, and the endpoint controllers need the rate limiter.
+		$this->container->register( TimeController::class );
+		$this->container->register( RateLimitController::class );
+
 		$this->container->register( AdminController::class );
 		$this->container->register( AuthKitController::class );
 		$this->container->register( LoginProfilesAdminController::class );

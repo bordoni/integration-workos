@@ -15,8 +15,14 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Email\AddressCanonicalizer;
+use WorkOS\Http\ClientIp;
+use WorkOS\RateLimit\HttpRateLimit;
+use WorkOS\RateLimit\OutboundEmailRateLimiter;
+use WorkOS\RateLimit\RateLimiter;
+use WorkOS\RateLimit\TransientStore;
 use WorkOS\REST\Auth\Password;
+use WorkOS\Time\SystemClock;
 
 /**
  * REST dispatch coverage for /auth/password/*.
@@ -119,7 +125,9 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			$this->repository,
 			$this->nonce,
 			new Radar(),
-			new RateLimiter(),
+			new HttpRateLimit( new RateLimiter( new TransientStore(), new SystemClock() ), 10, 5, 60 ),
+			new ClientIp(),
+			new OutboundEmailRateLimiter( new RateLimiter( new TransientStore(), new SystemClock() ), new AddressCanonicalizer(), 3, 10, 20 ),
 			new LoginCompleter()
 		);
 

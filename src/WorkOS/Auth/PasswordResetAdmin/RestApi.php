@@ -10,7 +10,8 @@ namespace WorkOS\Auth\PasswordResetAdmin;
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Http\ClientIp;
+use WorkOS\RateLimit\HttpRateLimit;
 use WorkOS\Email\AddressMask;
 use WP_Error;
 use WP_REST_Request;
@@ -34,9 +35,6 @@ class RestApi {
 
 	public const NAMESPACE = 'workos/v1';
 
-	private const RATE_LIMIT_IP_ATTEMPTS   = 10;
-	private const RATE_LIMIT_USER_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW        = 60;
 
 	/**
 	 * Profile repository.
@@ -48,9 +46,16 @@ class RestApi {
 	/**
 	 * Rate limiter.
 	 *
-	 * @var RateLimiter
+	 * @var HttpRateLimit
 	 */
-	private RateLimiter $rate_limiter;
+	private HttpRateLimit $http_rate_limit;
+
+	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	private ClientIp $client_ip;
 
 	/**
 	 * Redirect URL validator.
@@ -70,18 +75,21 @@ class RestApi {
 	 * Constructor.
 	 *
 	 * @param ProfileRepository $profiles           Profile repository.
-	 * @param RateLimiter       $rate_limiter       Rate limiter.
+	 * @param HttpRateLimit     $http_rate_limit    Per-requester limits.
+	 * @param ClientIp          $client_ip          Client IP resolver.
 	 * @param RedirectValidator $redirect_validator Redirect validator.
 	 * @param AddressMask       $masker             Email-address masker.
 	 */
 	public function __construct(
 		ProfileRepository $profiles,
-		RateLimiter $rate_limiter,
+		HttpRateLimit $http_rate_limit,
+		ClientIp $client_ip,
 		RedirectValidator $redirect_validator,
 		AddressMask $masker
 	) {
 		$this->profiles           = $profiles;
-		$this->rate_limiter       = $rate_limiter;
+		$this->http_rate_limit    = $http_rate_limit;
+		$this->client_ip          = $client_ip;
 		$this->redirect_validator = $redirect_validator;
 		$this->masker             = $masker;
 	}
@@ -199,22 +207,8 @@ class RestApi {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limiter->attempt(
-			'pw_reset_admin_ip',
-			$ip,
-			self::RATE_LIMIT_IP_ATTEMPTS,
-			self::RATE_LIMIT_WINDOW
-		);
-		if ( is_wp_error( $rate_ok ) ) {
-			return $rate_ok;
-		}
-		$rate_ok = $this->rate_limiter->attempt(
-			'pw_reset_admin_user',
-			(string) $user->ID,
-			self::RATE_LIMIT_USER_ATTEMPTS,
-			self::RATE_LIMIT_WINDOW
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'pw_reset_admin', $ip, (string) $user->ID );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}

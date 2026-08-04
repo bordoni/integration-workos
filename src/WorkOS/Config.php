@@ -48,6 +48,26 @@ class Config {
 	];
 
 	/**
+	 * Map of integer setting names to their PHP constant overrides.
+	 *
+	 * Read straight from the constant or environment rather than synced into
+	 * an option row: these are deployment tuning, not editorial settings, and
+	 * nothing in the admin edits them.
+	 */
+	private const INT_CONSTANT_MAP = [
+		'email_limit_5min' => 'WORKOS_EMAIL_LIMIT_5MIN',
+		'email_limit_hour' => 'WORKOS_EMAIL_LIMIT_HOUR',
+		'email_limit_day'  => 'WORKOS_EMAIL_LIMIT_DAY',
+	];
+
+	/**
+	 * Map of plain-string setting names to their PHP constant overrides.
+	 */
+	private const STRING_CONSTANT_MAP = [
+		'client_ip_header' => 'WORKOS_CLIENT_IP_HEADER',
+	];
+
+	/**
 	 * Get the active environment.
 	 *
 	 * @return string 'production' or 'staging'.
@@ -165,6 +185,54 @@ class Config {
 		$generic_const = self::CONSTANT_MAP[ $setting ] ?? '';
 
 		return $generic_const && defined( $generic_const ) && '' !== constant( $generic_const );
+	}
+
+	/**
+	 * Read a positive integer setting.
+	 *
+	 * Constant first, matching how every other override here resolves, then a
+	 * real environment variable for containerised installs. Anything missing,
+	 * unknown, non-numeric or non-positive falls back to the caller's default,
+	 * so a typo degrades to the shipped value rather than to no limit at all.
+	 *
+	 * @param string $setting  Key from {@see self::INT_CONSTANT_MAP}.
+	 * @param int    $fallback Value when unset.
+	 *
+	 * @return int
+	 */
+	public static function int_setting( string $setting, int $fallback ): int {
+		$value = self::read_constant( self::INT_CONSTANT_MAP[ $setting ] ?? '' );
+
+		return is_numeric( $value ) && (int) $value > 0 ? (int) $value : $fallback;
+	}
+
+	/**
+	 * Read a string setting.
+	 *
+	 * @param string $setting  Key from {@see self::STRING_CONSTANT_MAP}.
+	 * @param string $fallback Value when unset.
+	 *
+	 * @return string
+	 */
+	public static function string_setting( string $setting, string $fallback ): string {
+		$value = self::read_constant( self::STRING_CONSTANT_MAP[ $setting ] ?? '' );
+
+		return is_string( $value ) && '' !== $value ? $value : $fallback;
+	}
+
+	/**
+	 * Resolve a named constant, falling back to the environment.
+	 *
+	 * @param string $name Constant name; empty for an unmapped setting.
+	 *
+	 * @return mixed Null when there is nothing to read.
+	 */
+	private static function read_constant( string $name ) {
+		if ( '' === $name ) {
+			return null;
+		}
+
+		return defined( $name ) ? constant( $name ) : getenv( $name );
 	}
 
 	/**

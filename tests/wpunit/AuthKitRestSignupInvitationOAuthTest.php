@@ -15,10 +15,16 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\Email\AddressCanonicalizer;
+use WorkOS\Http\ClientIp;
+use WorkOS\RateLimit\HttpRateLimit;
+use WorkOS\RateLimit\OutboundEmailRateLimiter;
+use WorkOS\RateLimit\RateLimiter;
+use WorkOS\RateLimit\TransientStore;
 use WorkOS\REST\Auth\Invitation;
 use WorkOS\REST\Auth\OAuth;
 use WorkOS\REST\Auth\Signup;
+use WorkOS\Time\SystemClock;
 
 /**
  * REST dispatch coverage for /auth/{signup,invitation,oauth}/*.
@@ -106,12 +112,14 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$this->nonce = new Nonce();
 
 		$radar        = new Radar();
-		$rate_limiter = new RateLimiter();
+		$rate_limiter = new RateLimiter( new TransientStore(), new SystemClock() );
+		$http         = new HttpRateLimit( $rate_limiter, 10, 5, 60 );
+		$outbound     = new OutboundEmailRateLimiter( $rate_limiter, new AddressCanonicalizer(), 3, 10, 20 );
 		$completer    = new LoginCompleter();
 
-		$signup     = new Signup( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
-		$invitation = new Invitation( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
-		$oauth      = new OAuth( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
+		$signup     = new Signup( $this->repository, $this->nonce, $radar, $http, new ClientIp(), $outbound, $completer );
+		$invitation = new Invitation( $this->repository, $this->nonce, $radar, $http, new ClientIp(), $outbound, $completer );
+		$oauth      = new OAuth( $this->repository, $this->nonce, $radar, $http, new ClientIp(), $outbound, $completer );
 
 		add_action( 'rest_api_init', [ $signup, 'register_routes' ] );
 		add_action( 'rest_api_init', [ $invitation, 'register_routes' ] );

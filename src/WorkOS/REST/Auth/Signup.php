@@ -25,9 +25,20 @@ defined( 'ABSPATH' ) || exit;
  */
 class Signup extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS    = 5;
-	private const RATE_LIMIT_EMAIL_ATTEMPTS = 3;
-	private const RATE_LIMIT_WINDOW         = 60;
+	/**
+	 * Requests allowed per window from one address, for account creation.
+	 *
+	 * Tighter than the default posture: sign-up creates an account, and
+	 * creating one against somebody else's address is what makes that
+	 * address a target. Verifying isn't — it spends a code the user is
+	 * retyping off their own screen, so it keeps the default allowance.
+	 */
+	private const CREATE_PER_IP = 5;
+
+	/**
+	 * Requests allowed per window against one address being signed up.
+	 */
+	private const CREATE_PER_SUBJECT = 3;
 
 	/**
 	 * Register routes.
@@ -104,13 +115,8 @@ class Signup extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'signup_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'signup_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'signup', $ip, $email, self::CREATE_PER_IP, self::CREATE_PER_SUBJECT );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}
@@ -136,7 +142,9 @@ class Signup extends BaseEndpoint {
 		// If the user still needs to verify their email, kick off the code
 		// email so the React shell can transition straight to the verify step.
 		if ( empty( $user['email_verified'] ) && ! empty( $user['id'] ) ) {
-			workos()->api()->send_verification_email( $user['id'] );
+			if ( ! is_wp_error( $this->outbound_email->reserve( $email ) ) ) {
+				workos()->api()->send_verification_email( $user['id'] );
+			}
 		}
 
 		return new WP_REST_Response(
@@ -181,12 +189,8 @@ class Signup extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'signup_verify_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS * 2, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$ip      = $this->client_ip->get();
+		$rate_ok = $this->http_rate_limit->for_request( 'signup_verify', $ip );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}

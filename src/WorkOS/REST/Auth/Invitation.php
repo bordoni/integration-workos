@@ -24,8 +24,6 @@ defined( 'ABSPATH' ) || exit;
  */
 class Invitation extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS = 10;
-	private const RATE_LIMIT_WINDOW      = 60;
 
 	/**
 	 * Register routes.
@@ -74,11 +72,7 @@ class Invitation extends BaseEndpoint {
 			);
 		}
 
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'invitation_lookup_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$rate_ok = $this->http_rate_limit->for_request( 'invitation_lookup', $this->client_ip->get() );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}
@@ -152,11 +146,7 @@ class Invitation extends BaseEndpoint {
 			);
 		}
 
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'invitation_accept_ip', $this->rate_limiter->client_ip(), self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-			]
-		);
+		$rate_ok = $this->http_rate_limit->for_request( 'invitation_accept', $this->client_ip->get() );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
 		}

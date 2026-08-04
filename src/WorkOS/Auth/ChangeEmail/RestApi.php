@@ -8,7 +8,9 @@
 namespace WorkOS\Auth\ChangeEmail;
 
 use WorkOS\ActivityLog\EventLogger;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\OutboundEmailRateLimiter;
+use WorkOS\Http\ClientIp;
+use WorkOS\RateLimit\RateLimiter;
 use WorkOS\Email\AddressMask;
 use WP_Error;
 use WP_REST_Request;
@@ -63,6 +65,20 @@ class RestApi {
 	private RateLimiter $rate_limiter;
 
 	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	private ClientIp $client_ip;
+
+	/**
+	 * Per-recipient limiter for mail we cause to be sent.
+	 *
+	 * @var OutboundEmailRateLimiter
+	 */
+	private OutboundEmailRateLimiter $outbound_email;
+
+	/**
 	 * Token factory.
 	 *
 	 * @var TokenFactory
@@ -105,27 +121,33 @@ class RestApi {
 	 * that helper requires a `Profile` (which doesn't apply to the
 	 * change-email flow). The same same-host policy is enforced.
 	 *
-	 * @param RateLimiter      $rate_limiter Rate limiter.
-	 * @param TokenFactory     $tokens       Token factory.
-	 * @param PendingChange    $pending      Pending-change storage.
-	 * @param ConflictResolver $conflicts    Conflict resolver.
-	 * @param Notifier         $notifier     Email notifier.
-	 * @param AddressMask      $masker       Email-address masker.
+	 * @param RateLimiter              $rate_limiter   Rate limiter.
+	 * @param ClientIp                 $client_ip      Client IP resolver.
+	 * @param OutboundEmailRateLimiter $outbound_email Per-recipient mail limiter.
+	 * @param TokenFactory             $tokens         Token factory.
+	 * @param PendingChange            $pending        Pending-change storage.
+	 * @param ConflictResolver         $conflicts      Conflict resolver.
+	 * @param Notifier                 $notifier       Email notifier.
+	 * @param AddressMask              $masker         Email-address masker.
 	 */
 	public function __construct(
 		RateLimiter $rate_limiter,
+		ClientIp $client_ip,
+		OutboundEmailRateLimiter $outbound_email,
 		TokenFactory $tokens,
 		PendingChange $pending,
 		ConflictResolver $conflicts,
 		Notifier $notifier,
 		AddressMask $masker
 	) {
-		$this->rate_limiter = $rate_limiter;
-		$this->tokens       = $tokens;
-		$this->pending      = $pending;
-		$this->conflicts    = $conflicts;
-		$this->notifier     = $notifier;
-		$this->masker       = $masker;
+		$this->rate_limiter   = $rate_limiter;
+		$this->client_ip      = $client_ip;
+		$this->outbound_email = $outbound_email;
+		$this->tokens         = $tokens;
+		$this->pending        = $pending;
+		$this->conflicts      = $conflicts;
+		$this->notifier       = $notifier;
+		$this->masker         = $masker;
 	}
 
 	/**
@@ -275,7 +297,7 @@ class RestApi {
 		// Rate limits throttle self-service abuse; the capability-gated admin
 		// path bypasses them so a legitimate cleanup sweep isn't blocked.
 		if ( ! $is_admin_action ) {
-			$ip          = $this->rate_limiter->client_ip();
+			$ip          = $this->client_ip->get();
 			$user_count  = (int) workos()->option( 'change_email_rate_limit_user_count', self::RATE_LIMIT_DEFAULT_USER );
 			$user_window = (int) workos()->option( 'change_email_rate_limit_user_window', self::RATE_LIMIT_DEFAULT_WIN );
 			$ip_count    = (int) workos()->option( 'change_email_rate_limit_ip_count', self::RATE_LIMIT_DEFAULT_IP );
@@ -346,6 +368,14 @@ class RestApi {
 			return $this->commit_admin_change( $user, $new_email );
 		}
 
+		// The counters above measure the requester; `$new_email` is caller-chosen
+		// and otherwise unbounded. Checked before the pending row is stored so we
+		// never record a change we can't email about.
+		$mail_ok = $this->outbound_email->reserve( $new_email );
+		if ( is_wp_error( $mail_ok ) ) {
+			return $mail_ok;
+		}
+
 		$lifetime = $this->token_lifetime();
 		$expires  = time() + $lifetime;
 
@@ -366,6 +396,11 @@ class RestApi {
 		$cancel_url   = $this->build_cancel_url( (int) $user->ID, $cancel_token );
 
 		$this->notifier->send_verification( $user, $new_email, $confirm_url, $expires );
+
+		// The notice to the account's own address is a second message and costs
+		// its own slot. Not gated: the user asked for this change, and refusing
+		// to tell them it happened is worse than going one over.
+		$this->outbound_email->reserve( (string) $user->user_email );
 		$this->notifier->send_old_address_notice( $user, $new_email, $cancel_url, $expires );
 
 		EventLogger::log(
