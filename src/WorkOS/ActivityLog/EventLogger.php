@@ -7,6 +7,8 @@
 
 namespace WorkOS\ActivityLog;
 
+use WorkOS\App;
+use WorkOS\Auth\AuthKit\RateLimiter;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -190,30 +192,17 @@ class EventLogger {
 	/**
 	 * Get the client IP address.
 	 *
-	 * @return string
+	 * Shares the rate limiter's resolution so an audit row records only an
+	 * address the site can vouch for: `REMOTE_ADDR`, or a forwarding header an
+	 * operator has explicitly named as trusted.
+	 *
+	 * @return string Empty when nothing usable resolves.
 	 */
 	private static function get_ip_address(): string {
-		$headers = [
-			'HTTP_CF_CONNECTING_IP',
-			'HTTP_X_FORWARDED_FOR',
-			'HTTP_X_REAL_IP',
-			'REMOTE_ADDR',
-		];
+		$ip = App::container()->get( RateLimiter::class )->client_ip();
 
-		foreach ( $headers as $header ) {
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Dynamic key; sanitized below via FILTER_VALIDATE_IP.
-			if ( ! empty( $_SERVER[ $header ] ) ) {
-				$ip = sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) );
-				// X-Forwarded-For may contain multiple IPs; use the first.
-				if ( str_contains( $ip, ',' ) ) {
-					$ip = trim( explode( ',', $ip )[0] );
-				}
-				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
-					return $ip;
-				}
-			}
-		}
-
-		return '';
+		// The limiter buckets unknown callers under a placeholder; an audit row
+		// should say nothing rather than name an address.
+		return '0.0.0.0' === $ip ? '' : $ip;
 	}
 }

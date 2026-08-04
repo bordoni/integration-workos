@@ -237,7 +237,8 @@ class RateLimiter {
 	 * bucket. That is the worse failure: per-IP limits then apply to the whole
 	 * audience at once. Sites in that position can name the header their edge
 	 * sets via the `trusted_proxy_header` option, which is only safe because
-	 * the edge overwrites it on ingress.
+	 * the edge controls what it appends. {@see self::ip_from_header()} reads
+	 * only the part the edge is responsible for.
 	 *
 	 * When nothing resolves, returns '0.0.0.0' so callers still have a stable
 	 * string to bucket against.
@@ -277,9 +278,11 @@ class RateLimiter {
 	/**
 	 * Read a client IP from a configured forwarding header.
 	 *
-	 * `X-Forwarded-For` accumulates a comma-separated chain as a request passes
-	 * through each hop, appending on the right. The left-most entry is the
-	 * original client, so that is the one read here.
+	 * Each hop appends the address it received from, so the left-most entry is
+	 * client-supplied and carries no weight. The scan runs right to left and
+	 * skips private and reserved ranges, so an internal load balancer's own
+	 * address never becomes everyone's bucket. A chain that is private end to
+	 * end is an internal deployment; there the right-most valid entry stands.
 	 *
 	 * @param string $header Server variable name.
 	 *
@@ -292,11 +295,26 @@ class RateLimiter {
 			return '';
 		}
 
-		$raw   = sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) );
-		$parts = explode( ',', $raw );
-		$first = filter_var( trim( (string) reset( $parts ) ), FILTER_VALIDATE_IP );
+		$raw      = sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) );
+		$fallback = '';
 
-		return is_string( $first ) ? $first : '';
+		foreach ( array_reverse( explode( ',', $raw ) ) as $entry ) {
+			$candidate = filter_var( trim( $entry ), FILTER_VALIDATE_IP );
+
+			if ( ! is_string( $candidate ) ) {
+				continue;
+			}
+
+			if ( '' === $fallback ) {
+				$fallback = $candidate;
+			}
+
+			if ( false !== filter_var( $candidate, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+				return $candidate;
+			}
+		}
+
+		return $fallback;
 	}
 
 	/**
