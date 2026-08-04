@@ -128,25 +128,7 @@ class TieredRateLimiter {
 		}
 	}
 
-	/**
-	 * Best-effort client IP for the current request.
-	 *
-	 * @return string
-	 */
-	public function client_ip(): string {
-		return $this->limiter->client_ip();
-	}
 
-	/**
-	 * Normalize an email for consistent per-email bucketing.
-	 *
-	 * @param string $email Raw email string.
-	 *
-	 * @return string
-	 */
-	public function normalize_email( string $email ): string {
-		return $this->limiter->normalize_email( $email );
-	}
 
 	/**
 	 * Order a policy shortest window first.

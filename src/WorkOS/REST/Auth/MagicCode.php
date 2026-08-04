@@ -83,7 +83,7 @@ class MagicCode extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'magic_send_ip', $ip, TieredRateLimiter::REQUEST_IP ],
@@ -165,7 +165,7 @@ class MagicCode extends BaseEndpoint {
 			);
 		}
 
-		$ip      = $this->rate_limiter->client_ip();
+		$ip      = $this->client_ip->get();
 		$rate_ok = $this->rate_limit(
 			[
 				[ 'magic_verify_ip', $ip, TieredRateLimiter::REQUEST_IP ],

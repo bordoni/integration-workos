@@ -10,6 +10,7 @@ namespace WorkOS\Auth\ChangeEmail;
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Email\AddressMask;
+use WorkOS\Http\ClientIp;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -61,6 +62,13 @@ class RestApi {
 	private TieredRateLimiter $rate_limiter;
 
 	/**
+	 * Client IP resolver.
+	 *
+	 * @var ClientIp
+	 */
+	private ClientIp $client_ip;
+
+	/**
 	 * Token factory.
 	 *
 	 * @var TokenFactory
@@ -104,6 +112,7 @@ class RestApi {
 	 * change-email flow). The same same-host policy is enforced.
 	 *
 	 * @param TieredRateLimiter $rate_limiter Rate limiter.
+	 * @param ClientIp          $client_ip    Client IP resolver.
 	 * @param TokenFactory      $tokens       Token factory.
 	 * @param PendingChange     $pending      Pending-change storage.
 	 * @param ConflictResolver  $conflicts    Conflict resolver.
@@ -112,6 +121,7 @@ class RestApi {
 	 */
 	public function __construct(
 		TieredRateLimiter $rate_limiter,
+		ClientIp $client_ip,
 		TokenFactory $tokens,
 		PendingChange $pending,
 		ConflictResolver $conflicts,
@@ -119,6 +129,7 @@ class RestApi {
 		AddressMask $masker
 	) {
 		$this->rate_limiter = $rate_limiter;
+		$this->client_ip    = $client_ip;
 		$this->tokens       = $tokens;
 		$this->pending      = $pending;
 		$this->conflicts    = $conflicts;
@@ -278,7 +289,7 @@ class RestApi {
 			// account is what's common to them.
 			$rate_ok = $this->rate_limiter->attempt(
 				'change_email_init_ip',
-				$this->rate_limiter->client_ip(),
+				$this->client_ip->get(),
 				TieredRateLimiter::SEND_IP
 			);
 			if ( is_wp_error( $rate_ok ) ) {

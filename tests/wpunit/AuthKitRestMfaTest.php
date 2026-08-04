@@ -16,6 +16,7 @@ use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\Mfa;
 
@@ -93,6 +94,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 			$this->nonce,
 			new Radar(),
 			new TieredRateLimiter( new DatabaseRateLimiter() ),
+			new ClientIp(),
 			new LoginCompleter()
 		);
 		add_action( 'rest_api_init', [ $mfa, 'register_routes' ] );

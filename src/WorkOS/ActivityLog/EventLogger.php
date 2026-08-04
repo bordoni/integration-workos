@@ -7,6 +7,8 @@
 
 namespace WorkOS\ActivityLog;
 
+use WorkOS\App;
+use WorkOS\Http\ClientIp;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -190,30 +192,14 @@ class EventLogger {
 	/**
 	 * Get the client IP address.
 	 *
+	 * Resolved from the container so a site that trusts a proxy header
+	 * gets the same caller here as its rate limits and audit log do.
+	 *
 	 * @return string
 	 */
 	private static function get_ip_address(): string {
-		$headers = [
-			'HTTP_CF_CONNECTING_IP',
-			'HTTP_X_FORWARDED_FOR',
-			'HTTP_X_REAL_IP',
-			'REMOTE_ADDR',
-		];
+		$ip = App::container()->get( ClientIp::class )->get();
 
-		foreach ( $headers as $header ) {
-			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Dynamic key; sanitized below via FILTER_VALIDATE_IP.
-			if ( ! empty( $_SERVER[ $header ] ) ) {
-				$ip = sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) );
-				// X-Forwarded-For may contain multiple IPs; use the first.
-				if ( str_contains( $ip, ',' ) ) {
-					$ip = trim( explode( ',', $ip )[0] );
-				}
-				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
-					return $ip;
-				}
-			}
-		}
-
-		return '';
+		return ClientIp::UNKNOWN === $ip ? '' : $ip;
 	}
 }

@@ -74,7 +74,7 @@ class Invitation extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'invitation_lookup_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
+				[ 'invitation_lookup_ip', $this->client_ip->get(), TieredRateLimiter::REQUEST_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -152,7 +152,7 @@ class Invitation extends BaseEndpoint {
 
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'invitation_accept_ip', $this->rate_limiter->client_ip(), TieredRateLimiter::REQUEST_IP ],
+				[ 'invitation_accept_ip', $this->client_ip->get(), TieredRateLimiter::REQUEST_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

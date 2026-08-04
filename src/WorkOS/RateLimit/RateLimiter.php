@@ -62,20 +62,4 @@ interface RateLimiter {
 	 * @return void
 	 */
 	public function reset( string $bucket, string $subject, int $window ): void;
-
-	/**
-	 * Best-effort client IP for the current request.
-	 *
-	 * @return string IPv4 or IPv6 address string.
-	 */
-	public function client_ip(): string;
-
-	/**
-	 * Normalize an email for consistent per-email bucketing.
-	 *
-	 * @param string $email Raw email string.
-	 *
-	 * @return string Lowercased, trimmed email; empty string if not an email.
-	 */
-	public function normalize_email( string $email ): string;
 }
