@@ -15,7 +15,8 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\MagicCode;
 use WorkOS\REST\Auth\Session;
 
@@ -100,7 +101,7 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$this->nonce = new Nonce();
 
 		$radar        = new Radar();
-		$rate_limiter = new RateLimiter();
+		$rate_limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
 		$completer    = new LoginCompleter();
 
 		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );
@@ -275,6 +276,55 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
 		);
 		$this->assertNotEmpty( $send_calls );
+	}
+
+	public function test_magic_send_rate_limits_recipient_hourly(): void {
+		for ( $i = 0; $i < 3; $i++ ) {
+			$response = $this->dispatch_with_nonce(
+				'POST',
+				'/workos/v1/auth/magic/send',
+				[ 'profile' => 'members', 'email' => 'repeat@example.com' ]
+			);
+			$this->assertSame( 200, $response->get_status(), "Send {$i} should be allowed." );
+		}
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'members', 'email' => 'repeat@example.com' ]
+		);
+
+		$this->assertSame( 429, $response->get_status() );
+		$this->assertSame( 'workos_rate_limited', $response->get_data()['code'] );
+
+		$send_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertCount( 3, $send_calls, 'The over-limit attempt must not send another code.' );
+	}
+
+	public function test_magic_send_recipient_bucket_is_shared_across_endpoints(): void {
+		// Pre-charge the shared bucket the way reset_start does: same
+		// `otp_send_recipient` name means rotating endpoints buys nothing.
+		$limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
+		for ( $i = 0; $i < 3; $i++ ) {
+			$this->assertTrue( $limiter->attempt( 'otp_send_recipient', 'repeat@example.com', TieredRateLimiter::SEND_RECIPIENT ) );
+		}
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'members', 'email' => 'repeat@example.com' ]
+		);
+
+		$this->assertSame( 429, $response->get_status() );
+
+		$send_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertEmpty( $send_calls, 'A recipient exhausted elsewhere must not receive a magic code.' );
 	}
 
 	public function test_magic_send_rejects_invalid_email(): void {

@@ -8,6 +8,7 @@
 namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -19,10 +20,6 @@ defined( 'ABSPATH' ) || exit;
  * POST /auth/magic/verify  — exchange a magic-code for a session.
  */
 class MagicCode extends BaseEndpoint {
-
-	private const RATE_LIMIT_IP_ATTEMPTS    = 10;
-	private const RATE_LIMIT_EMAIL_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW         = 60;
 
 	/**
 	 * Register routes.
@@ -89,12 +86,24 @@ class MagicCode extends BaseEndpoint {
 		$ip      = $this->rate_limiter->client_ip();
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'magic_send_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'magic_send_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'magic_send_ip', $ip, TieredRateLimiter::REQUEST_IP ],
+				[ 'magic_send_email', $email, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
+		}
+
+		// Charged before the known-account check below: a 429 that depended
+		// on whether the account exists would be an enumeration oracle.
+		$send_ok = $this->rate_limit(
+			[
+				[ self::BUCKET_OTP_SEND_IP, $ip, TieredRateLimiter::SEND_IP ],
+				[ self::BUCKET_OTP_SEND_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
+			]
+		);
+		if ( is_wp_error( $send_ok ) ) {
+			return $send_ok;
 		}
 
 		// If email registration is disabled, only known accounts get a code.
@@ -159,8 +168,8 @@ class MagicCode extends BaseEndpoint {
 		$ip      = $this->rate_limiter->client_ip();
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'magic_verify_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'magic_verify_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'magic_verify_ip', $ip, TieredRateLimiter::REQUEST_IP ],
+				[ 'magic_verify_email', $email, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

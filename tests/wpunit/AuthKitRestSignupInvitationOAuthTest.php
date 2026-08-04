@@ -15,7 +15,8 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\Invitation;
 use WorkOS\REST\Auth\OAuth;
 use WorkOS\REST\Auth\Signup;
@@ -106,7 +107,7 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$this->nonce = new Nonce();
 
 		$radar        = new Radar();
-		$rate_limiter = new RateLimiter();
+		$rate_limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
 		$completer    = new LoginCompleter();
 
 		$signup     = new Signup( $this->repository, $this->nonce, $radar, $rate_limiter, $completer );

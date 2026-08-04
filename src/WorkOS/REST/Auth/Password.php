@@ -9,6 +9,7 @@ namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\FrontendRoute;
 use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
 use WP_Error;
 use WP_REST_Request;
@@ -23,9 +24,16 @@ defined( 'ABSPATH' ) || exit;
  */
 class Password extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS    = 10;
-	private const RATE_LIMIT_EMAIL_ATTEMPTS = 5;
-	private const RATE_LIMIT_WINDOW         = 60;
+	/**
+	 * Buckets for the sign-in OTP reservation.
+	 *
+	 * Constants because reserve and refund must name the same bucket: a
+	 * mismatch would leave every reservation charged forever. Separate
+	 * from the shared `otp_send` pair so heavy magic-code use can't lock
+	 * an account out of password sign-in.
+	 */
+	private const BUCKET_PASSWORD_OTP_IP        = 'password_otp_ip';
+	private const BUCKET_PASSWORD_OTP_RECIPIENT = 'password_otp_recipient';
 
 	/**
 	 * Minimum observable response time for reset_start, in microseconds.
@@ -115,12 +123,26 @@ class Password extends BaseEndpoint {
 		$ip      = $this->rate_limiter->client_ip();
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'password_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'password_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'password_ip', $ip, TieredRateLimiter::REQUEST_IP ],
+				[ 'password_email', $email, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
+		}
+
+		// Reserve BEFORE calling WorkOS: authenticating an unverified account
+		// makes WorkOS mail a verification code as a side effect, so by the
+		// time we see the response the email is already out. Refunded below
+		// when the outcome sent nothing.
+		$reserved = $this->rate_limit(
+			[
+				[ self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP ],
+				[ self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
+			]
+		);
+		if ( is_wp_error( $reserved ) ) {
+			return $reserved;
 		}
 
 		$workos_response = workos()->api()->authenticate_with_password(
@@ -140,7 +162,9 @@ class Password extends BaseEndpoint {
 				if ( $workos_user_id ) {
 					if ( workos()->option( 'wp_password_fallback_email_confirmation', false ) ) {
 						// Email confirmation path: identity is verified via a magic code
-						// instead of syncing the plaintext password to WorkOS.
+						// instead of syncing the plaintext password to WorkOS. This send
+						// consumes the OTP slot reserved above; the early return skips
+						// the refund on purpose.
 						workos()->api()->send_magic_auth_code( $email, $this->get_radar_token( $request ) );
 
 						return new WP_REST_Response(
@@ -163,6 +187,14 @@ class Password extends BaseEndpoint {
 					);
 				}
 			}
+		}
+
+		// Every path that reaches here without a verification-required error
+		// sent no email (completed login, wrong password, other API errors),
+		// so the reserved OTP slot goes back.
+		if ( ! $this->triggered_verification_email( $workos_response ) ) {
+			$this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_IP, $ip, TieredRateLimiter::SEND_IP );
+			$this->rate_limiter->refund( self::BUCKET_PASSWORD_OTP_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT );
 		}
 
 		// `complete()` handles the `organization_selection_required` error
@@ -219,12 +251,24 @@ class Password extends BaseEndpoint {
 		$ip      = $this->rate_limiter->client_ip();
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'pw_reset_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'pw_reset_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'pw_reset_ip', $ip, TieredRateLimiter::REQUEST_IP ],
+				[ 'pw_reset_email', $email, TieredRateLimiter::REQUEST_SUBJECT ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;
+		}
+
+		// Charged whether or not WorkOS ends up mailing, so the 429 boundary
+		// is the same for existing and unknown accounts.
+		$send_ok = $this->rate_limit(
+			[
+				[ self::BUCKET_OTP_SEND_IP, $ip, TieredRateLimiter::SEND_IP ],
+				[ self::BUCKET_OTP_SEND_RECIPIENT, $email, TieredRateLimiter::SEND_RECIPIENT ],
+			]
+		);
+		if ( is_wp_error( $send_ok ) ) {
+			return $send_ok;
 		}
 
 		$redirect_url = ( new RedirectValidator() )->validate(
@@ -297,7 +341,7 @@ class Password extends BaseEndpoint {
 		$ip      = $this->rate_limiter->client_ip();
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'pw_reset_confirm_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'pw_reset_confirm_ip', $ip, TieredRateLimiter::REQUEST_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -375,6 +419,29 @@ class Password extends BaseEndpoint {
 		}
 
 		return new WP_REST_Response( $response_body, 200 );
+	}
+
+	/**
+	 * Whether a WorkOS authenticate response means a verification email
+	 * was sent as a side effect.
+	 *
+	 * WorkOS mails a one-time code before we ever see the
+	 * `email_verification_required` response, unless its email sending is
+	 * disabled. We can't tell that setting from here, so the slot stays
+	 * charged either way.
+	 *
+	 * @param mixed $workos_response Response from authenticate_with_password.
+	 *
+	 * @return bool
+	 */
+	private function triggered_verification_email( $workos_response ): bool {
+		if ( ! is_wp_error( $workos_response ) ) {
+			return false;
+		}
+
+		$data = $workos_response->get_error_data();
+
+		return 'email_verification_required' === ( $data['body']['code'] ?? '' );
 	}
 
 	/**

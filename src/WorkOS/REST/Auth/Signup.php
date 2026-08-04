@@ -25,9 +25,13 @@ defined( 'ABSPATH' ) || exit;
  */
 class Signup extends BaseEndpoint {
 
-	private const RATE_LIMIT_IP_ATTEMPTS    = 5;
-	private const RATE_LIMIT_EMAIL_ATTEMPTS = 3;
-	private const RATE_LIMIT_WINDOW         = 60;
+	/**
+	 * Tighter than the shared request policy: signup creates an account
+	 * for an address nobody has proven they own.
+	 */
+	private const RATE_LIMIT_CREATE_IP    = [ [ 5, MINUTE_IN_SECONDS ] ];
+	private const RATE_LIMIT_CREATE_EMAIL = [ [ 3, MINUTE_IN_SECONDS ] ];
+	private const RATE_LIMIT_VERIFY_IP    = [ [ 10, MINUTE_IN_SECONDS ] ];
 
 	/**
 	 * Register routes.
@@ -107,8 +111,8 @@ class Signup extends BaseEndpoint {
 		$ip      = $this->rate_limiter->client_ip();
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'signup_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
-				[ 'signup_email', $email, self::RATE_LIMIT_EMAIL_ATTEMPTS, self::RATE_LIMIT_WINDOW ],
+				[ 'signup_ip', $ip, self::RATE_LIMIT_CREATE_IP ],
+				[ 'signup_email', $email, self::RATE_LIMIT_CREATE_EMAIL ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {
@@ -184,7 +188,7 @@ class Signup extends BaseEndpoint {
 		$ip      = $this->rate_limiter->client_ip();
 		$rate_ok = $this->rate_limit(
 			[
-				[ 'signup_verify_ip', $ip, self::RATE_LIMIT_IP_ATTEMPTS * 2, self::RATE_LIMIT_WINDOW ],
+				[ 'signup_verify_ip', $ip, self::RATE_LIMIT_VERIFY_IP ],
 			]
 		);
 		if ( is_wp_error( $rate_ok ) ) {

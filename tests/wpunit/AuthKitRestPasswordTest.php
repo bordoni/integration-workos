@@ -15,7 +15,8 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\Password;
 
 /**
@@ -119,7 +120,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			$this->repository,
 			$this->nonce,
 			new Radar(),
-			new RateLimiter(),
+			new TieredRateLimiter( new DatabaseRateLimiter() ),
 			new LoginCompleter()
 		);
 
@@ -731,6 +732,260 @@ class AuthKitRestPasswordTest extends WPTestCase {
 			static fn( array $c ) => str_contains( $c['url'], '/user_management/users/user_wos_fallback' )
 		);
 		$this->assertEmpty( $update_calls, 'Password must not be synced in email-confirmation mode.' );
+	}
+
+	/**
+	 * Confirmation OTP sends are capped per destination address: the 4th
+	 * attempt with valid credentials returns 429 and sends no email.
+	 */
+	public function test_fallback_email_confirmation_rate_limits_sends_per_email(): void {
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', 'user_wos_fallback' );
+		update_option(
+			'workos_production',
+			[
+				'api_key'                                 => 'sk_test_fake',
+				'client_id'                               => 'client_fake',
+				'environment_id'                          => 'environment_test',
+				'wp_password_fallback_email_confirmation' => true,
+			]
+		);
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		$workos_reject = [ 'response' => [ 'code' => 401, 'message' => 'Unauthorized' ], 'body' => wp_json_encode( [ 'message' => 'Email not verified.' ] ) ];
+		$send_ok       = [ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ];
+
+		$this->response_queue = [
+			$workos_reject, $send_ok,
+			$workos_reject, $send_ok,
+			$workos_reject, $send_ok,
+			$workos_reject,
+		];
+
+		$body = [
+			'profile'  => 'members',
+			'email'    => 'fallback@example.com',
+			'password' => 'wp_password_123',
+		];
+
+		for ( $i = 0; $i < 3; $i++ ) {
+			$response = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/authenticate', $body );
+			$this->assertSame( 200, $response->get_status(), "Send {$i} should be allowed." );
+		}
+
+		$response = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/authenticate', $body );
+		$this->assertSame( 429, $response->get_status() );
+		$this->assertSame( 'workos_rate_limited', $response->get_data()['code'] );
+
+		$magic_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertCount( 3, $magic_calls, 'The over-limit attempt must not send another code.' );
+	}
+
+	/**
+	 * Confirmation OTP sends are also capped per IP across destination
+	 * addresses: the 11th send from one IP returns 429 even though each
+	 * email is under its own per-destination limit.
+	 */
+	public function test_fallback_email_confirmation_rate_limits_sends_per_ip(): void {
+		update_option(
+			'workos_production',
+			[
+				'api_key'                                 => 'sk_test_fake',
+				'client_id'                               => 'client_fake',
+				'environment_id'                          => 'environment_test',
+				'wp_password_fallback_email_confirmation' => true,
+			]
+		);
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		// One unverified account per destination address, all valid credentials.
+		for ( $i = 0; $i < 11; $i++ ) {
+			$user_id = wp_create_user( "confirm_ip_{$i}", 'wp_password_123', "confirm_ip_{$i}@example.com" );
+			$this->assertIsInt( $user_id );
+			update_user_meta( $user_id, '_workos_user_id', "user_wos_confirm_{$i}" );
+		}
+		$this->captured = [];
+
+		$workos_reject = [ 'response' => [ 'code' => 401, 'message' => 'Unauthorized' ], 'body' => wp_json_encode( [ 'message' => 'Email not verified.' ] ) ];
+		$send_ok       = [ 'response' => [ 'code' => 200, 'message' => 'OK' ], 'body' => '{}' ];
+
+		$limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
+		$ip      = $limiter->client_ip();
+
+		for ( $i = 0; $i < 10; $i++ ) {
+			// The endpoint's own 10/min IP bucket would mask the hourly one;
+			// clear it between attempts to simulate a slow, window-spanning attack.
+			$limiter->reset( 'password_ip', $ip, TieredRateLimiter::REQUEST_IP );
+			$this->response_queue = [ $workos_reject, $send_ok ];
+
+			$response = $this->dispatch_with_nonce(
+				'POST',
+				'/workos/v1/auth/password/authenticate',
+				[
+					'profile'  => 'members',
+					'email'    => "confirm_ip_{$i}@example.com",
+					'password' => 'wp_password_123',
+				]
+			);
+			$this->assertSame( 200, $response->get_status(), "Send {$i} should be allowed." );
+		}
+
+		$limiter->reset( 'password_ip', $ip, TieredRateLimiter::REQUEST_IP );
+		$this->response_queue = [ $workos_reject ];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'confirm_ip_10@example.com',
+				'password' => 'wp_password_123',
+			]
+		);
+		$this->assertSame( 429, $response->get_status() );
+		$this->assertSame( 'workos_rate_limited', $response->get_data()['code'] );
+
+		$magic_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/magic_auth/send' )
+		);
+		$this->assertCount( 10, $magic_calls, 'The over-limit attempt must not send another code.' );
+	}
+
+	/**
+	 * WorkOS mails a verification OTP as a side effect of authenticating an
+	 * unverified account and only reports it afterwards. The reserved slot is
+	 * kept on `email_verification_required`, so the 4th attempt is refused
+	 * before WorkOS is called, even with no WP user for the fallback path.
+	 */
+	public function test_authenticate_rate_limits_workos_verification_sends(): void {
+		$verification_reject = [
+			'response' => [ 'code' => 403, 'message' => 'Forbidden' ],
+			'body'     => wp_json_encode(
+				[
+					'code'                         => 'email_verification_required',
+					'message'                      => 'Email ownership must be verified before authentication.',
+					'email'                        => 'ghost@example.com',
+					'pending_authentication_token' => 'pat_123',
+				]
+			),
+		];
+
+		$body = [
+			'profile'  => 'members',
+			'email'    => 'ghost@example.com',
+			'password' => 'CorrectPassword!1',
+		];
+
+		for ( $i = 0; $i < 3; $i++ ) {
+			$this->response_queue = [ $verification_reject ];
+			$response             = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/authenticate', $body );
+			$this->assertSame( 403, $response->get_status(), "Attempt {$i} should reach WorkOS." );
+		}
+
+		$response = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/authenticate', $body );
+		$this->assertSame( 429, $response->get_status() );
+		$this->assertSame( 'workos_rate_limited', $response->get_data()['code'] );
+
+		$authenticate_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertCount( 3, $authenticate_calls, 'The over-limit attempt must not reach WorkOS at all.' );
+	}
+
+	/**
+	 * Outcomes that send no email refund the reserved OTP slot: more
+	 * successful logins than the send limit all pass.
+	 */
+	public function test_authenticate_refunds_otp_slot_when_no_email_sent(): void {
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', 'user_wos_fallback' );
+
+		$auth_success = [
+			'response' => [ 'code' => 200, 'message' => 'OK' ],
+			'body'     => wp_json_encode(
+				[
+					'access_token'  => 'eyJhbGciOi.eyJzdWIiOiJ1c2VyX3dva28iLCJleHAiOjk5OTk5OTk5OTl9.sig',
+					'refresh_token' => 'rt_refund',
+					'user'          => [
+						'id'             => 'user_wos_fallback',
+						'email'          => 'fallback@example.com',
+						'email_verified' => true,
+					],
+				]
+			),
+		];
+
+		// 4 logins > the 3-per-hour send limit; without refunds the 4th would 429.
+		for ( $i = 0; $i < 4; $i++ ) {
+			$this->response_queue = [ $auth_success ];
+			$response             = $this->dispatch_with_nonce(
+				'POST',
+				'/workos/v1/auth/password/authenticate',
+				[
+					'profile'  => 'members',
+					'email'    => 'fallback@example.com',
+					'password' => 'wp_password_123',
+				]
+			);
+			$this->assertSame( 200, $response->get_status(), "Login {$i} should not be throttled by the send limit." );
+		}
+	}
+
+	/**
+	 * Reset emails are capped per recipient on the hourly bucket: the 4th
+	 * request returns 429 and never reaches WorkOS.
+	 */
+	public function test_reset_start_rate_limits_recipient_hourly(): void {
+		$body = [
+			'profile' => 'members',
+			'email'   => 'repeat@example.com',
+		];
+
+		for ( $i = 0; $i < 3; $i++ ) {
+			$response = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/reset/start', $body );
+			$this->assertSame( 200, $response->get_status(), "Reset {$i} should be allowed." );
+		}
+
+		$response = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/reset/start', $body );
+		$this->assertSame( 429, $response->get_status() );
+		$this->assertSame( 'workos_rate_limited', $response->get_data()['code'] );
+
+		$reset_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/password_reset/send' )
+		);
+		$this->assertCount( 3, $reset_calls, 'The over-limit attempt must not trigger another reset email.' );
+	}
+
+	/**
+	 * reset_start reads the same `otp_send` buckets as magic/send, so a
+	 * recipient exhausted on one endpoint is refused on the other.
+	 */
+	public function test_reset_start_shares_recipient_bucket_across_endpoints(): void {
+		$limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
+		for ( $i = 0; $i < 3; $i++ ) {
+			$this->assertTrue( $limiter->attempt( 'otp_send_recipient', 'repeat@example.com', TieredRateLimiter::SEND_RECIPIENT ) );
+		}
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/reset/start',
+			[
+				'profile' => 'members',
+				'email'   => 'repeat@example.com',
+			]
+		);
+
+		$this->assertSame( 429, $response->get_status() );
+
+		$reset_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/password_reset/send' )
+		);
+		$this->assertEmpty( $reset_calls, 'A recipient exhausted elsewhere must not receive a reset email.' );
 	}
 
 	// -------------------------------------------------------------------------

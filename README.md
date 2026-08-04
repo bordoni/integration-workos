@@ -183,7 +183,10 @@ WorkOS-verified change-email flow (self-service token verification +
 admin-direct immediate commits + the WorkOS → Users / row-action /
 user-edit surfaces + configurable conflict policy + cancel link to old
 address), see
-[`docs/change-email.md`](docs/change-email.md).
+[`docs/change-email.md`](docs/change-email.md). For how the public
+endpoints are throttled (per-requester windows, layered per-recipient
+send limits, and the rules for adding a route that sends email), see
+[`docs/rate-limiting.md`](docs/rate-limiting.md).
 
 ### Custom paths
 
