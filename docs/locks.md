@@ -235,11 +235,15 @@ class InviteResendLock extends BaseLock {
 Register it:
 
 ```php
-add_filter( 'workos_locks', function ( array $locks, $store ) {
-    $locks['invite_resend'] = new \Acme\Locks\InviteResendLock( $store );
+add_filter( 'workos_locks', function ( array $locks, $store, $clock ) {
+    $locks['invite_resend'] = new \Acme\Locks\InviteResendLock( $store, $clock );
     return $locks;
-}, 10, 2 );
+}, 10, 3 );
 ```
+
+A lock takes the shared store and the shared clock. Take the clock from the
+filter rather than calling `time()`, or the lock cannot be tested against a
+boundary and will ignore a frozen clock in someone else's test run.
 
 It now appears in `wp workos lock list`, in the user-edit panel, and in the operator clear — no further wiring.
 
@@ -250,7 +254,7 @@ It now appears in `wp workos lock list`, in the user-edit panel, and in the oper
 | Hook | Type | Arguments | Purpose |
 | --- | --- | --- | --- |
 | `workos_locks_enabled` | filter | `$enabled` | Master switch. False leaves the burst limiter in place. |
-| `workos_locks` | filter | `$locks`, `$store` | Register or replace locks. |
+| `workos_locks` | filter | `$locks`, `$store`, `$clock` | Register or replace locks. |
 | `workos_lock_enabled` | filter | `$enabled`, `$subject`, `$slug` | Disable one lock. |
 | `workos_lock_threshold` | filter | `$threshold`, `$subject`, `$slug` | Attempts before a cooldown. |
 | `workos_lock_cooldowns` | filter | `$ladder`, `$subject`, `$slug` | The ladder, in seconds. |
@@ -258,7 +262,6 @@ It now appears in `wp workos lock list`, in the user-edit panel, and in the oper
 | `workos_lock_subject` | filter | `$subject`, `$slug` | Rewrite a subject before it is counted. |
 | `workos_lock_store` | filter | `$store`, `$subject` | Override the chosen backend. |
 | `workos_lock_state` | filter | `$state`, `$subject`, `$slug` | Inspect or adjust loaded state. |
-| `workos_lock_current_time` | filter | `$timestamp` | The clock every lock reads. Primarily for tests. |
 | `workos_lock_row_ceiling` | filter | `$ceiling` | Maximum option rows retained. |
 | `workos_trusted_proxy_header` | filter | `$header` | Header carrying the real client IP. |
 | `workos_lock_engaged` | action | `$slug`, `$subject`, `$state` | Fired when a cooldown engages. |

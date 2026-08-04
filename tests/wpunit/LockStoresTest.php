@@ -14,6 +14,7 @@ use WorkOS\Lock\Store\OptionStore;
 use WorkOS\Lock\Store\ResolvingStore;
 use WorkOS\Lock\Store\UserMetaStore;
 use WorkOS\Lock\Subject;
+use WorkOS\Time\SystemClock;
 
 /**
  * User-meta, option and resolving backends.
@@ -290,7 +291,7 @@ class LockStoresTest extends WPTestCase {
 		$this->options->write( 'demo', $live, $this->state(), DAY_IN_SECONDS );
 		$this->options->write( 'demo', $expired, $this->state(), MINUTE_IN_SECONDS );
 
-		$collector = new GarbageCollector( $this->options );
+		$collector = new GarbageCollector( $this->options, new SystemClock() );
 
 		// Two hours on, only the one-minute row has lapsed.
 		$removed = $collector->run_at( time() + ( 2 * HOUR_IN_SECONDS ) );
@@ -330,7 +331,7 @@ class LockStoresTest extends WPTestCase {
 	public function test_gc_drops_malformed_rows(): void {
 		update_option( 'workos_lock_demo_' . str_repeat( 'a', 32 ), 'not-an-array', false );
 
-		$collector = new GarbageCollector( $this->options );
+		$collector = new GarbageCollector( $this->options, new SystemClock() );
 		$removed   = $collector->run_at( time() );
 
 		$this->assertSame( 1, $removed );

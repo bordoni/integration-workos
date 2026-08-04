@@ -8,6 +8,7 @@
 namespace WorkOS\Lock\Admin;
 
 use WorkOS\Lock\Registry;
+use WorkOS\Time\Clock;
 use WorkOS\Lock\State;
 use WP_User;
 
@@ -42,14 +43,23 @@ class UserProfilePanel {
 	private UnlockHandler $handler;
 
 	/**
+	 * Time source.
+	 *
+	 * @var Clock
+	 */
+	private Clock $clock;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Registry      $registry Lock registry.
 	 * @param UnlockHandler $handler  Unlock action handler.
+	 * @param Clock         $clock    Time source.
 	 */
-	public function __construct( Registry $registry, UnlockHandler $handler ) {
+	public function __construct( Registry $registry, UnlockHandler $handler, Clock $clock ) {
 		$this->registry = $registry;
 		$this->handler  = $handler;
+		$this->clock    = $clock;
 	}
 
 	/**
@@ -90,7 +100,7 @@ class UserProfilePanel {
 			return;
 		}
 
-		$now = (int) apply_filters( 'workos_lock_current_time', time() );
+		$now = $this->clock->now();
 
 		echo '<h2>' . esc_html__( 'WorkOS login locks', 'integration-workos' ) . '</h2>';
 		echo '<p class="description">' . esc_html__( 'Repeated attempts against this account have been recorded. Clearing the locks lets the user try again immediately.', 'integration-workos' ) . '</p>';

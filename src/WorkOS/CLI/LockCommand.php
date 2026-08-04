@@ -10,6 +10,7 @@ namespace WorkOS\CLI;
 use WorkOS\App;
 use WorkOS\Lock\GarbageCollector;
 use WorkOS\Lock\Registry;
+use WorkOS\Time\Clock;
 use WP_CLI;
 use WP_CLI\Formatter;
 
@@ -102,7 +103,7 @@ class LockCommand extends \WP_CLI_Command {
 		$lock    = $this->resolve_lock( (string) $args[0] );
 		$subject = $this->resolve_subject( $lock, (string) $args[1], $assoc_args['type'] ?? '' );
 		$state   = $lock->status( $subject );
-		$now     = (int) apply_filters( 'workos_lock_current_time', time() );
+		$now     = App::container()->get( Clock::class )->now();
 
 		WP_CLI::line( sprintf( 'Lock:      %s', $lock->slug() ) );
 		WP_CLI::line( sprintf( 'Subject:   %s (%s)', $subject->value(), $subject->type() ) );

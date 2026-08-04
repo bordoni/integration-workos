@@ -4,6 +4,7 @@ modules:
     enabled:
         - WPLoader
         - "\\Helper\\Wpunit"
+        - "\\Helper\\Time"
     config:
         WPLoader:
             wpRootFolder: "%WP_ROOT_FOLDER%"

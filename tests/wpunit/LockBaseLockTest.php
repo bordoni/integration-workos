@@ -12,6 +12,7 @@ use WorkOS\Lock\BaseLock;
 use WorkOS\Lock\Store\OptionStore;
 use WorkOS\Lock\Store\ResolvingStore;
 use WorkOS\Lock\Store\UserMetaStore;
+use WorkOS\Time\FrozenClock;
 use WorkOS\Lock\Subject;
 use WP_Error;
 
@@ -30,11 +31,11 @@ class LockBaseLockTest extends WPTestCase {
 	private BaseLock $lock;
 
 	/**
-	 * Fixed clock value, moved by {@see self::travel_to()}.
+	 * Clock the lock under test reads.
 	 *
-	 * @var int
+	 * @var FrozenClock
 	 */
-	private int $now = 1700000000;
+	private FrozenClock $clock;
 
 	/**
 	 * Set up.
@@ -42,27 +43,8 @@ class LockBaseLockTest extends WPTestCase {
 	public function setUp(): void {
 		parent::setUp();
 
-		$this->now = 1700000000;
-		add_filter( 'workos_lock_current_time', [ $this, 'frozen_time' ] );
-
-		$this->lock = $this->make_lock();
-	}
-
-	/**
-	 * Tear down.
-	 */
-	public function tearDown(): void {
-		remove_filter( 'workos_lock_current_time', [ $this, 'frozen_time' ] );
-		parent::tearDown();
-	}
-
-	/**
-	 * Frozen clock for the lock under test.
-	 *
-	 * @return int
-	 */
-	public function frozen_time(): int {
-		return $this->now;
+		$this->clock = new FrozenClock( 1700000000 );
+		$this->lock  = $this->make_lock();
 	}
 
 	/**
@@ -73,7 +55,7 @@ class LockBaseLockTest extends WPTestCase {
 	 * @return void
 	 */
 	private function travel_to( int $seconds ): void {
-		$this->now += $seconds;
+		$this->clock->travel( $seconds );
 	}
 
 	/**
@@ -84,7 +66,7 @@ class LockBaseLockTest extends WPTestCase {
 	private function make_lock(): BaseLock {
 		$store = new ResolvingStore( new UserMetaStore(), new OptionStore() );
 
-		return new class( $store ) extends BaseLock {
+		return new class( $store, $this->clock ) extends BaseLock {
 			public function slug(): string {
 				return 'test_lock';
 			}

@@ -8,6 +8,7 @@
 namespace WorkOS\Lock;
 
 use WorkOS\Lock\Store\OptionStore;
+use WorkOS\Time\Clock;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -43,12 +44,21 @@ class GarbageCollector {
 	private OptionStore $options;
 
 	/**
+	 * Time source.
+	 *
+	 * @var Clock
+	 */
+	private Clock $clock;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param OptionStore $options Option-backed store.
+	 * @param Clock       $clock   Time source.
 	 */
-	public function __construct( OptionStore $options ) {
+	public function __construct( OptionStore $options, Clock $clock ) {
 		$this->options = $options;
+		$this->clock   = $clock;
 	}
 
 	/**
@@ -117,7 +127,7 @@ class GarbageCollector {
 	 * @return int Total rows removed.
 	 */
 	public function run(): int {
-		return $this->run_at( (int) apply_filters( 'workos_lock_current_time', time() ) );
+		return $this->run_at( $this->clock->now() );
 	}
 
 	/**

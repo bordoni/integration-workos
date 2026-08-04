@@ -9,6 +9,7 @@ namespace WorkOS\Lock;
 
 use WorkOS\Lock\Contracts\Lockable;
 use WorkOS\Lock\Contracts\Store;
+use WorkOS\Time\Clock;
 use WP_Error;
 use WP_User;
 
@@ -53,12 +54,21 @@ abstract class BaseLock implements Lockable {
 	protected Store $store;
 
 	/**
+	 * Time source.
+	 *
+	 * @var Clock
+	 */
+	protected Clock $clock;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Store $store Persistence backend.
+	 * @param Clock $clock Time source.
 	 */
-	public function __construct( Store $store ) {
+	public function __construct( Store $store, Clock $clock ) {
 		$this->store = $store;
+		$this->clock = $clock;
 	}
 
 	/**
@@ -592,17 +602,9 @@ abstract class BaseLock implements Lockable {
 	/**
 	 * Current timestamp.
 	 *
-	 * Routed through a filter so tests can move time forward instead of
-	 * sleeping — a ladder that tops out at 24 hours is not otherwise testable.
-	 *
 	 * @return int
 	 */
 	protected function now(): int {
-		/**
-		 * Filters the clock every lock reads.
-		 *
-		 * @param int $now Current Unix timestamp.
-		 */
-		return (int) apply_filters( 'workos_lock_current_time', time() );
+		return $this->clock->now();
 	}
 }

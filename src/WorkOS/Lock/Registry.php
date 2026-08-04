@@ -15,6 +15,7 @@ use WorkOS\Lock\Locks\PasswordResetLock;
 use WorkOS\Lock\Locks\SignupLock;
 use WorkOS\Lock\Locks\TokenGuessLock;
 use WorkOS\Lock\Store\ResolvingStore;
+use WorkOS\Time\Clock;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -38,6 +39,13 @@ class Registry {
 	private ResolvingStore $store;
 
 	/**
+	 * Time source handed to every lock.
+	 *
+	 * @var Clock
+	 */
+	private Clock $clock;
+
+	/**
 	 * Built locks, keyed by slug.
 	 *
 	 * @var array<string, Lockable>|null
@@ -48,9 +56,11 @@ class Registry {
 	 * Constructor.
 	 *
 	 * @param ResolvingStore $store Persistence backend.
+	 * @param Clock          $clock Time source handed to every lock.
 	 */
-	public function __construct( ResolvingStore $store ) {
+	public function __construct( ResolvingStore $store, Clock $clock ) {
 		$this->store = $store;
+		$this->clock = $clock;
 	}
 
 	/**
@@ -77,8 +87,9 @@ class Registry {
 		 *
 		 * @param array<string, Lockable> $locks Locks keyed by slug.
 		 * @param ResolvingStore          $store Shared persistence backend, for constructing new locks.
+		 * @param Clock                   $clock Shared time source, for constructing new locks.
 		 */
-		$filtered = apply_filters( 'workos_locks', $locks, $this->store );
+		$filtered = apply_filters( 'workos_locks', $locks, $this->store, $this->clock );
 
 		$this->locks = [];
 
@@ -220,12 +231,12 @@ class Registry {
 	 */
 	private function default_locks(): array {
 		return [
-			new OtpSendLock( $this->store ),
-			new PasswordAuthLock( $this->store ),
-			new PasswordResetLock( $this->store ),
-			new MfaChallengeLock( $this->store ),
-			new SignupLock( $this->store ),
-			new TokenGuessLock( $this->store ),
+			new OtpSendLock( $this->store, $this->clock ),
+			new PasswordAuthLock( $this->store, $this->clock ),
+			new PasswordResetLock( $this->store, $this->clock ),
+			new MfaChallengeLock( $this->store, $this->clock ),
+			new SignupLock( $this->store, $this->clock ),
+			new TokenGuessLock( $this->store, $this->clock ),
 		];
 	}
 }

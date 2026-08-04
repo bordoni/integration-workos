@@ -17,6 +17,7 @@ use WorkOS\Auth\Controller as AuthController;
 use WorkOS\Auth\PasswordResetAdmin\Controller as PasswordResetAdminController;
 use WorkOS\Auth\ChangeEmail\Controller as ChangeEmailController;
 use WorkOS\Lock\Controller as LockController;
+use WorkOS\Time\Controller as TimeController;
 use WorkOS\REST\Controller as RESTController;
 use WorkOS\Webhook\Controller as WebhookController;
 use WorkOS\Sync\Controller as SyncController;
@@ -36,8 +37,10 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
-		// Registered first: the auth flows resolve locks during their own
-		// registration, so the registry and its storage must already exist.
+		// Both resolve while registering — LockController builds its own
+		// services, the auth flows build locks — so what they depend on has to
+		// be bound first. Clock is an interface and cannot be autowired.
+		$this->container->register( TimeController::class );
 		$this->container->register( LockController::class );
 
 		$this->container->register( AdminController::class );
