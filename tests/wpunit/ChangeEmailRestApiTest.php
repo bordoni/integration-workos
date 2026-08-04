@@ -69,8 +69,6 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		);
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
-		$this->reset_rate_limit_buckets();
-
 		$tokens   = new TokenFactory();
 		$pending  = new PendingChange( $tokens );
 		$mailer   = new Mailer();
@@ -686,14 +684,4 @@ class ChangeEmailRestApiTest extends WPTestCase {
 
 	// ----------------------------------------------------------------- helpers
 
-	private function reset_rate_limit_buckets(): void {
-		global $wpdb;
-		$wpdb->query(
-			"DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_workos_rl_%' OR option_name LIKE '_transient_timeout_workos_rl_%'"
-		);
-
-		if ( wp_using_ext_object_cache() ) {
-			wp_cache_flush();
-		}
-	}
 }

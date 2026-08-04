@@ -16,6 +16,7 @@ use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\RateLimit\DatabaseRateLimiter;
+use WorkOS\Email\AddressCanonicalizer;
 use WorkOS\Http\ClientIp;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\REST\Auth\MagicCode;
@@ -105,8 +106,8 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$rate_limiter = new TieredRateLimiter( new DatabaseRateLimiter() );
 		$completer    = new LoginCompleter();
 
-		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, new ClientIp(), $completer );
-		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, new ClientIp(), $completer );
+		$magic   = new MagicCode( $this->repository, $this->nonce, $radar, $rate_limiter, new ClientIp(), new AddressCanonicalizer(), $completer );
+		$session = new Session( $this->repository, $this->nonce, $radar, $rate_limiter, new ClientIp(), new AddressCanonicalizer(), $completer );
 
 		add_action( 'rest_api_init', [ $magic, 'register_routes' ] );
 		add_action( 'rest_api_init', [ $session, 'register_routes' ] );
@@ -428,6 +429,30 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 	}
 
 	// ------------------------------- /auth/magic/verify ------------------------
+
+	/**
+	 * A malformed address is rejected before rate limiting rather than
+	 * reaching it. The per-email bucket is keyed on the canonical mailbox,
+	 * which is empty for a non-address, and an empty subject is skipped
+	 * rather than counted, so accepting one here would leave that bucket
+	 * silently unenforced.
+	 */
+	public function test_magic_verify_rejects_malformed_email(): void {
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/verify',
+			[ 'profile' => 'members', 'email' => 'not-an-email', 'code' => '123456' ]
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_authkit_invalid_input', $response->get_data()['code'] );
+
+		$verify_calls = array_filter(
+			$this->captured,
+			static fn( array $c ) => str_contains( $c['url'], '/user_management/authenticate' )
+		);
+		$this->assertEmpty( $verify_calls, 'A malformed address must not reach WorkOS.' );
+	}
 
 	public function test_magic_verify_completes_login_on_success(): void {
 		self::factory()->user->create( [ 'user_email' => 'alice@example.com' ] );
