@@ -12,14 +12,16 @@ It is written for two audiences in parallel: a developer wiring a lock into a ne
 
 | Lock | Slug | Counts | Default allowance | Applied in |
 | --- | --- | --- | --- | --- |
-| One-time code delivery | `otp_send` | Requests that may send a code | 5 per address | `/auth/magic/send`, `/auth/password/authenticate` (verification refusals), `/auth/signup/create` |
+| One-time code delivery | `otp_send` | Requests that may send a code | 5 per recipient | `/auth/magic/send`, `/auth/password/authenticate` (verification refusals), `/auth/signup/create`, `/users/{id}/email-change` (per account) |
 | Password sign-in | `password_auth` | Failures only | 10 per account | `/auth/password/authenticate`, `admin-ajax.php` headless login, the `authenticate` filter |
-| Password reset delivery | `password_reset` | Requests that send a link | 5 per account | `/auth/password/reset/start`, `/admin/users/{id}/password-reset` |
+| Password reset delivery | `password_reset` | Requests that send a link | 5 per recipient | `/auth/password/reset/start`, `/admin/users/{id}/password-reset` |
 | Multi-factor challenge | `mfa_challenge` | Challenges issued | 5 per factor | `/auth/mfa/challenge` |
 | Account creation | `signup` | Create attempts | 3 per address | `/auth/signup/create` |
 | Code and token redemption | `token_guess` | Failures only | 10 per token | reset confirm, signup verify, magic verify, MFA verify, invitation accept, email-change confirm/cancel |
 
 Every lock returns the same refusal as the burst limiter — `WP_Error( 'workos_rate_limited', …, [ 'status' => 429, 'retry_after' => N, 'lock' => $slug ] )` — so clients and the login UI need no special handling for the two.
+
+`otp_send` deserves one clarification, because its routes have two different caller postures. On magic send and signup the caller is anonymous and names any address they like; the cap is what stops this site's sending domain being used to spam strangers. On password sign-in the send only happens when a **correct password** meets an unverified account — WorkOS answers by dispatching a verification code — so the caller is partially authenticated and can only reach that account's own inbox. There the cap bounds how many live codes get issued, and an account repeatedly hitting it is a signal worth taking seriously: someone who is not completing verification keeps presenting the right password, which is what a compromised credential looks like.
 
 ---
 
@@ -175,7 +177,7 @@ A lock never counts "requests" in the abstract; it counts requests by a **subjec
 | --- | --- | --- |
 | `for_user( 42 )` | `user` | user meta, `_workos_lock_{slug}` |
 | `for_email( $addr )`, address owned by a WP user | `email` | user meta, `_workos_lock_{slug}` |
-| `for_email( $addr )`, no WP user | `email` | option, `workos_lock_{slug}_{sha256(identity)}` |
+| `for_email( $addr )`, no WP user | `email` | option, `workos_lock_{slug}_{sha256(identity)}`, identity uses the canonical form |
 | `for_ip( $addr )` | `ip` | option |
 | `for_key( $value )` | `key` | option |
 
@@ -184,6 +186,34 @@ A lock never counts "requests" in the abstract; it counts requests by a **subjec
 Subject values are SHA-256 hashed into storage keys, so no address ever sits in `wp_options` in plaintext. Option rows are written with autoload off and carry an `expires_at` stamp; a daily `workos_lock_gc` sweep prunes expired rows and enforces a ceiling on the total (default 50 000) so a caller cycling through throwaway addresses cannot grow the table without bound.
 
 When an address that already has counters gains a WordPress user, the record is **moved onto that user** on the next read. Counting stays continuous across account creation, and there is no orphaned row left behind to report a lock that no longer applies.
+
+### One counter per account, or per inbox
+
+`for_email()` keys a counter one of two ways, and the fork is ownership, not
+which lock is asking.
+
+An address a WordPress user owns resolves to that account and is stored on it.
+The record survives the address changing, an operator can see and clear it from
+the profile screen, and counters recorded before the account existed are folded
+onto it on first read, whichever spelling the account registered with — the
+subject's identity is always the canonical form, ownership only decides where
+the counter lives. The ownership lookup uses the address as given, so
+`alice+1@` matching nothing is never resolved to whoever holds `alice@`; its
+strikes stay keyed to the inbox, and reach an account only when that account
+owns the canonical address itself, at which point it is that account's inbox.
+
+An address nobody owns is keyed on its canonical form (see
+`AddressCanonicalizer`): `alice@`, `a.l.i.c.e@` and `alice+1@gmail.com` share
+one counter. The send endpoints take their destination from the caller, so a
+counter that restarts on every re-spelling stops nothing — and collapsing
+spellings hands the attacker nothing in return, because anyone who can type a
+variant can type the address itself and attack it directly.
+
+What canonical keying does couple is spellings that upstream are genuinely
+separate accounts: while neither has a WordPress user, failures against
+`alice+forum@` and `alice@` share one ladder, and a success on one clears the
+other. Those addresses also share an inbox, and almost always an owner, which
+is why that trade is accepted.
 
 ### IP subjects are deliberately weak
 

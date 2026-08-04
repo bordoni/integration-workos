@@ -343,6 +343,50 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$this->assertSame( 429, $last->get_status() );
 	}
 
+	public function test_initiate_send_lock_is_durable_and_user_backed(): void {
+		wp_set_current_user( $this->linked_user_id );
+
+		$response = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->linked_user_id . '/email-change',
+			[ 'new_email' => 'spray-0@example.test' ]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertCount( 2, $this->mail_captured, 'One initiation sends two messages.' );
+
+		// One attempt per initiation, not one per message or per address.
+		$lock = \WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )->get( 'otp_send' );
+
+		$this->assertSame(
+			1,
+			$lock->status( $lock->for_user( $this->linked_user_id ) )->strikes()
+		);
+
+		// The burst window is cleared between requests; only the durable lock
+		// carries history across, and it does not care that every request
+		// named a different address.
+		for ( $i = 1; $i < 5; $i++ ) {
+			$this->reset_rate_limit_buckets();
+
+			$this->dispatch(
+				'POST',
+				'/workos/v1/users/' . $this->linked_user_id . '/email-change',
+				[ 'new_email' => 'spray-' . $i . '@example.test' ]
+			);
+		}
+
+		$this->reset_rate_limit_buckets();
+
+		$response = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->linked_user_id . '/email-change',
+			[ 'new_email' => 'spray-final@example.test' ]
+		);
+
+		$this->assertSame( 429, $response->get_status(), 'The account is spent, whatever address comes next.' );
+	}
+
 	public function test_initiate_admin_commits_immediately_without_verification(): void {
 		wp_set_current_user( $this->admin_user_id );
 

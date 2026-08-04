@@ -368,6 +368,12 @@ class RestApi {
 
 		$is_admin_action = $this->is_admin_action( (int) $user->ID );
 
+		// The caller is authenticated and the sends go wherever they point, so
+		// the durable lock counts the account, not the address: one attempt per
+		// initiation, however many messages it produces or spellings it tries.
+		$send_lock     = ! $is_admin_action ? $this->locks->get( 'otp_send' ) : null;
+		$send_subjects = null !== $send_lock ? [ $send_lock->for_user( (int) $user->ID ) ] : [];
+
 		// Rate limits throttle self-service abuse; the capability-gated admin
 		// path bypasses them so a legitimate cleanup sweep isn't blocked.
 		if ( ! $is_admin_action ) {
@@ -384,6 +390,13 @@ class RestApi {
 			$rate_ok = $this->rate_limiter->attempt( 'change_email_init_user', (string) $user->ID, $user_count, $user_window );
 			if ( is_wp_error( $rate_ok ) ) {
 				return $rate_ok;
+			}
+
+			foreach ( $send_subjects as $subject ) {
+				$gate = $send_lock->check( $subject );
+				if ( is_wp_error( $gate ) ) {
+					return $gate;
+				}
 			}
 		}
 
@@ -463,6 +476,10 @@ class RestApi {
 
 		$this->notifier->send_verification( $user, $new_email, $confirm_url, $expires );
 		$this->notifier->send_old_address_notice( $user, $new_email, $cancel_url, $expires );
+
+		foreach ( $send_subjects as $subject ) {
+			$send_lock->record( $subject );
+		}
 
 		EventLogger::log(
 			'email_change.initiated',
