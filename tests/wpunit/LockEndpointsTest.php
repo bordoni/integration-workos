@@ -14,7 +14,9 @@ use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\Http\ClientIp;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\RateLimiter;
+use WorkOS\RateLimit\TransientStore;
+use WorkOS\Time\SystemClock;
 use WorkOS\Lock\Registry;
 use WorkOS\REST\Auth\Password;
 use WP_REST_Request;
@@ -100,7 +102,7 @@ class LockEndpointsTest extends WPTestCase {
 			$this->repository,
 			$this->nonce,
 			new Radar(),
-			new RateLimiter(),
+			new RateLimiter( new TransientStore(), new SystemClock() ),
 			new ClientIp(),
 			new LoginCompleter(),
 			$this->locks

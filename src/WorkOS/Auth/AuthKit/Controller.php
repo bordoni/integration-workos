@@ -27,7 +27,6 @@ class Controller extends BaseController {
 	protected function doRegister(): void {
 		$this->container->singleton( ProfileRepository::class );
 		$this->container->singleton( ProfileRouter::class );
-		$this->container->singleton( RateLimiter::class );
 		$this->container->singleton( Nonce::class );
 		$this->container->singleton( Radar::class );
 		$this->container->singleton( Renderer::class );

@@ -7,7 +7,7 @@
 
 namespace WorkOS\UI;
 
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\RateLimiter;
 use WorkOS\Auth\Login;
 use WorkOS\Http\ClientIp;
 use WorkOS\Lock\Registry as LockRegistry;

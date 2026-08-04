@@ -16,7 +16,9 @@ use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
 use WorkOS\Http\ClientIp;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\RateLimiter;
+use WorkOS\RateLimit\TransientStore;
+use WorkOS\Time\SystemClock;
 use WorkOS\REST\Auth\Mfa;
 
 /**
@@ -92,7 +94,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 			$this->repository,
 			$this->nonce,
 			new Radar(),
-			new RateLimiter(),
+			new RateLimiter( new TransientStore(), new SystemClock() ),
 			new ClientIp(),
 			new LoginCompleter(),
 			\WorkOS\App::container()->get( \WorkOS\Lock\Registry::class )

@@ -9,7 +9,9 @@ namespace WorkOS\Tests\Wpunit;
 
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Http\ClientIp;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\RateLimiter;
+use WorkOS\RateLimit\TransientStore;
+use WorkOS\Time\SystemClock;
 use WorkOS\Auth\ChangeEmail\ConflictResolver;
 use WorkOS\Auth\ChangeEmail\Notifier;
 use WorkOS\Auth\ChangeEmail\PendingChange;
@@ -81,7 +83,7 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$notifier = new Notifier( $mailer, $masker );
 
 		$rest = new RestApi(
-			new RateLimiter(),
+			new RateLimiter( new TransientStore(), new SystemClock() ),
 			new ClientIp(),
 			$tokens,
 			$pending,

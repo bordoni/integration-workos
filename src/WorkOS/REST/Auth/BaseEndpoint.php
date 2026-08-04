@@ -12,7 +12,7 @@ use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Auth\AuthKit\Radar;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\RateLimiter;
 use WorkOS\Http\ClientIp;
 use WorkOS\Lock\Contracts\Lockable;
 use WorkOS\Lock\Registry as LockRegistry;

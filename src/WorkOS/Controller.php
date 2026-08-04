@@ -17,6 +17,7 @@ use WorkOS\Auth\Controller as AuthController;
 use WorkOS\Auth\PasswordResetAdmin\Controller as PasswordResetAdminController;
 use WorkOS\Auth\ChangeEmail\Controller as ChangeEmailController;
 use WorkOS\Lock\Controller as LockController;
+use WorkOS\RateLimit\Controller as RateLimitController;
 use WorkOS\Time\Controller as TimeController;
 use WorkOS\REST\Controller as RESTController;
 use WorkOS\Webhook\Controller as WebhookController;
@@ -41,6 +42,7 @@ class Controller extends BaseController {
 		// services, the auth flows build locks — so what they depend on has to
 		// be bound first. Clock is an interface and cannot be autowired.
 		$this->container->register( TimeController::class );
+		$this->container->register( RateLimitController::class );
 		$this->container->register( LockController::class );
 
 		$this->container->register( AdminController::class );

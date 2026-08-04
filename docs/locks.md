@@ -25,11 +25,11 @@ Every lock returns the same refusal as the burst limiter — `WP_Error( 'workos_
 
 ## Why this exists
 
-The plugin already had throttling: `WorkOS\Auth\AuthKit\RateLimiter`, a fixed-window limiter wired into every public auth route. It is cheap, it runs first, and it stays. But it is **advisory by construction**, for three reasons its own docblock spells out:
+The plugin already had throttling: `WorkOS\RateLimit\RateLimiter`, a fixed-window limiter wired into every public auth route. It is cheap, it runs first, and it stays. But it is **advisory by construction**, for three reasons:
 
 1. **Its storage is cache, not record.** Counters live in transients and an object-cache group. A flush, an eviction, or a restart of a non-persistent object cache empties them, and the full allowance comes back.
-2. **Its fallback path is not atomic.** Without a persistent object cache it does a read-modify-write that concurrent requests interleave, so parallel requests can each read the same count and each write the same increment.
-3. **A fixed window has edges.** A window opening at `t` permits a full allowance at `t+59s` and another at `t+61s`.
+2. **Its fallback path is not atomic.** With a persistent object cache the counter is a single `wp_cache_incr`, which Redis and Memcached serialize per key. Without one it falls back to transients and reads, modifies and writes, so parallel requests can each read the same count and each write the same increment.
+3. **A fixed window has edges.** Windows are clock-aligned, so a 60s window permits a full allowance at `:59` and another at `:01`.
 
 None of that matters much for smoothing a burst, which is the limiter's job. It matters a great deal when the thing being repeated costs money or weakens a secret. So there are two layers now, with different jobs:
 
@@ -327,4 +327,4 @@ wp workos lock gc
 
 - [`docs/password-reset.md`](password-reset.md) — the reset flows these locks guard.
 - [`docs/change-email.md`](change-email.md) — the confirm and cancel routes covered by `token_guess`.
-- `src/WorkOS/Auth/AuthKit/RateLimiter.php` — the burst limiter that runs first.
+- `src/WorkOS/RateLimit/RateLimiter.php` — the burst limiter that runs first.

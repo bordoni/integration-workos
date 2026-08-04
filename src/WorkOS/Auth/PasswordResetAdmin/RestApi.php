@@ -10,7 +10,7 @@ namespace WorkOS\Auth\PasswordResetAdmin;
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\RateLimiter;
 use WorkOS\Http\ClientIp;
 use WorkOS\Email\AddressMask;
 use WorkOS\Lock\Registry as LockRegistry;

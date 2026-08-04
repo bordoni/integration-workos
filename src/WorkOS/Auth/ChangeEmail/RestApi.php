@@ -8,7 +8,7 @@
 namespace WorkOS\Auth\ChangeEmail;
 
 use WorkOS\ActivityLog\EventLogger;
-use WorkOS\Auth\AuthKit\RateLimiter;
+use WorkOS\RateLimit\RateLimiter;
 use WorkOS\Http\ClientIp;
 use WorkOS\Email\AddressMask;
 use WorkOS\Lock\Registry as LockRegistry;

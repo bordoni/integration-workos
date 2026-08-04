@@ -26,7 +26,7 @@ defined( 'ABSPATH' ) || exit;
  * ## Why counters live in the database
  *
  * The plugin already rejects bursts with a transient-backed fixed-window
- * limiter ({@see \WorkOS\Auth\AuthKit\RateLimiter}). That limiter is cheap and
+ * limiter ({@see \WorkOS\RateLimit\RateLimiter}). That limiter is cheap and
  * runs first, but it is advisory by construction: without a persistent object
  * cache it does a read-modify-write that concurrent requests can interleave,
  * its storage is evictable, and a fixed window lets a caller spend a full
