@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.0.9] - 2026-08-05
+
+### Security
+
+- **Unlimited verification emails from the sign-in endpoint** (#39) — an account that signed up and abandoned email verification left a working credential behind, and replaying it against `POST /wp-json/workos/v1/auth/password/authenticate` made WorkOS mail a fresh verification code every time. The only bound was 5 per minute against the requester, which is sustainable indefinitely, and the transient counter behind it was non-atomic so a concurrent burst passed straight through. Email sends are now charged against the recipient across layered windows: 3 per 5 minutes, 5 per hour, and 10 per 8 hours. The sign-in path reserves a slot before calling WorkOS and refunds it when the response shows nothing was sent, so a failed password or a completed login costs the recipient nothing. Magic-code send and password-reset start share one recipient bucket, so rotating between endpoints buys no extra mail.
+- **Activity log recorded forgeable IP addresses** (#40) — the log read forwarded-for headers without checking that the request had actually passed through a proxy, and took the left-most entry, which is the portion a client writes. Any caller could attribute their own actions to an address of their choosing, which made the log unusable as evidence for the thing it exists to record. The address the webserver saw is now the default, and it cannot be forged.
+
+### Added
+
+- **`WORKOS_CLIENT_IP_HEADER` constant** (#40) — names the proxy header to trust on sites behind a CDN. Setting it is a deliberate assertion that the origin accepts nothing but proxied traffic, because an origin reachable directly makes the header attacker-controlled again.
+
+### Changed
+
+- **Rate limits count the mailbox, not the string as typed** (#41) — `alice@gmail.com`, `alice+1@gmail.com`, and `a.l.i.c.e@gmail.com` each earned a separate allowance against a single inbox, which was enough to type past the cap. Anything whose effect is mail now counts the mailbox an address lands in. Rewrites apply per provider rather than universally: merging two real mailboxes would let either starve the other, and `business+brian@corp.com` is routinely its own mailbox with its own owner. The address sent to WorkOS is untouched; the reduced form is only ever a counter key, never a destination.
+- **Guessing limits still count the address exactly as typed** (#41) — WorkOS keys accounts on the exact string, so `alice@` and `alice+work@` can both exist with separate passwords. Merging them would let an attacker on one lock out the other, so password and code attempts keep the literal address as their subject.
+- **One answer to "who is calling"** (#40) — rate limiting, the activity log, and the audit log each had their own IP resolution and could name three different callers for one request. They now share one implementation.
+- **Rate limiting moved into its own domain** (#39) — a single-window interface with transient and object-cache implementations, plus a wrapper that stacks windows into a policy. Previously this lived inside the AuthKit package while being used across the plugin.
+
+### Removed
+
+- **`change_email_rate_limit_*` options** (#39) — the change-email flow now uses the shared tiered limiter. Sites that set these will lose them; the layered send policy replaces them.
+
+### Fixed
+
+- **Concurrent-burst bypass on rate limits** (#39) — sites with a persistent object cache now get atomic counters. Sites without one keep the read-modify-write path, which the longer window tiers bound.
+- **Magic-code verify accepted malformed addresses** (#41) — it took any non-empty string; it now rejects addresses that are not valid.
+
 ## [1.0.8] - 2026-06-30
 
 ### Added

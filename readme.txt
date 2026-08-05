@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.8
+Stable tag: 1.0.9
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,17 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.9 - 2026-08-05 =
+
+* Fix: Unlimited verification emails from the sign-in endpoint. Credentials from an account that never finished email verification could be replayed to make WorkOS send a fresh code every time, bounded only at 5 per minute against the caller. Email sends are now counted against the recipient across 5 minute, 1 hour, and 8 hour windows, and a reserved slot is refunded when the response shows nothing was sent. (#39)
+* Fix: The activity log no longer records forgeable IP addresses. Forwarded-for headers were trusted without a proxy in front, and the left-most entry was used, so any caller could attribute their actions to an address of their choosing. The address the webserver saw is now used by default. (#40)
+* New: `WORKOS_CLIENT_IP_HEADER` constant names a trusted proxy header for sites behind a CDN. Only set it when the origin accepts nothing but proxied traffic. (#40)
+* Fix: Rate limits now count the mailbox an address lands in, so plus-tags and dots on providers that ignore them no longer multiply a single inbox's allowance. The address sent to WorkOS is unchanged. Sign-in and code guessing still count the address exactly as typed, since WorkOS treats those as separate accounts. (#41)
+* Fix: Rate limiting, the activity log, and the audit log now agree on the caller's IP address instead of each resolving it separately. (#40)
+* Fix: Sites with a persistent object cache now get atomic rate-limit counters, closing a bypass where concurrent requests passed the same check. (#39)
+* Fix: Magic-code verify rejects malformed email addresses instead of accepting any non-empty string. (#41)
+* Fix: Removed the `change_email_rate_limit_*` options. The change-email flow now uses the shared tiered rate limiter. (#39)
+
 = 1.0.8 - 2026-06-30 =
 
 * New: Change a user's email from the WorkOS → Users admin page, alongside "Open in WorkOS" and "Send password reset". (#33)
@@ -271,6 +282,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.9 =
+Security release. Closes an unlimited-verification-email path on the sign-in endpoint and stops the activity log trusting spoofable IP headers. Rate limits now count the mailbox an address lands in, so plus-tags no longer multiply an inbox's allowance. Removes the `change_email_rate_limit_*` options in favour of the shared tiered limiter; sites behind a CDN should set `WORKOS_CLIENT_IP_HEADER`.
 
 = 1.0.8 =
 Adds a "Change email" action to the WorkOS → Users admin page and makes admin-of-other email changes commit immediately, while self-service keeps the verified token flow. Also fixes a 500 in the admin password-reset endpoint when the profile field is empty.
