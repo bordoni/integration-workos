@@ -161,6 +161,27 @@ class Plugin {
 	}
 
 	/**
+	 * Defaults that only new installs get, so an upgrade never changes how an
+	 * existing site behaves. Re-link Protection starts on: a new site has no
+	 * accounts that rely on email auto-linking moving an existing link.
+	 *
+	 * Writes only keys the environment rows don't already have.
+	 *
+	 * @return void
+	 */
+	public static function seed_new_install_defaults(): void {
+		foreach ( [ 'production', 'staging' ] as $env ) {
+			$options = get_option( "workos_{$env}", [] );
+			$options = is_array( $options ) ? $options : [];
+
+			if ( ! array_key_exists( 'relink_protection', $options ) ) {
+				$options['relink_protection'] = true;
+				update_option( "workos_{$env}", $options );
+			}
+		}
+	}
+
+	/**
 	 * Plugin activation callback.
 	 *
 	 * @return void
@@ -173,7 +194,14 @@ class Plugin {
 			require_once $autoloader;
 		}
 
+		// No schema version yet means the plugin has never been set up on this site.
+		$fresh_install = false === get_option( 'workos_db_version', false );
+
 		Database\Schema::activate();
+
+		if ( $fresh_install ) {
+			self::seed_new_install_defaults();
+		}
 
 		/*
 		 * Register rewrite rules before flushing so they all get persisted:

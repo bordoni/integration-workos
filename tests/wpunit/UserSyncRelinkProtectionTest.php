@@ -433,4 +433,95 @@ class UserSyncRelinkProtectionTest extends WPTestCase {
 		$this->assertSame( 'user_old', get_user_meta( $user_id, '_workos_user_id', true ) );
 		$this->assertSame( 'directory_sync', $this->refused[0][3] );
 	}
+
+	// -------------------------------------------------------------------------
+	// Review follow-ups
+	// -------------------------------------------------------------------------
+
+	/**
+	 * A WorkOS ID match wins over an email match, and nothing is refused.
+	 *
+	 * WorkOS user A is linked to WP user 1. A signs in with an email that belongs to
+	 * WP user 2 (linked to B). Step 1 finds WP user 1; WP user 2 is never considered.
+	 */
+	public function test_workos_id_match_beats_email_match(): void {
+		$this->enable_protection();
+		$one = $this->linked_user( 'one@example.com', 'user_a' );
+		$two = $this->linked_user( 'two@example.com', 'user_b' );
+
+		$result = UserSync::find_or_create_wp_user( [ 'id' => 'user_a', 'email' => 'two@example.com' ], 'login' );
+
+		$this->assertInstanceOf( \WP_User::class, $result );
+		$this->assertSame( $one, $result->ID );
+		$this->assertSame( [], $this->refused );
+		$this->assertSame( 'user_a', get_user_meta( $one, '_workos_user_id', true ) );
+		$this->assertSame( 'user_b', get_user_meta( $two, '_workos_user_id', true ) );
+		$this->assertEmpty( get_user_meta( $two, UserSync::META_LINK_REFUSED, true ) );
+	}
+
+	/**
+	 * Unlinking clears a recorded refusal.
+	 */
+	public function test_unlink_clears_refusal(): void {
+		$this->enable_protection();
+		$user_id = $this->linked_user( 'unlink@example.com', 'user_old' );
+		UserSync::link_user( $user_id, [ 'id' => 'user_new', 'email' => 'unlink@example.com' ], 'login' );
+		$this->assertNotEmpty( get_user_meta( $user_id, UserSync::META_LINK_REFUSED, true ) );
+
+		UserSync::unlink_user( $user_id );
+
+		$this->assertEmpty( get_user_meta( $user_id, UserSync::META_LINK_REFUSED, true ) );
+		$this->assertEmpty( get_user_meta( $user_id, '_workos_user_id', true ) );
+	}
+
+	/**
+	 * --force never links a WorkOS ID that another WP user holds.
+	 */
+	public function test_force_refuses_workos_id_linked_elsewhere(): void {
+		$holder = $this->linked_user( 'holder@example.com', 'user_held' );
+		$other  = $this->linked_user( 'other@example.com', 'user_other' );
+
+		$result = UserSync::link_user( $other, [ 'id' => 'user_held', 'email' => 'other@example.com' ], 'cli_link', true );
+
+		$this->assertFalse( $result );
+		$this->assertSame( 'user_other', get_user_meta( $other, '_workos_user_id', true ) );
+		$this->assertSame( 'user_held', get_user_meta( $holder, '_workos_user_id', true ) );
+		$this->assertSame( [], $this->linked );
+	}
+
+	/**
+	 * With protection on, a first link of a WorkOS ID another WP user holds is refused too.
+	 */
+	public function test_protection_refuses_first_link_of_workos_id_linked_elsewhere(): void {
+		$this->enable_protection();
+		$this->linked_user( 'holder2@example.com', 'user_held2' );
+		$fresh = self::factory()->user->create();
+
+		$this->assertFalse( UserSync::link_user( $fresh, [ 'id' => 'user_held2', 'email' => 'fresh2@example.com' ], 'onboarding' ) );
+		$this->assertEmpty( get_user_meta( $fresh, '_workos_user_id', true ) );
+	}
+
+	/**
+	 * With protection off and no --force, link_user() behaves as before.
+	 */
+	public function test_unprotected_link_leaves_holder_check_to_caller(): void {
+		$this->linked_user( 'holder3@example.com', 'user_held3' );
+		$fresh = self::factory()->user->create();
+
+		$this->assertTrue( UserSync::link_user( $fresh, [ 'id' => 'user_held3', 'email' => 'fresh3@example.com' ], 'onboarding' ) );
+	}
+
+	/**
+	 * New installs start with protection on; keys a site already has are left alone.
+	 */
+	public function test_new_install_defaults_turn_protection_on(): void {
+		delete_option( 'workos_staging' );
+		update_option( 'workos_production', [ 'api_key' => 'sk_test_fake', 'relink_protection' => false ] );
+
+		\WorkOS\Plugin::seed_new_install_defaults();
+
+		$this->assertTrue( get_option( 'workos_staging' )['relink_protection'] );
+		$this->assertFalse( get_option( 'workos_production' )['relink_protection'] );
+		$this->assertSame( 'sk_test_fake', get_option( 'workos_production' )['api_key'] );
+	}
 }
