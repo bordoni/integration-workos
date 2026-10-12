@@ -227,6 +227,10 @@ class UserCommand extends \WP_CLI_Command {
 	 * [--force]
 	 * : Replace an existing link to a different WorkOS user.
 	 *
+	 * [--reactivate]
+	 * : Also clear the deactivation. Required to link an account that was
+	 * deactivated because its WorkOS user was deleted.
+	 *
 	 * [--yes]
 	 * : Skip the confirmation for --force.
 	 *
@@ -234,6 +238,7 @@ class UserCommand extends \WP_CLI_Command {
 	 *
 	 *     wp workos user link 1 user_01ABC
 	 *     wp workos user link 1 user_01XYZ --force
+	 *     wp workos user link 1 user_01XYZ --force --reactivate
 	 *
 	 * @param array $args       Positional arguments.
 	 * @param array $assoc_args Associative arguments.
@@ -244,6 +249,7 @@ class UserCommand extends \WP_CLI_Command {
 		$wp_user_id     = (int) $args[0];
 		$workos_user_id = $args[1];
 		$force          = ! empty( $assoc_args['force'] );
+		$reactivate     = ! empty( $assoc_args['reactivate'] );
 
 		$user = get_user_by( 'id', $wp_user_id );
 		if ( ! $user ) {
@@ -266,6 +272,13 @@ class UserCommand extends \WP_CLI_Command {
 			WP_CLI::error( "WorkOS user {$workos_user_id} is already linked to WordPress user #{$other_user_id}. Unlink that user first." );
 		}
 
+		// An account deactivated by user.deleted belongs to a WorkOS user that no longer
+		// exists. Handing it to a new identity is a separate decision from re-linking.
+		$deactivated = (bool) get_user_meta( $wp_user_id, '_workos_deactivated', true );
+		if ( $deactivated && ! $reactivate ) {
+			WP_CLI::error( "User #{$wp_user_id} was deactivated when its WorkOS user was deleted. Pass --reactivate to link it to {$workos_user_id} and reactivate it." );
+		}
+
 		// Validate the WorkOS user exists.
 		$workos_user = workos()->api()->get_user( $workos_user_id );
 		if ( is_wp_error( $workos_user ) ) {
@@ -276,7 +289,15 @@ class UserCommand extends \WP_CLI_Command {
 			WP_CLI::confirm( "Replace the link of user #{$wp_user_id} ({$user->user_email}) from WorkOS user {$existing_link} to {$workos_user_id}?", $assoc_args );
 		}
 
-		UserSync::link_user( $wp_user_id, $workos_user, 'cli_link', $force );
+		if ( ! UserSync::link_user( $wp_user_id, $workos_user, 'cli_link', $force ) ) {
+			WP_CLI::error( "Could not link WordPress user #{$wp_user_id} to WorkOS user {$workos_user_id}. See the debug log." );
+		}
+
+		if ( $deactivated ) {
+			delete_user_meta( $wp_user_id, '_workos_deactivated' );
+			WP_CLI::log( "Reactivated WordPress user #{$wp_user_id}. Check its role: a demoted account keeps the role it was demoted to." );
+		}
+
 		WP_CLI::success( "Linked WordPress user #{$wp_user_id} to WorkOS user {$workos_user_id}." );
 	}
 

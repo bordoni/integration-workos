@@ -149,6 +149,11 @@ class UserSync {
 	 * user, and `workos_user_link_refused` fires. `$force` is for explicit
 	 * reassignment by an administrator (`wp workos user link --force`).
 	 *
+	 * One WorkOS user maps to one WP user: with `$force` or Re-link Protection on,
+	 * a WorkOS ID that is already linked to a different WP user is never linked
+	 * again, and this returns false. With both off, that check is the caller's
+	 * (the sign-in paths look the ID up first, in `find_or_create_wp_user()`).
+	 *
 	 * @param int    $wp_user_id  WP user ID.
 	 * @param array  $workos_user WorkOS user data.
 	 * @param string $source      What is linking, for logs (e.g. 'login', 'webhook', 'cli_link').
@@ -165,9 +170,19 @@ class UserSync {
 		$previous_id = (string) get_user_meta( $wp_user_id, '_workos_user_id', true );
 		$is_relink   = '' !== $previous_id && $previous_id !== $new_id;
 
-		if ( $is_relink && ! $force && Config::is_relink_protection_enabled() ) {
+		$protected = Config::is_relink_protection_enabled();
+
+		if ( $is_relink && ! $force && $protected ) {
 			self::refuse_link( $wp_user_id, $previous_id, $workos_user, $source );
 			return false;
+		}
+
+		if ( $force || $protected ) {
+			$holder = self::get_wp_user_id_by_workos_id( $new_id );
+			if ( $holder && $holder !== $wp_user_id ) {
+				workos_log( sprintf( 'Refused to link WP user #%d to WorkOS user %s: already linked to WP user #%d (source: %s).', $wp_user_id, $new_id, $holder, $source ? $source : 'unknown' ), 'warning' );
+				return false;
+			}
 		}
 
 		update_user_meta( $wp_user_id, '_workos_user_id', $new_id );
@@ -265,6 +280,7 @@ class UserSync {
 		delete_user_meta( $wp_user_id, '_workos_access_token' );
 		delete_user_meta( $wp_user_id, '_workos_refresh_token' );
 		delete_user_meta( $wp_user_id, '_workos_deactivated' );
+		delete_user_meta( $wp_user_id, self::META_LINK_REFUSED );
 	}
 
 	/**
