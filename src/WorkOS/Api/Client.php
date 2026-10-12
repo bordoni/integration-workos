@@ -833,11 +833,18 @@ class Client {
 			return false;
 		}
 
-		$timestamp = (int) $parts['t'];
-		if ( abs( time() - $timestamp ) > $tolerance ) {
+		$timestamp = $parts['t'];
+		if ( ! ctype_digit( $timestamp ) ) {
 			return false;
 		}
 
+		// WorkOS sends the timestamp in milliseconds; seconds are accepted too.
+		$seconds = strlen( $timestamp ) > 10 ? intdiv( (int) $timestamp, 1000 ) : (int) $timestamp;
+		if ( abs( time() - $seconds ) > $tolerance ) {
+			return false;
+		}
+
+		// The signed string uses the timestamp exactly as sent.
 		$expected = hash_hmac( 'sha256', "{$timestamp}.{$payload}", $secret );
 
 		return hash_equals( $expected, $parts['v1'] );
