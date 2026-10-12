@@ -53,6 +53,7 @@ Defined in `Plugin::init()`:
 - `WORKOS_ORGANIZATION_ID` — Organization ID (overrides DB option)
 - `WORKOS_ENVIRONMENT_ID` — Environment ID (overrides DB option)
 - `WORKOS_ENVIRONMENT` — Lock active environment (`production` or `staging`)
+- `WORKOS_RELINK_PROTECTION` — Re-link Protection on/off (see [`docs/identity-linking.md`](docs/identity-linking.md)); read on every call, so the settings page can't override it
 
 Per-environment constants (take priority over generic):
 - `WORKOS_PRODUCTION_API_KEY`, `WORKOS_PRODUCTION_CLIENT_ID`, etc.
@@ -353,6 +354,7 @@ tests/
     ├── UserSyncDeprovisionTest.php                 # User deprovisioning tests
     ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
     ├── UserSyncLinkTest.php                        # User linking tests
+    ├── UserSyncRelinkProtectionTest.php            # Re-link Protection: refuse/force/actions, sign-in, webhook, directory sync
     ├── UserSyncPushTest.php                        # Outbound user sync tests
     ├── UserSyncResyncTest.php                      # User re-sync tests
     ├── WebhookReceiverTest.php                     # Webhook receiver tests
