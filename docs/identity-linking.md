@@ -15,6 +15,10 @@ With **Re-link Protection** on, that match is refused:
 
 Linking a user that has no link yet, or writing the same link again, is unaffected.
 
+One WorkOS user maps to one WordPress user. With protection on (or `--force`), `link_user()` also refuses a WorkOS ID that is already linked to a different WordPress user.
+
+The checks are read-then-write with no lock. Two first links that run at the same moment for one WorkOS user (a sign-in and the `user.created` webhook, say) can both pass them. When both match the same WordPress user by email, the same link is written twice and nothing is lost. When neither finds one, both can create a WordPress user (WordPress's own email check is read-then-write too), leaving two accounts linked to one WorkOS user; lookups then return the first by login. It needs both requests inside the same few milliseconds, and `wp workos user unlink` plus deleting the spare account clears it.
+
 Reassigning an account on purpose stays possible, and is explicit:
 
 ```bash
@@ -23,9 +27,21 @@ wp workos user link <wp_user_id> <workos_user_id> --force
 
 It asks for confirmation (`--yes` skips it), refuses when that WorkOS user is already linked to another WordPress user, and clears the refusal notice.
 
+### A WorkOS user deleted and created again
+
+`user.deleted` deprovisions the WordPress account (deactivate, demote or delete, per **Deprovision Action**) and leaves it linked to the deleted WorkOS ID. When a new WorkOS user later signs in with the same email, protection refuses the match: the address may belong to someone else now, so the old account, with its orders and licenses, isn't handed over automatically. The sign-in fails with the conflict message until an administrator decides.
+
+Giving the old account to the new identity is a deliberate step, and `--force` alone isn't enough when the account was deactivated:
+
+```bash
+wp workos user link <wp_user_id> <new_workos_user_id> --force --reactivate
+```
+
+`--reactivate` clears the deactivation. A demoted account keeps the role it was demoted to; set the role yourself.
+
 ### Turning it on
 
-**WorkOS → Users → Identity Linking → Re-link Protection**, per environment. Off by default.
+**WorkOS → Users → Identity Linking → Re-link Protection**, per environment. On for new installs since 1.0.10; sites upgrading from an earlier version keep it off until they turn it on, so an update never changes who can sign in.
 
 Or in `wp-config.php`, which locks the checkbox:
 
