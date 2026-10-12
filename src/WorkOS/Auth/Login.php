@@ -36,6 +36,9 @@ class Login {
 		// Optionally remove WP default auth handlers.
 		add_action( 'init', [ $this, 'maybe_disable_password_fallback' ] );
 
+		// Keep ?fallback=1 / ?workos=0 on the classic form's POST, so the takeover lets it through.
+		add_filter( 'site_url', [ $this, 'keep_classic_login_on_post' ], 10, 3 );
+
 		// Control session duration.
 		add_filter( 'auth_cookie_expiration', [ $this, 'session_expiration' ], 10, 3 );
 
@@ -326,6 +329,38 @@ class Login {
 
 		remove_filter( 'authenticate', 'wp_authenticate_username_password', 20 );
 		remove_filter( 'authenticate', 'wp_authenticate_email_password', 20 );
+	}
+
+	/**
+	 * Carry the classic-login opt-ins onto the URL wp-login.php posts its forms to.
+	 *
+	 * `?fallback=1` and `?workos=0` are read from the query string, but the classic form
+	 * posts to a bare `wp-login.php`. Without them on the POST, the custom-mode takeover
+	 * renders the React login and the AuthKit redirect sends the visitor away, so the
+	 * submitted username and password are dropped and the sign-in never happens.
+	 *
+	 * @param string      $url    The site URL.
+	 * @param string      $path   Path relative to the site URL.
+	 * @param string|null $scheme Scheme context; wp-login.php uses `login_post` for its form actions.
+	 *
+	 * @return string
+	 */
+	public function keep_classic_login_on_post( $url, $path, $scheme ) {
+		if ( 'login_post' !== $scheme || ! is_string( $url ) || ! workos()->is_enabled() ) {
+			return $url;
+		}
+
+		$carry = [];
+
+		if ( ! empty( SuperGlobals::get_get_var( 'fallback' ) ) && workos()->option( 'allow_password_fallback', true ) ) {
+			$carry['fallback'] = '1';
+		}
+
+		if ( LoginBypass::is_active() ) {
+			$carry['workos'] = '0';
+		}
+
+		return $carry ? add_query_arg( $carry, $url ) : $url;
 	}
 
 	/**
