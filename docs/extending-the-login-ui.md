@@ -20,7 +20,7 @@ Every slot's `fillProps` carries the active step and profile context so a Fill c
 
 ```ts
 {
-    step: Step;            // 'pick' | 'password' | 'magic_send' | 'magic_verify' | 'mfa' | 'signup' | …
+    step: Step;            // 'pick' | 'password' | 'magic_send' | 'magic_verify' | 'email_verify' | 'mfa' | 'signup' | …
     profileSlug: string;   // 'default', 'members-area', etc.
     methods: AuthMethod[]; // enabled sign-in methods on this profile
     flow?: string;         // present on flow-specific slots, e.g. 'password', 'magic_send'

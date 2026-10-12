@@ -70,6 +70,11 @@ class LoginCompleter {
 	 *     'pending_authentication_token' => string,
 	 *     'factors'                      => array,
 	 *   }
+	 *   When the email must be verified first: {
+	 *     'email_verification_required'  => true,
+	 *     'pending_authentication_token' => string,
+	 *     'email'                        => string,
+	 *   }
 	 */
 	public function complete( $workos_response, Profile $profile, string $redirect_to = '', bool $honor_profile_redirect = true ) {
 		// WorkOS returns `organization_selection_required` when the
@@ -79,6 +84,11 @@ class LoginCompleter {
 		// organization-selection grant. With no pinned org we bail with a
 		// clear error — there is no in-shell org picker by design.
 		if ( is_wp_error( $workos_response ) ) {
+			$verification = $this->email_verification_step( $workos_response );
+			if ( null !== $verification ) {
+				return $verification;
+			}
+
 			$resolved = $this->maybe_resolve_organization_selection( $workos_response, $profile );
 			if ( is_wp_error( $resolved ) ) {
 				return $resolved;
@@ -225,6 +235,35 @@ class LoginCompleter {
 		}
 
 		return [];
+	}
+
+	/**
+	 * The email-verification step, when WorkOS asks for one.
+	 *
+	 * WorkOS has already mailed the code; the shell collects it and finishes
+	 * the sign-in with the pending token.
+	 *
+	 * @param WP_Error $error Error from the WorkOS authenticate call.
+	 *
+	 * @return array|null Step payload, or null for any other error.
+	 */
+	private function email_verification_step( WP_Error $error ): ?array {
+		$data = $error->get_error_data();
+		$body = is_array( $data ) && isset( $data['body'] ) && is_array( $data['body'] ) ? $data['body'] : [];
+
+		$pending_token = (string) ( $body['pending_authentication_token'] ?? '' );
+		if ( 'email_verification_required' !== ( $body['code'] ?? '' ) || '' === $pending_token ) {
+			return null;
+		}
+
+		$email = (string) ( $body['email'] ?? '' );
+		PendingEmailVerification::remember( $pending_token, $email );
+
+		return [
+			'email_verification_required'  => true,
+			'pending_authentication_token' => $pending_token,
+			'email'                        => $email,
+		];
 	}
 
 	/**

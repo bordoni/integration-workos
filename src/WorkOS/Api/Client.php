@@ -261,6 +261,33 @@ class Client {
 	}
 
 	/**
+	 * Complete a pending authentication with an email-verification code.
+	 *
+	 * @param string      $code               Code WorkOS mailed when it required verification.
+	 * @param string      $pending_auth_token Pending authentication token from that response.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function authenticate_with_email_verification(
+		string $code,
+		string $pending_auth_token,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'code'                         => $code,
+				'pending_authentication_token' => $pending_auth_token,
+				'client_id'                    => $this->client_id,
+				'client_secret'                => $this->api_key,
+				'grant_type'                   => 'urn:workos:oauth:grant-type:email-verification:code',
+			],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	/**
 	 * Complete a pending authentication with a TOTP code.
 	 *
 	 * @param string      $pending_auth_token Pending authentication token returned from prior auth.

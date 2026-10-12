@@ -15,13 +15,14 @@ import type {
 	AuthFactor,
 	AuthMethod,
 	AuthResult,
+	EmailVerificationRequired,
 	InvitationLookup,
 	LoginSuccess,
 	MfaRequired,
 	Profile,
 	Step,
 } from './types';
-import { isMfaRequired } from './types';
+import { isEmailVerificationRequired, isMfaRequired } from './types';
 import {
 	Alert,
 	Button,
@@ -194,10 +195,11 @@ interface PasswordProps {
 	onMfa: ( data: MfaRequired ) => void;
 	onSuccess: ( data: LoginSuccess ) => void;
 	onEmailConfirmation: ( email: string ) => void;
+	onEmailVerification: ( data: EmailVerificationRequired ) => void;
 	onBack: ( target?: Step ) => void;
 }
 
-export function Password( { client, onMfa, onSuccess, onEmailConfirmation, onBack, profile }: PasswordProps ) {
+export function Password( { client, onMfa, onSuccess, onEmailConfirmation, onEmailVerification, onBack, profile }: PasswordProps ) {
 	const [ email, setEmail ] = useState( '' );
 	const [ password, setPassword ] = useState( '' );
 	const [ loading, setLoading ] = useState( false );
@@ -214,6 +216,10 @@ export function Password( { client, onMfa, onSuccess, onEmailConfirmation, onBac
 		setLoading( false );
 		if ( ! ok ) {
 			setError( errorMessage( data ) );
+			return;
+		}
+		if ( isEmailVerificationRequired( data ) ) {
+			onEmailVerification( data );
 			return;
 		}
 		const result = data as AuthResult & { email_confirmation_required?: boolean };
@@ -467,6 +473,157 @@ export function MagicVerify( {
 					fillProps={ fillProps }
 				/>
 			</form>
+		</FlowCard>
+	);
+}
+
+// -------------------------------------------------------------- EmailVerify
+
+interface EmailVerifyProps {
+	client: AuthKitClient;
+	profile: Profile;
+	email: string;
+	pendingAuthToken: string;
+	onMfa: ( data: MfaRequired ) => void;
+	onSuccess: ( data: LoginSuccess ) => void;
+	onBack: () => void;
+}
+
+/**
+ * Finish a password sign-in that WorkOS paused to verify the email. The
+ * code is already in the inbox; resending only needs the pending token,
+ * since the server remembers whose sign-in it is.
+ */
+export function EmailVerify( {
+	client,
+	email,
+	pendingAuthToken,
+	onMfa,
+	onSuccess,
+	onBack,
+	profile,
+}: EmailVerifyProps ) {
+	const [ code, setCode ] = useState( '' );
+	const [ loading, setLoading ] = useState( false );
+	const [ resending, setResending ] = useState( false );
+	const [ error, setError ] = useState( '' );
+	const [ notice, setNotice ] = useState( '' );
+
+	const submit = async ( event: FormEvent ) => {
+		event.preventDefault();
+		setLoading( true );
+		setError( '' );
+		setNotice( '' );
+		const { ok, data } = await client.json< AuthResult >(
+			'/email-verification/verify',
+			{
+				code,
+				pending_authentication_token: pendingAuthToken,
+				redirect_to: profile.redirectTo,
+			}
+		);
+		setLoading( false );
+		if ( ! ok ) {
+			setError( errorMessage( data ) );
+			return;
+		}
+		const result = data as AuthResult;
+		if ( isMfaRequired( result ) ) {
+			onMfa( result );
+			return;
+		}
+		onSuccess( result );
+	};
+
+	const resend = async () => {
+		if ( resending ) {
+			return;
+		}
+		setResending( true );
+		setError( '' );
+		setNotice( '' );
+		const { ok, data } = await client.json< { message?: string } >(
+			'/email-verification/resend',
+			{ pending_authentication_token: pendingAuthToken }
+		);
+		setResending( false );
+		if ( ! ok ) {
+			setError( errorMessage( data ) );
+			return;
+		}
+		setNotice(
+			( data as { message?: string } ).message ||
+				__( 'A new code is on its way. Use the newest one.', 'integration-workos' )
+		);
+	};
+
+	const fillProps = fillPropsFor( profile, 'email_verify', 'email_verify' );
+
+	return (
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Verify your email', 'integration-workos' ) }
+					</Heading>
+					<Subheading>
+						{ sprintf(
+							/* translators: %s: email address. */
+							__(
+								'We sent a code to %s. Enter it to finish signing in.',
+								'integration-workos'
+							),
+							email
+						) }
+					</Subheading>
+				</>
+			}
+			footer={
+				<p className="wa-footer">
+					<LinkButton onClick={ onBack }>
+						{ __( '← Back', 'integration-workos' ) }
+					</LinkButton>
+				</p>
+			}
+		>
+			{ error && <Alert variant="error">{ error }</Alert> }
+			{ notice && <Alert variant="success">{ notice }</Alert> }
+			<form onSubmit={ submit }>
+				<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
+				<Field label={ __( 'Code', 'integration-workos' ) } htmlFor="wa-code">
+					<Input
+						id="wa-code"
+						type="text"
+						value={ code }
+						onChange={ setCode }
+						autoComplete="one-time-code"
+						autoFocus={ true }
+						required={ true }
+						placeholder="123456"
+					/>
+				</Field>
+				<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
+				<Button type="submit" disabled={ loading }>
+					{ loading ? <Spinner /> : __( 'Sign in', 'integration-workos' ) }
+				</Button>
+				<AuthKitSlot
+					name={ SLOT_AFTER_PRIMARY_ACTION }
+					fillProps={ fillProps }
+				/>
+			</form>
+			<p className="wa-footer">
+				{ __( 'Didn’t get it?', 'integration-workos' ) }{ ' ' }
+				<LinkButton onClick={ resend }>
+					{ resending
+						? __( 'Sending…', 'integration-workos' )
+						: __( 'Send a new code', 'integration-workos' ) }
+				</LinkButton>
+			</p>
 		</FlowCard>
 	);
 }

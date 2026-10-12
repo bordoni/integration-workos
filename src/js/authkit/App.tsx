@@ -12,6 +12,7 @@ import { createClient } from './api';
 import type { AuthKitClient } from './api';
 import * as Radar from './radar';
 import type {
+	EmailVerificationRequired,
 	LoginSuccess,
 	MfaRequired,
 	Profile,
@@ -19,6 +20,7 @@ import type {
 } from './types';
 import {
 	Complete,
+	EmailVerify,
 	InvitationAccept,
 	MagicSend,
 	MagicVerify,
@@ -64,6 +66,8 @@ export function App( props: AppProps ) {
 	const [ mfaState, setMfaState ] = useState< MfaState | null >( null );
 	const [ magicEmail, setMagicEmail ] = useState( '' );
 	const [ magicVerifyBack, setMagicVerifyBack ] = useState< Step >( 'magic_send' );
+	const [ emailVerification, setEmailVerification ] =
+		useState< EmailVerificationRequired | null >( null );
 	const [ signupContext, setSignupContext ] = useState< SignupContext | null >(
 		null
 	);
@@ -180,7 +184,26 @@ export function App( props: AppProps ) {
 						setMagicVerifyBack( 'password' );
 						setStep( 'magic_verify' );
 					} }
+					onEmailVerification={ ( data ) => {
+						setEmailVerification( data );
+						setStep( 'email_verify' );
+					} }
 					onBack={ ( target ) => setStep( target || 'pick' ) }
+				/>
+			);
+
+		case 'email_verify':
+			return (
+				<EmailVerify
+					client={ client }
+					profile={ profile }
+					email={ emailVerification?.email ?? '' }
+					pendingAuthToken={
+						emailVerification?.pending_authentication_token ?? ''
+					}
+					onMfa={ handleMfa }
+					onSuccess={ handleSuccess }
+					onBack={ () => setStep( 'password' ) }
 				/>
 			);
 

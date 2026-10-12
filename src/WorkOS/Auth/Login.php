@@ -277,6 +277,17 @@ class Login {
 			);
 		}
 
+		// Hosted AuthKit verifies email before it issues a code, so this
+		// shouldn't happen, and there's no code step here to recover with.
+		// Without this the redirect below would land without a session.
+		if ( ! empty( $outcome['email_verification_required'] ) ) {
+			wp_die(
+				esc_html__( 'We couldn’t finish signing you in. Please try again.', 'integration-workos' ),
+				esc_html__( 'Authentication Error', 'integration-workos' ),
+				[ 'response' => 403 ]
+			);
+		}
+
 		wp_safe_redirect( (string) ( $outcome['redirect_to'] ?? admin_url() ) );
 		exit;
 	}
