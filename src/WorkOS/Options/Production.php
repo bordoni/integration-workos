@@ -52,6 +52,8 @@ class Production extends Options {
 			'allow_legacy_magic_code_registration'    => true,
 			// Identity linking (see UserSync::link_user()).
 			'relink_protection'                       => false,
+			'require_linked_identity'                 => false,
+			'identity_gate_profile'                   => 'default',
 		];
 	}
 }
