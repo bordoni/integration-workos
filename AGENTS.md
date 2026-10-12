@@ -93,6 +93,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/Controller.php` | Auth controller (login, registration, password reset, redirects) |
 | `src/WorkOS/Auth/Login.php` | SSO login flow (redirect + headless modes) |
 | `src/WorkOS/Auth/LoginBypass.php` | Login bypass (`?fallback=1`) when WorkOS is unavailable |
+| `src/WorkOS/Auth/Deactivation.php` | Deactivated accounts (`_workos_deactivated`, set by `user.deleted` deprovisioning) can't sign in: a late `authenticate` filter (WP passwords, headless WorkOS), plus checks in `LoginCompleter::complete()` and `UI\Ajax`. Filter `workos_user_is_deactivated`. Deprovisioning also ends the account's sessions. |
 | `src/WorkOS/Auth/Registration.php` | User registration redirect |
 | `src/WorkOS/Auth/PasswordReset.php` | Legacy guard — blocks WP's native password-reset flow for WorkOS-linked users so they're funneled to the WorkOS-backed reset (`PasswordResetAdmin/*`) instead. |
 | **Auth — Password Reset Admin** ([`docs/password-reset.md`](docs/password-reset.md)) | |

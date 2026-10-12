@@ -7,6 +7,7 @@
 
 namespace WorkOS\UI;
 
+use WorkOS\Auth\Deactivation;
 use WorkOS\Auth\Login;
 use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
@@ -54,6 +55,10 @@ class Ajax {
 
 		if ( is_wp_error( $wp_user ) ) {
 			wp_send_json_error( [ 'message' => $wp_user->get_error_message() ] );
+		}
+
+		if ( Deactivation::is_deactivated( $wp_user->ID ) ) {
+			wp_send_json_error( [ 'message' => Deactivation::error()->get_error_message() ], 403 );
 		}
 
 		Login::store_tokens( $wp_user->ID, $result );
