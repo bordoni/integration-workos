@@ -230,7 +230,7 @@ bun run start         # Development with watch
 bun run lint:ts       # Type-check TypeScript (tsc --noEmit)
 bun run lint:php      # Lint PHP via PHPCS
 bun run lint:php:fix  # Auto-fix PHP lint issues
-composer phpstan      # Static analysis (PHPStan level 5, --memory-limit=1G)
+composer phpstan      # Static analysis (PHPStan level 5, --memory-limit=2G)
 ```
 
 `@wordpress/scripts` v30 transpiles `.ts` / `.tsx` natively via its default
