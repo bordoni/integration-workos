@@ -22,7 +22,10 @@ defined( 'ABSPATH' ) || exit;
  * - Front-end pages and wp-admin show only a "Connect your account" page.
  *   Its button signs the user out and sends them through WorkOS sign-in,
  *   which links the identity and returns them where they were going.
- * - REST requests outside the plugin's own `workos/v1` routes get a 403.
+ * - REST requests outside the plugin's sign-in routes (`workos/v1/auth`) get a 403.
+ * - WooCommerce's order-received and order-pay pages stay reachable (both are
+ *   guarded by the order key), so a customer who creates an account at checkout
+ *   still sees their order.
  * - admin-ajax requests get a 403 JSON error.
  *
  * Users who can `manage_options` are exempt. A failed identity check counts
@@ -41,9 +44,15 @@ class IdentityGate {
 	public const ERROR_CODE = 'workos_identity_required';
 
 	/**
-	 * REST namespace that stays reachable: sign-in and webhooks live there.
+	 * REST routes that stay reachable: the sign-in endpoints. Webhooks don't need it
+	 * (they come from WorkOS, signed out), and the rest of workos/v1 acts on accounts.
 	 */
-	private const REST_NAMESPACE = '/workos/v1';
+	private const REST_ALLOWED = '/workos/v1/auth';
+
+	/**
+	 * WooCommerce endpoints that stay reachable. Both are guarded by the order key.
+	 */
+	private const WC_ENDPOINTS = [ 'order-received', 'order-pay' ];
 
 	/**
 	 * Login profiles.
@@ -176,17 +185,29 @@ class IdentityGate {
 	 * Whether a front-end request goes through for a blocked user.
 	 *
 	 * The WorkOS callback and the login route stay reachable so the user can
-	 * finish signing in.
+	 * finish signing in, and so do WooCommerce's order-received and order-pay
+	 * pages: an account created at checkout can stay unlinked (when creating its
+	 * WorkOS user fails), and the customer has just paid.
 	 *
 	 * @return bool
 	 */
 	public function is_allowed_front_end_request(): bool {
 		$allowed = (bool) get_query_var( 'workos_callback' ) || '' !== (string) get_query_var( FrontendRoute::QUERY_VAR );
 
+		if ( ! $allowed && function_exists( 'is_wc_endpoint_url' ) ) {
+			foreach ( self::WC_ENDPOINTS as $endpoint ) {
+				if ( is_wc_endpoint_url( $endpoint ) ) {
+					$allowed = true;
+					break;
+				}
+			}
+		}
+
 		/**
 		 * Filter whether a front-end request goes through for a user the gate blocks.
 		 *
-		 * @param bool $allowed Default: true for the WorkOS callback and login routes.
+		 * @param bool $allowed Default: true for the WorkOS callback and login routes,
+		 *                      and WooCommerce's order-received and order-pay pages.
 		 */
 		return (bool) apply_filters( 'workos_identity_gate_allow_request', $allowed );
 	}
@@ -265,16 +286,27 @@ class IdentityGate {
 	 * @return string
 	 */
 	private function message(): string {
+		$user  = wp_get_current_user();
+		$email = $user->exists() ? (string) $user->user_email : '';
+
+		// Naming the address matters: signing in as a different email creates a
+		// second account and leaves this one unconnected.
+		$message = '' !== $email
+			? sprintf(
+				/* translators: %s: the signed-in account's email address. */
+				__( 'Your account isn\'t connected to a sign-in yet. Sign in with %s to connect it and continue.', 'integration-workos' ),
+				$email
+			)
+			: __( 'Your account isn\'t connected to a sign-in yet. Sign in to connect it and continue.', 'integration-workos' );
+
 		/**
 		 * Filter the message shown on the "Connect your account" page and
 		 * returned with REST and AJAX errors.
 		 *
-		 * @param string $message Message text.
+		 * @param string   $message Message text.
+		 * @param \WP_User $user    The signed-in user.
 		 */
-		return (string) apply_filters(
-			'workos_identity_gate_message',
-			__( 'Your account isn\'t connected to a sign-in yet. Sign in to connect it and continue.', 'integration-workos' )
-		);
+		return (string) apply_filters( 'workos_identity_gate_message', $message, $user );
 	}
 
 	// -------------------------------------------------------------------------
@@ -380,7 +412,7 @@ class IdentityGate {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Refuse REST requests from a blocked user, outside workos/v1.
+	 * Refuse REST requests from a blocked user, outside the sign-in routes.
 	 *
 	 * @param mixed            $result  Response so far; anything but null short-circuits.
 	 * @param \WP_REST_Server  $server  Server.
@@ -408,12 +440,12 @@ class IdentityGate {
 	 * @return bool
 	 */
 	public function is_allowed_rest_route( string $route ): bool {
-		$allowed = self::REST_NAMESPACE === $route || 0 === strpos( $route, self::REST_NAMESPACE . '/' );
+		$allowed = self::REST_ALLOWED === $route || 0 === strpos( $route, self::REST_ALLOWED . '/' );
 
 		/**
 		 * Filter whether a REST route goes through for a user the gate blocks.
 		 *
-		 * @param bool   $allowed Default: true for the plugin's own workos/v1 routes.
+		 * @param bool   $allowed Default: true for the sign-in routes (workos/v1/auth).
 		 * @param string $route   REST route.
 		 */
 		return (bool) apply_filters( 'workos_identity_gate_allow_rest_route', $allowed, $route );

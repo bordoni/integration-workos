@@ -276,11 +276,17 @@ class IdentityGateTest extends WPTestCase {
 	}
 
 	/**
-	 * The plugin's own routes stay reachable, so sign-in can finish.
+	 * Only the sign-in routes stay reachable; the rest of workos/v1 acts on accounts.
 	 */
 	public function test_rest_route_allowlist(): void {
-		$this->assertTrue( $this->gate->is_allowed_rest_route( '/workos/v1' ) );
+		$this->assertTrue( $this->gate->is_allowed_rest_route( '/workos/v1/auth' ) );
 		$this->assertTrue( $this->gate->is_allowed_rest_route( '/workos/v1/auth/nonce' ) );
+		$this->assertTrue( $this->gate->is_allowed_rest_route( '/workos/v1/auth/password/authenticate' ) );
+		$this->assertFalse( $this->gate->is_allowed_rest_route( '/workos/v1' ) );
+		$this->assertFalse( $this->gate->is_allowed_rest_route( '/workos/v1/admin/users' ) );
+		$this->assertFalse( $this->gate->is_allowed_rest_route( '/workos/v1/users/5/email-change' ) );
+		$this->assertFalse( $this->gate->is_allowed_rest_route( '/workos/v1/admin/users/5/password-reset' ) );
+		$this->assertFalse( $this->gate->is_allowed_rest_route( '/workos/v1/authx' ) );
 		$this->assertFalse( $this->gate->is_allowed_rest_route( '/workos/v10/anything' ) );
 		$this->assertFalse( $this->gate->is_allowed_rest_route( '/wp/v2/users/me' ) );
 		$this->assertFalse( $this->gate->is_allowed_rest_route( '/wc/store/v1/cart' ) );
@@ -320,6 +326,7 @@ class IdentityGateTest extends WPTestCase {
 		$html = $this->gate->connect_page_html( home_url( '/account/' ) );
 
 		$this->assertStringContainsString( 'Connect your account', $html );
+		$this->assertStringContainsString( 'Sign in with ' . esc_html( wp_get_current_user()->user_email ) . ' to connect it', $html );
 		$this->assertStringContainsString( IdentityGate::CONNECT_ACTION . '=1', $html );
 		$this->assertStringContainsString( rawurlencode( home_url( '/account/' ) ), $html );
 		$this->assertStringContainsString( 'action=logout', $html );
@@ -327,14 +334,19 @@ class IdentityGateTest extends WPTestCase {
 	}
 
 	/**
-	 * The message filter changes the page.
+	 * The message filter changes the page, and receives the user.
 	 */
 	public function test_message_filter(): void {
+		$user_id = $this->sign_in( false );
+		$seen    = null;
 		add_filter(
 			'workos_identity_gate_message',
-			function () {
+			function ( $message, $user ) use ( &$seen ) {
+				$seen = $user;
 				return 'Sign in with the email you used to purchase.';
-			}
+			},
+			10,
+			2
 		);
 
 		$html = $this->gate->connect_page_html( home_url( '/' ) );
@@ -342,6 +354,46 @@ class IdentityGateTest extends WPTestCase {
 		remove_all_filters( 'workos_identity_gate_message' );
 
 		$this->assertStringContainsString( 'Sign in with the email you used to purchase.', $html );
+		$this->assertSame( $user_id, $seen->ID );
+	}
+
+	/**
+	 * The REST error names the account's email too.
+	 */
+	public function test_rest_error_names_the_account_email(): void {
+		$this->enable_gate();
+		$this->sign_in( false );
+
+		$response = rest_do_request( new \WP_REST_Request( 'GET', '/wp/v2/users/me' ) );
+
+		$this->assertSame( 403, $response->get_status() );
+		$this->assertStringContainsString( wp_get_current_user()->user_email, $response->get_data()['message'] );
+	}
+
+	/**
+	 * WooCommerce's order-received and order-pay pages go through; other endpoints don't.
+	 */
+	public function test_woocommerce_order_pages_go_through(): void {
+		$this->enable_gate();
+		$this->sign_in( false );
+
+		if ( ! function_exists( 'is_wc_endpoint_url' ) ) {
+			require_once __DIR__ . '/../_data/wc-endpoint-stub.php';
+		}
+		if ( ! empty( $GLOBALS['workos_test_wc_endpoint_stub'] ) ) {
+			$GLOBALS['workos_test_wc_endpoint'] = 'order-received';
+			$this->assertTrue( $this->gate->is_allowed_front_end_request() );
+
+			$GLOBALS['workos_test_wc_endpoint'] = 'order-pay';
+			$this->assertTrue( $this->gate->is_allowed_front_end_request() );
+
+			$GLOBALS['workos_test_wc_endpoint'] = 'edit-account';
+			$this->assertFalse( $this->gate->is_allowed_front_end_request() );
+
+			$GLOBALS['workos_test_wc_endpoint'] = '';
+		}
+
+		$this->assertFalse( $this->gate->is_allowed_front_end_request() );
 	}
 
 	/**
