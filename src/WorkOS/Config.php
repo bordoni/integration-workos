@@ -37,6 +37,7 @@ class Config {
 	private const BOOL_CONSTANT_MAP = [
 		'allow_password_fallback'                 => 'WORKOS_ALLOW_PASSWORD_FALLBACK',
 		'wp_password_fallback_email_confirmation' => 'WORKOS_WP_PASSWORD_FALLBACK_EMAIL_CONFIRMATION',
+		'relink_protection'                       => 'WORKOS_RELINK_PROTECTION',
 	];
 
 	/**
@@ -156,6 +157,59 @@ class Config {
 	 */
 	public static function get_environment_id(): string {
 		return self::get( 'environment_id' );
+	}
+
+	/**
+	 * Whether Re-link Protection is on.
+	 *
+	 * When on, no automatic path (sign-in, webhooks, directory sync, imports)
+	 * moves a WordPress user that is already linked to a different WorkOS
+	 * user; see {@see Sync\UserSync::link_user()}.
+	 *
+	 * The constant is read on every call rather than trusted from the synced
+	 * option, so a site that sets it in wp-config.php can't be switched off
+	 * from the settings page.
+	 *
+	 * @return bool
+	 */
+	public static function is_relink_protection_enabled(): bool {
+		$constant = self::bool_constant( 'relink_protection' );
+		$enabled  = '' !== $constant
+			? (bool) constant( $constant )
+			: (bool) workos()->option( 'relink_protection', false );
+
+		/**
+		 * Filter whether Re-link Protection is on.
+		 *
+		 * @param bool $enabled Whether automatic re-linking is refused.
+		 */
+		return (bool) apply_filters( 'workos_relink_protection_enabled', $enabled );
+	}
+
+	/**
+	 * Name of the wp-config.php constant that sets a boolean setting, if one is defined.
+	 *
+	 * Checks WORKOS_{ENV}_{SETTING} first, then the generic constant from
+	 * {@see self::BOOL_CONSTANT_MAP}.
+	 *
+	 * @param string $setting Key from {@see self::BOOL_CONSTANT_MAP}.
+	 * @param string $env     'production' or 'staging'; defaults to the active environment.
+	 *
+	 * @return string Constant name, or '' when the setting comes from the database.
+	 */
+	public static function bool_constant( string $setting, string $env = '' ): string {
+		if ( '' === $env ) {
+			$env = self::get_active_environment();
+		}
+
+		$env_const = 'WORKOS_' . strtoupper( $env ) . '_' . strtoupper( $setting );
+		if ( defined( $env_const ) ) {
+			return $env_const;
+		}
+
+		$generic = self::BOOL_CONSTANT_MAP[ $setting ] ?? '';
+
+		return ( '' !== $generic && defined( $generic ) ) ? $generic : '';
 	}
 
 	/**

@@ -140,7 +140,7 @@ class LoginCompleter {
 			);
 		}
 
-		$wp_user = UserSync::find_or_create_wp_user( $workos_user );
+		$wp_user = UserSync::find_or_create_wp_user( $workos_user, 'authkit' );
 		if ( is_wp_error( $wp_user ) ) {
 			return $wp_user;
 		}

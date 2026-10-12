@@ -11,6 +11,7 @@
 namespace WorkOS\Admin;
 
 use WorkOS\Config;
+use WorkOS\Sync\UserSync;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -83,6 +84,7 @@ class UserProfile {
 
 		echo '<h2>' . esc_html__( 'WorkOS', 'integration-workos' ) . '</h2>';
 
+		$this->render_link_refused_notice( $user->ID, $workos_user_id );
 		$this->render_dashboard_link( $workos_user_id, $environment_id );
 
 		// User Information.
@@ -104,6 +106,44 @@ class UserProfile {
 			$events = $this->get_cached_events( $workos_user_id, $local_meta['org_id'] );
 			$this->render_events( $events );
 		}
+	}
+
+	/**
+	 * Render the last refused re-link, if any.
+	 *
+	 * Written by {@see UserSync::link_user()} when Re-link Protection keeps an
+	 * account on its current WorkOS user.
+	 *
+	 * @param int    $wp_user_id     WP user ID.
+	 * @param string $workos_user_id WorkOS user ID the account is linked to.
+	 */
+	private function render_link_refused_notice( int $wp_user_id, string $workos_user_id ): void {
+		$refused = get_user_meta( $wp_user_id, UserSync::META_LINK_REFUSED, true );
+		if ( ! is_array( $refused ) || empty( $refused['workos_user_id'] ) ) {
+			return;
+		}
+
+		$when = ! empty( $refused['time'] )
+			? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $refused['time'] )
+			: '';
+
+		echo '<div class="notice notice-warning inline"><p>';
+		printf(
+			/* translators: 1: attempted WorkOS user ID, 2: attempted email, 3: source, e.g. "login", 4: date, 5: current WorkOS user ID. */
+			esc_html__( 'Re-link refused: WorkOS user %1$s (%2$s) tried to claim this account through %3$s on %4$s. It stays linked to %5$s.', 'integration-workos' ),
+			'<code>' . esc_html( $refused['workos_user_id'] ) . '</code>',
+			esc_html( $refused['email'] ?? '' ),
+			esc_html( $refused['source'] ?? '' ),
+			esc_html( $when ),
+			'<code>' . esc_html( $workos_user_id ) . '</code>'
+		);
+		echo '</p><p>';
+		printf(
+			/* translators: %s: WP-CLI command. */
+			esc_html__( 'If the account should move, run %s.', 'integration-workos' ),
+			'<code>' . esc_html( sprintf( 'wp workos user link %d %s --force', $wp_user_id, $refused['workos_user_id'] ) ) . '</code>'
+		);
+		echo '</p></div>';
 	}
 
 	/**
