@@ -739,23 +739,14 @@ class UserSync {
 	}
 
 	/**
-	 * Look up a WP user ID by their linked WorkOS user ID.
+	 * Look up a WP user ID by their linked WorkOS user ID (indexed; see UserLinks).
 	 *
 	 * @param string $workos_id WorkOS user ID.
 	 *
 	 * @return int|null WP user ID or null.
 	 */
 	public static function get_wp_user_id_by_workos_id( string $workos_id ): ?int {
-		$users = get_users(
-			[
-				'meta_key'   => '_workos_user_id',
-				'meta_value' => $workos_id,
-				'number'     => 1,
-				'fields'     => 'ID',
-			]
-		);
-
-		return ! empty( $users ) ? (int) $users[0] : null;
+		return UserLinks::find( $workos_id );
 	}
 
 	/**

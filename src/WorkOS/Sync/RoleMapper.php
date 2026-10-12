@@ -445,15 +445,6 @@ class RoleMapper {
 	 * @return int|null WP user ID, or null if not found.
 	 */
 	private static function get_wp_user_by_workos_id( string $workos_id ): ?int {
-		$users = get_users(
-			[
-				'meta_key'   => '_workos_user_id',
-				'meta_value' => $workos_id,
-				'number'     => 1,
-				'fields'     => 'ID',
-			]
-		);
-
-		return ! empty( $users ) ? (int) $users[0] : null;
+		return UserLinks::find( $workos_id );
 	}
 }

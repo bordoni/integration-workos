@@ -246,6 +246,43 @@ class AdminUsersRestApiTest extends WPTestCase {
 		$this->assertStringContainsString( 'limit=25', $req['url'] );
 	}
 
+	public function test_list_resolves_linked_wp_users_in_one_lookup(): void {
+		global $wpdb;
+
+		$this->become_admin();
+		$alice = self::factory()->user->create( [ 'user_login' => 'alice_rest' ] );
+		$bob   = self::factory()->user->create( [ 'user_login' => 'bob_rest' ] );
+		update_user_meta( $alice, '_workos_user_id', 'user_alice' );
+		update_user_meta( $bob, '_workos_user_id', 'user_bob' );
+		$this->captured  = [];
+		$this->responses = [];
+
+		$this->queue_response(
+			200,
+			[
+				'data'          => [
+					[ 'id' => 'user_alice', 'email' => 'alice@example.com' ],
+					[ 'id' => 'user_nobody', 'email' => 'nobody@example.com' ],
+					[ 'id' => 'user_bob', 'email' => 'bob@example.com' ],
+				],
+				'list_metadata' => [ 'before' => null, 'after' => null ],
+			]
+		);
+
+		wp_cache_flush();
+		$before   = $wpdb->num_queries;
+		$response = $this->dispatch( [ 'limit' => 3 ] );
+		$queries  = $wpdb->num_queries - $before;
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			[ $alice, 0, $bob ],
+			array_column( $response->get_data()['data'], 'wp_user_id' )
+		);
+		// The page's links in one query plus one for their meta, not a meta scan per row.
+		$this->assertLessThanOrEqual( 6, $queries );
+	}
+
 	// ---------------------------------------------------------------------
 	// Parameter forwarding.
 	// ---------------------------------------------------------------------

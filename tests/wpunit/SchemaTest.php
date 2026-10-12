@@ -25,7 +25,7 @@ class SchemaTest extends WPTestCase {
 	}
 
 	/**
-	 * Test activate creates all 4 tables.
+	 * Test activate creates all 5 tables.
 	 */
 	public function test_activate_creates_all_tables(): void {
 		global $wpdb;
@@ -39,6 +39,7 @@ class SchemaTest extends WPTestCase {
 		$this->assertContains( $wpdb->prefix . 'workos_org_memberships', $tables );
 		$this->assertContains( $wpdb->prefix . 'workos_org_sites', $tables );
 		$this->assertContains( $wpdb->prefix . 'workos_activity_log', $tables );
+		$this->assertContains( $wpdb->base_prefix . 'workos_user_links', $tables );
 	}
 
 	/**

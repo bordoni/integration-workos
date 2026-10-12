@@ -8,6 +8,7 @@
 namespace WorkOS\Admin\Users;
 
 use WorkOS\Config;
+use WorkOS\Sync\UserLinks;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -170,14 +171,19 @@ class RestApi {
 		}
 
 		$environment_id = Config::get_environment_id();
-		$users          = isset( $result['data'] ) && is_array( $result['data'] )
-			? array_map(
-				function ( $user ) use ( $environment_id ) {
-					return $this->shape_user( is_array( $user ) ? $user : [], $environment_id );
+		$rows           = isset( $result['data'] ) && is_array( $result['data'] ) ? array_filter( $result['data'], 'is_array' ) : [];
+
+		// The linked WP users for the whole page at once, not one lookup per row.
+		$wp_user_ids = UserLinks::find_many( array_map( 'strval', array_column( $rows, 'id' ) ) );
+
+		$users = array_values(
+			array_map(
+				function ( array $user ) use ( $environment_id, $wp_user_ids ) {
+					return $this->shape_user( $user, $environment_id, $wp_user_ids );
 				},
-				$result['data']
+				$rows
 			)
-			: [];
+		);
 
 		$metadata = isset( $result['list_metadata'] ) && is_array( $result['list_metadata'] )
 			? $result['list_metadata']
@@ -241,12 +247,13 @@ class RestApi {
 	 * profile picture URL — the list intentionally doesn't render avatars
 	 * to keep the page lean) and adds a server-computed `dashboard_url`.
 	 *
-	 * @param array  $user           Upstream user object.
-	 * @param string $environment_id Active WorkOS environment ID (for the deep link).
+	 * @param array              $user           Upstream user object.
+	 * @param string             $environment_id Active WorkOS environment ID (for the deep link).
+	 * @param array<string, int> $wp_user_ids    Linked WP user IDs by WorkOS user ID (UserLinks::find_many()).
 	 *
 	 * @return array<string, mixed>
 	 */
-	private function shape_user( array $user, string $environment_id ): array {
+	private function shape_user( array $user, string $environment_id, array $wp_user_ids ): array {
 		$id    = isset( $user['id'] ) ? (string) $user['id'] : '';
 		$email = isset( $user['email'] ) ? (string) $user['email'] : '';
 
@@ -263,20 +270,7 @@ class RestApi {
 		// row can wire up the "Send password reset" trigger that lives at
 		// `POST /workos/v1/admin/users/{wp_user_id}/password-reset`. Empty
 		// when the WorkOS user has no matching WP row yet.
-		$wp_user_id = 0;
-		if ( '' !== $id ) {
-			$users = get_users(
-				[
-					'meta_key'   => '_workos_user_id',
-					'meta_value' => $id,
-					'number'     => 1,
-					'fields'     => 'ID',
-				]
-			);
-			if ( ! empty( $users ) ) {
-				$wp_user_id = (int) $users[0];
-			}
-		}
+		$wp_user_id = '' !== $id ? (int) ( $wp_user_ids[ $id ] ?? 0 ) : 0;
 
 		return [
 			'id'              => $id,
