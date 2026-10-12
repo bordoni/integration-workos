@@ -537,7 +537,7 @@ class Password extends BaseEndpoint {
 
 		$existing = workos()->api()->list_users( [ 'email' => $email ] );
 		if ( ! is_wp_error( $existing ) && ! empty( $existing['data'][0] ) ) {
-			\WorkOS\Sync\UserSync::link_user( $wp_user->ID, $existing['data'][0] );
+			\WorkOS\Sync\UserSync::link_user( $wp_user->ID, $existing['data'][0], 'password_reset' );
 			return (string) $existing['data'][0]['id'];
 		}
 

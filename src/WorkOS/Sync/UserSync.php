@@ -7,6 +7,10 @@
 
 namespace WorkOS\Sync;
 
+use WorkOS\ActivityLog\EventLogger;
+use WorkOS\Auth\ChangeEmail\RestApi as ChangeEmailRestApi;
+use WorkOS\Config;
+use WorkOS\Organization\Manager as OrganizationManager;
 use WorkOS\Webhook\EventGuard;
 
 defined( 'ABSPATH' ) || exit;
@@ -20,6 +24,12 @@ class UserSync {
 	 * User meta: `updated_at` of the last WorkOS user payload applied to this account.
 	 */
 	public const META_UPDATED_AT = '_workos_updated_at';
+
+	/**
+	 * User meta holding the most recent refused re-link attempt, shown on the
+	 * user's profile. Cleared when the account is linked to a new identity.
+	 */
+	public const META_LINK_REFUSED = '_workos_link_refused';
 
 	/**
 	 * Flag to prevent infinite sync loops.
@@ -57,11 +67,16 @@ class UserSync {
 	/**
 	 * Find an existing WP user by WorkOS ID or email, or create a new one.
 	 *
-	 * @param array $workos_user WorkOS user data.
+	 * With Re-link Protection on, an email match on a WP user that is already
+	 * linked to a different WorkOS user returns a `workos_link_conflict`
+	 * error instead of that WP user.
+	 *
+	 * @param array  $workos_user WorkOS user data.
+	 * @param string $source      What is asking, for logs (e.g. 'login', 'webhook').
 	 *
 	 * @return \WP_User|\WP_Error
 	 */
-	public static function find_or_create_wp_user( array $workos_user ) {
+	public static function find_or_create_wp_user( array $workos_user, string $source = '' ) {
 		$workos_id = $workos_user['id'] ?? '';
 		$email     = $workos_user['email'] ?? '';
 
@@ -85,7 +100,14 @@ class UserSync {
 		// 2. Try email match (auto-link).
 		$existing = get_user_by( 'email', $email );
 		if ( $existing ) {
-			self::link_user( $existing->ID, $workos_user );
+			if ( ! self::link_user( $existing->ID, $workos_user, $source ) ) {
+				return new \WP_Error(
+					'workos_link_conflict',
+					__( 'This account is already connected to a different sign-in. Contact support to connect it.', 'integration-workos' ),
+					[ 'status' => 409 ]
+				);
+			}
+
 			return $existing;
 		}
 
@@ -107,7 +129,7 @@ class UserSync {
 			return $user_id;
 		}
 
-		self::link_user( $user_id, $workos_user );
+		self::link_user( $user_id, $workos_user, $source );
 
 		update_user_meta( $user_id, '_workos_first_login', '1' );
 
@@ -127,17 +149,128 @@ class UserSync {
 	/**
 	 * Link a WP user to a WorkOS user.
 	 *
-	 * @param int   $wp_user_id  WP user ID.
-	 * @param array $workos_user WorkOS user data.
+	 * Every path that links goes through here. When the WP user is already
+	 * linked to a different WorkOS user and Re-link Protection is on, the link
+	 * is refused: nothing changes, the attempt is logged and recorded on the
+	 * user, and `workos_user_link_refused` fires. `$force` is for explicit
+	 * reassignment by an administrator (`wp workos user link --force`).
+	 *
+	 * One WorkOS user maps to one WP user: with `$force` or Re-link Protection on,
+	 * a WorkOS ID that is already linked to a different WP user is never linked
+	 * again, and this returns false. With both off, that check is the caller's
+	 * (the sign-in paths look the ID up first, in `find_or_create_wp_user()`).
+	 *
+	 * @param int    $wp_user_id  WP user ID.
+	 * @param array  $workos_user WorkOS user data.
+	 * @param string $source      What is linking, for logs (e.g. 'login', 'webhook', 'cli_link').
+	 * @param bool   $force       Replace an existing link to a different WorkOS user.
+	 *
+	 * @return bool True when the user is linked to `$workos_user`, false when refused.
 	 */
-	public static function link_user( int $wp_user_id, array $workos_user ): void {
-		update_user_meta( $wp_user_id, '_workos_user_id', $workos_user['id'] );
+	public static function link_user( int $wp_user_id, array $workos_user, string $source = '', bool $force = false ): bool {
+		$new_id = (string) ( $workos_user['id'] ?? '' );
+		if ( '' === $new_id ) {
+			return false;
+		}
+
+		$previous_id = (string) get_user_meta( $wp_user_id, '_workos_user_id', true );
+		$is_relink   = '' !== $previous_id && $previous_id !== $new_id;
+
+		$protected = Config::is_relink_protection_enabled();
+
+		if ( $is_relink && ! $force && $protected ) {
+			self::refuse_link( $wp_user_id, $previous_id, $workos_user, $source );
+			return false;
+		}
+
+		if ( $force || $protected ) {
+			$holder = self::get_wp_user_id_by_workos_id( $new_id );
+			if ( $holder && $holder !== $wp_user_id ) {
+				workos_log( sprintf( 'Refused to link WP user #%d to WorkOS user %s: already linked to WP user #%d (source: %s).', $wp_user_id, $new_id, $holder, $source ? $source : 'unknown' ), 'warning' );
+				return false;
+			}
+		}
+
+		update_user_meta( $wp_user_id, '_workos_user_id', $new_id );
 		update_user_meta( $wp_user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
 		update_user_meta( $wp_user_id, '_workos_profile_hash', self::hash_profile( $workos_user ) );
 
 		if ( ! empty( $workos_user['organization_id'] ) ) {
 			update_user_meta( $wp_user_id, '_workos_org_id', $workos_user['organization_id'] );
 		}
+
+		if ( $previous_id !== $new_id ) {
+			delete_user_meta( $wp_user_id, self::META_LINK_REFUSED );
+
+			if ( $is_relink ) {
+				workos_log( sprintf( 'Re-linked WP user #%d from WorkOS user %s to %s (source: %s).', $wp_user_id, $previous_id, $new_id, $source ? $source : 'unknown' ), 'warning' );
+			}
+
+			/**
+			 * Fires when a WP user is linked to a WorkOS user it wasn't linked to before.
+			 *
+			 * Covers first links and re-links; doesn't fire when the same link is
+			 * written again. Use it to resume work that waited for an identity.
+			 *
+			 * @param int    $wp_user_id  WP user ID.
+			 * @param string $workos_id   WorkOS user ID now linked.
+			 * @param string $previous_id WorkOS user ID linked before, or '' for a first link.
+			 * @param string $source      What linked (e.g. 'login', 'webhook', 'cli_link').
+			 */
+			do_action( 'workos_user_linked', $wp_user_id, $new_id, $previous_id, $source );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Record a refused re-link.
+	 *
+	 * @param int    $wp_user_id  WP user ID.
+	 * @param string $current_id  WorkOS user ID the WP user keeps.
+	 * @param array  $workos_user WorkOS user data that tried to claim it.
+	 * @param string $source      What tried to link.
+	 */
+	private static function refuse_link( int $wp_user_id, string $current_id, array $workos_user, string $source ): void {
+		$attempted_id    = (string) ( $workos_user['id'] ?? '' );
+		$attempted_email = (string) ( $workos_user['email'] ?? '' );
+		$source          = $source ? $source : 'unknown';
+
+		update_user_meta(
+			$wp_user_id,
+			self::META_LINK_REFUSED,
+			[
+				'workos_user_id' => $attempted_id,
+				'email'          => $attempted_email,
+				'source'         => $source,
+				'time'           => time(),
+			]
+		);
+
+		workos_log( sprintf( 'Refused to re-link WP user #%d from WorkOS user %s to %s (source: %s).', $wp_user_id, $current_id, $attempted_id, $source ), 'warning' );
+
+		EventLogger::log(
+			'link_refused',
+			[
+				'user_id'        => $wp_user_id,
+				'workos_user_id' => $current_id,
+				'metadata'       => [
+					'attempted_workos_user_id' => $attempted_id,
+					'attempted_email'          => $attempted_email,
+					'source'                   => $source,
+				],
+			]
+		);
+
+		/**
+		 * Fires when Re-link Protection refuses to move a WP user to a different WorkOS user.
+		 *
+		 * @param int    $wp_user_id  WP user ID.
+		 * @param string $current_id  WorkOS user ID the WP user stays linked to.
+		 * @param array  $workos_user WorkOS user data that tried to claim it.
+		 * @param string $source      What tried to link (e.g. 'login', 'webhook').
+		 */
+		do_action( 'workos_user_link_refused', $wp_user_id, $current_id, $workos_user, $source );
 	}
 
 	/**
@@ -153,6 +286,7 @@ class UserSync {
 		delete_user_meta( $wp_user_id, '_workos_access_token' );
 		delete_user_meta( $wp_user_id, '_workos_refresh_token' );
 		delete_user_meta( $wp_user_id, '_workos_deactivated' );
+		delete_user_meta( $wp_user_id, self::META_LINK_REFUSED );
 	}
 
 	/**
@@ -178,7 +312,7 @@ class UserSync {
 		// we'd issue a second, redundant update_user() to WorkOS on the
 		// latency-sensitive confirm path. Same transient the webhook handler
 		// checks; see ChangeEmail\RestApi::confirm().
-		if ( get_transient( \WorkOS\Auth\ChangeEmail\RestApi::TRANSIENT_PREFIX . $user_id ) ) {
+		if ( get_transient( ChangeEmailRestApi::TRANSIENT_PREFIX . $user_id ) ) {
 			return;
 		}
 
@@ -242,7 +376,7 @@ class UserSync {
 		}
 
 		if ( ! empty( $result['id'] ) ) {
-			self::link_user( $user_id, $result );
+			self::link_user( $user_id, $result, 'user_register' );
 			self::ensure_workos_org_membership( $result['id'] );
 			self::update_platform_metadata( $result['id'], $user_id );
 		}
@@ -299,7 +433,7 @@ class UserSync {
 		}
 
 		if ( ! empty( $result['id'] ) ) {
-			self::link_user( $user_id, $result );
+			self::link_user( $user_id, $result, 'manual_sync' );
 			self::ensure_workos_org_membership( $result['id'] );
 			self::update_platform_metadata( $result['id'], $user_id );
 		}
@@ -368,7 +502,7 @@ class UserSync {
 		// re-trigger the very mutation that already happened. The transient
 		// is set in ChangeEmail\RestApi::confirm() and cleared once the
 		// local write succeeds (or on rollback).
-		if ( get_transient( \WorkOS\Auth\ChangeEmail\RestApi::TRANSIENT_PREFIX . $wp_user_id ) ) {
+		if ( get_transient( ChangeEmailRestApi::TRANSIENT_PREFIX . $wp_user_id ) ) {
 			return;
 		}
 
@@ -414,10 +548,10 @@ class UserSync {
 		self::$syncing = true;
 
 		$workos_user = $event['data'] ?? [];
-		$wp_user     = self::find_or_create_wp_user( $workos_user );
+		$wp_user     = self::find_or_create_wp_user( $workos_user, 'webhook' );
 
 		if ( ! is_wp_error( $wp_user ) && $wp_user instanceof \WP_User ) {
-			\WorkOS\Organization\Manager::ensure_user_org_membership( $wp_user->ID, [] );
+			OrganizationManager::ensure_user_org_membership( $wp_user->ID, [] );
 			self::update_platform_metadata( $workos_user['id'] ?? '', $wp_user->ID );
 		}
 
@@ -461,7 +595,7 @@ class UserSync {
 			return;
 		}
 
-		$org_id = \WorkOS\Config::get_organization_id();
+		$org_id = Config::get_organization_id();
 		if ( empty( $org_id ) ) {
 			return;
 		}
@@ -480,7 +614,7 @@ class UserSync {
 			// Store the existing membership ID locally.
 			$membership_id = $memberships['data'][0]['id'] ?? '';
 			if ( $wp_user_id && ! empty( $membership_id ) ) {
-				\WorkOS\Organization\Manager::store_membership_id( $wp_user_id, $org_id, $membership_id );
+				OrganizationManager::store_membership_id( $wp_user_id, $org_id, $membership_id );
 			}
 			return;
 		}
@@ -495,7 +629,7 @@ class UserSync {
 		// Store the newly created membership ID locally.
 		$membership_id = $result['id'] ?? '';
 		if ( $wp_user_id && ! empty( $membership_id ) ) {
-			\WorkOS\Organization\Manager::store_membership_id( $wp_user_id, $org_id, $membership_id );
+			OrganizationManager::store_membership_id( $wp_user_id, $org_id, $membership_id );
 		}
 	}
 
@@ -513,7 +647,7 @@ class UserSync {
 			return;
 		}
 
-		$meta_key = 'puid:' . \WorkOS\Config::get_site_key();
+		$meta_key = 'puid:' . Config::get_site_key();
 
 		// Fetch existing user to get current metadata.
 		$workos_user = workos()->api()->get_user( $workos_user_id );

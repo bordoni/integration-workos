@@ -148,7 +148,7 @@ class Login {
 		}
 
 		$workos_user = $result['user'] ?? $result;
-		$wp_user     = \WorkOS\Sync\UserSync::find_or_create_wp_user( $workos_user );
+		$wp_user     = \WorkOS\Sync\UserSync::find_or_create_wp_user( $workos_user, 'login' );
 
 		if ( is_wp_error( $wp_user ) ) {
 			return $wp_user;
