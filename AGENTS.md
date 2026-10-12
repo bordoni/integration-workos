@@ -182,6 +182,7 @@ Per-environment constants (take priority over generic):
 | **Webhook** | |
 | `src/WorkOS/Webhook/Controller.php` | Webhook controller |
 | `src/WorkOS/Webhook/Receiver.php` | Webhook event processing and signature verification |
+| `src/WorkOS/Webhook/EventGuard.php` | Retried and late deliveries: handled event IDs are remembered (transient, 3 days, `workos_webhook_seen_ttl`) so a repeat runs no handlers; `user.updated` and `organization_membership.updated` skip payloads whose `updated_at` isn't newer than the last applied (`_workos_updated_at`, `_workos_membership_updated_at`). |
 | **CLI** | |
 | `src/WorkOS/CLI/Controller.php` | CLI controller, registers WP-CLI commands |
 | `src/WorkOS/CLI/StatusCommand.php` | `wp workos status` command |
