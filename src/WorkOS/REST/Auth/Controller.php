@@ -34,6 +34,7 @@ class Controller extends BaseController {
 		$this->container->singleton( Invitation::class );
 		$this->container->singleton( OAuth::class );
 		$this->container->singleton( Mfa::class );
+		$this->container->singleton( EmailVerification::class );
 
 		// Resolve each once so the container instantiates them now; the
 		// actual route registration happens below on `rest_api_init`.
@@ -44,6 +45,7 @@ class Controller extends BaseController {
 		$this->container->get( Invitation::class );
 		$this->container->get( OAuth::class );
 		$this->container->get( Mfa::class );
+		$this->container->get( EmailVerification::class );
 
 		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
 	}
@@ -85,6 +87,7 @@ class Controller extends BaseController {
 			$this->container->get( Invitation::class ),
 			$this->container->get( OAuth::class ),
 			$this->container->get( Mfa::class ),
+			$this->container->get( EmailVerification::class ),
 		];
 	}
 }

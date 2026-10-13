@@ -52,6 +52,8 @@ body.workos-authkit-body #workos-authkit-root {
 	--wa-muted: #50575e;
 	--wa-danger: #b91c1c;
 	--wa-danger-bg: #fee2e2;
+	--wa-success: #166534;
+	--wa-success-bg: #dcfce7;
 	--wa-gap: 16px;
 	--wa-radius: 3px;
 
@@ -230,6 +232,12 @@ body.workos-authkit-body #workos-authkit-root {
 	background: var(--wa-danger-bg);
 	color: var(--wa-danger);
 	border: 1px solid rgba( 185, 28, 28, 0.2 );
+}
+
+#workos-authkit-root .wa-alert-success {
+	background: var(--wa-success-bg);
+	color: var(--wa-success);
+	border: 1px solid rgba( 22, 101, 52, 0.2 );
 }
 
 #workos-authkit-root .wa-divider {
