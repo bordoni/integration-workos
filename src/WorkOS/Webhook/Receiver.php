@@ -95,6 +95,18 @@ class Receiver {
 		}
 
 		$event_type = sanitize_text_field( $event['event'] );
+		$event_id   = isset( $event['id'] ) && is_string( $event['id'] ) ? $event['id'] : '';
+
+		// A retry of an event that was already handled: acknowledge it, run nothing.
+		if ( EventGuard::was_handled( $event_id ) ) {
+			return new \WP_REST_Response(
+				[
+					'ok'        => true,
+					'duplicate' => true,
+				],
+				200
+			);
+		}
 
 		// Route to internal handlers via WP actions.
 		$handlers = [
@@ -132,6 +144,8 @@ class Receiver {
 		 * @param string $event_type The event type string.
 		 */
 		do_action( 'workos_webhook', $event, $event_type );
+
+		EventGuard::mark_handled( $event_id );
 
 		return new \WP_REST_Response( [ 'ok' => true ], 200 );
 	}

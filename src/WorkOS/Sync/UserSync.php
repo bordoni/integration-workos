@@ -11,6 +11,8 @@ use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Auth\ChangeEmail\RestApi as ChangeEmailRestApi;
 use WorkOS\Config;
 use WorkOS\Organization\Manager as OrganizationManager;
+use WorkOS\Webhook\EventGuard;
+use WP_Session_Tokens;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -18,6 +20,11 @@ defined( 'ABSPATH' ) || exit;
  * Handles user data sync between WorkOS and WordPress.
  */
 class UserSync {
+
+	/**
+	 * User meta: `updated_at` of the last WorkOS user payload applied to this account.
+	 */
+	public const META_UPDATED_AT = '_workos_updated_at';
 
 	/**
 	 * User meta holding the most recent refused re-link attempt, shown on the
@@ -500,15 +507,37 @@ class UserSync {
 			return;
 		}
 
+		// A retried or late event older than what's already applied would roll the
+		// profile back.
+		$last_applied = get_user_meta( $wp_user_id, self::META_UPDATED_AT, true );
+		if ( EventGuard::is_stale( $workos_user['updated_at'] ?? '', $last_applied ) ) {
+			return;
+		}
+
 		// Check if profile actually changed.
 		$current_hash = get_user_meta( $wp_user_id, '_workos_profile_hash', true );
 		$new_hash     = self::hash_profile( $workos_user );
 
 		if ( $current_hash === $new_hash ) {
+			self::record_updated_at( $wp_user_id, $workos_user );
 			return;
 		}
 
 		self::update_wp_user_from_workos( $wp_user_id, $workos_user );
+	}
+
+	/**
+	 * Remember the newest WorkOS `updated_at` applied to this account.
+	 *
+	 * @param int   $wp_user_id  WP user ID.
+	 * @param array $workos_user WorkOS user payload.
+	 */
+	private static function record_updated_at( int $wp_user_id, array $workos_user ): void {
+		$current = (string) get_user_meta( $wp_user_id, self::META_UPDATED_AT, true );
+		$latest  = EventGuard::latest( $workos_user['updated_at'] ?? '', $current );
+		if ( '' !== $latest && $latest !== $current ) {
+			update_user_meta( $wp_user_id, self::META_UPDATED_AT, $latest );
+		}
 	}
 
 	/**
@@ -721,6 +750,7 @@ class UserSync {
 
 		update_user_meta( $wp_user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
 		update_user_meta( $wp_user_id, '_workos_profile_hash', self::hash_profile( $workos_user ) );
+		self::record_updated_at( $wp_user_id, $workos_user );
 
 		self::$syncing = false;
 	}
@@ -745,11 +775,14 @@ class UserSync {
 					$user->set_role( 'subscriber' );
 				}
 				update_user_meta( $wp_user_id, '_workos_deactivated', true );
+				// Sign-in is refused from now on (Auth\Deactivation); end the sessions it already has.
+				WP_Session_Tokens::get_instance( $wp_user_id )->destroy_all();
 				break;
 
 			case 'deactivate':
 			default:
 				update_user_meta( $wp_user_id, '_workos_deactivated', true );
+				WP_Session_Tokens::get_instance( $wp_user_id )->destroy_all();
 				break;
 		}
 	}

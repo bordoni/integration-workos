@@ -10,7 +10,10 @@
 
 namespace WorkOS\Admin;
 
+use WorkOS\Config;
+use WorkOS\Organization\Manager;
 use WorkOS\Sync\RoleMapper;
+use WorkOS\Sync\RoleSyncCheck;
 use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
@@ -20,6 +23,13 @@ defined( 'ABSPATH' ) || exit;
  * Extends the WP Users list table with WorkOS visibility and sync controls.
  */
 class UserList {
+
+	/**
+	 * Whether this request already loaded the list page's memberships.
+	 *
+	 * @var bool
+	 */
+	private bool $primed = false;
 
 	/**
 	 * Constructor — registers all hooks.
@@ -63,7 +73,7 @@ class UserList {
 		}
 
 		$workos_id      = get_user_meta( $user_id, '_workos_user_id', true );
-		$environment_id = \WorkOS\Config::get_environment_id();
+		$environment_id = Config::get_environment_id();
 
 		if ( $workos_id ) {
 			return $this->render_linked_column( $user_id, $workos_id, $environment_id );
@@ -166,7 +176,9 @@ class UserList {
 	 * @return string HTML indicator or empty string.
 	 */
 	private function render_role_mismatch_indicator( int $user_id ): string {
-		$user_orgs = \WorkOS\Organization\Manager::get_user_orgs( $user_id );
+		$this->prime_page_memberships();
+
+		$user_orgs = Manager::get_user_orgs( $user_id );
 		if ( empty( $user_orgs ) ) {
 			return '';
 		}
@@ -203,6 +215,24 @@ class UserList {
 		}
 
 		return '';
+	}
+
+	/**
+	 * Load the memberships of every user on the current list page in one query,
+	 * the first time a row needs them.
+	 */
+	private function prime_page_memberships(): void {
+		if ( $this->primed ) {
+			return;
+		}
+		$this->primed = true;
+
+		global $wp_list_table;
+		if ( ! $wp_list_table instanceof \WP_Users_List_Table || empty( $wp_list_table->items ) ) {
+			return;
+		}
+
+		Manager::prime_user_orgs( wp_list_pluck( $wp_list_table->items, 'ID' ) );
 	}
 
 	/**
@@ -460,7 +490,7 @@ class UserList {
 
 		foreach ( $user_ids as $user_id ) {
 			$user_id   = absint( $user_id );
-			$user_orgs = \WorkOS\Organization\Manager::get_user_orgs( $user_id );
+			$user_orgs = Manager::get_user_orgs( $user_id );
 
 			if ( empty( $user_orgs ) ) {
 				++$skipped;
@@ -496,6 +526,8 @@ class UserList {
 	/**
 	 * Add an "Out of sync" view to the users list filter links.
 	 *
+	 * Reads the last role sync check (RoleSyncCheck); nothing is computed on this screen.
+	 *
 	 * @param array $views Existing view links.
 	 *
 	 * @return array Modified view links.
@@ -505,8 +537,8 @@ class UserList {
 			return $views;
 		}
 
-		$out_of_sync_ids = RoleMapper::get_out_of_sync_user_ids();
-		$count           = count( $out_of_sync_ids );
+		$result = RoleSyncCheck::result();
+		$count  = $result ? $result['count'] : 0;
 
 		if ( 0 === $count ) {
 			return $views;
@@ -538,7 +570,8 @@ class UserList {
 			return;
 		}
 
-		$out_of_sync_ids = RoleMapper::get_out_of_sync_user_ids();
+		$result          = RoleSyncCheck::result();
+		$out_of_sync_ids = $result ? $result['ids'] : [];
 
 		if ( empty( $out_of_sync_ids ) ) {
 			// No results — use impossible ID to return empty set.

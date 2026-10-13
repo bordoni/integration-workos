@@ -37,6 +37,12 @@ class Controller extends BaseController {
 
 		$this->container->singleton( LoginBypass::class );
 		$this->container->get( LoginBypass::class );
+
+		$this->container->singleton( Deactivation::class );
+		$this->container->get( Deactivation::class );
+
+		$this->container->singleton( IdentityGate::class );
+		$this->container->get( IdentityGate::class );
 	}
 
 	/**

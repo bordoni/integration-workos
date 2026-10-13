@@ -8,10 +8,14 @@
 namespace WorkOS\Admin;
 
 use WorkOS\App;
+use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Config;
 use WorkOS\Options\Options;
 use WorkOS\Options\Production;
 use WorkOS\Options\Staging;
+use WorkOS\Sync\RoleMapper;
+use WorkOS\Sync\RoleSyncCheck;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -51,6 +55,13 @@ class Settings {
 	private bool $role_sync_form_queued = false;
 
 	/**
+	 * Whether the role-check form has been queued for footer render.
+	 *
+	 * @var bool
+	 */
+	private bool $role_check_form_queued = false;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -59,6 +70,7 @@ class Settings {
 		add_action( 'admin_init', [ $this, 'handle_activate_environment' ] );
 		add_action( 'admin_post_workos_create_org', [ $this, 'handle_create_org' ] );
 		add_action( 'admin_post_workos_sync_roles_to_workos', [ $this, 'handle_sync_roles_to_workos' ] );
+		add_action( 'admin_post_workos_check_role_sync', [ $this, 'handle_check_role_sync' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
 		add_filter( 'plugin_action_links_' . WORKOS_BASENAME, [ $this, 'action_links' ] );
@@ -332,7 +344,7 @@ class Settings {
 			$asset['version']
 		);
 
-		$wp_roles     = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$wp_roles     = RoleMapper::get_wp_roles();
 		$workos_roles = $this->get_workos_org_roles();
 		wp_add_inline_script(
 			'workos-role-mapping',
@@ -375,7 +387,7 @@ class Settings {
 			$asset['version']
 		);
 
-		$wp_roles  = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$wp_roles  = RoleMapper::get_wp_roles();
 		$all_roles = array_merge(
 			[ '__default__' => __( 'Default (all roles)', 'integration-workos' ) ],
 			$wp_roles
@@ -420,7 +432,7 @@ class Settings {
 			$asset['version']
 		);
 
-		$wp_roles  = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$wp_roles  = RoleMapper::get_wp_roles();
 		$all_roles = array_merge(
 			[ '__default__' => __( 'Default (all roles)', 'integration-workos' ) ],
 			$wp_roles
@@ -824,6 +836,31 @@ class Settings {
 				),
 			]
 		);
+
+		// The gate trusts links, and only Re-link Protection keeps them from
+		// moving, so it is only offered while the protection is on.
+		if ( $this->is_editing_env_relink_protected() ) {
+			add_settings_field(
+				'workos_env_require_linked_identity',
+				__( 'Require Linked Identity', 'integration-workos' ),
+				[ $this, 'render_constant_checkbox' ],
+				self::USERS_PAGE,
+				'workos_identity_linking',
+				[
+					'setting'     => 'require_linked_identity',
+					'label'       => __( 'Signed-in users without a WorkOS link can\'t use the site until they connect one.', 'integration-workos' ),
+					'description' => esc_html__( 'They see only a "Connect your account" page, which signs them in through WorkOS, and the REST API answers them with 403. Administrators are exempt.', 'integration-workos' ),
+				]
+			);
+
+			add_settings_field(
+				'workos_env_identity_gate_profile',
+				__( 'Connect With', 'integration-workos' ),
+				[ $this, 'render_identity_gate_profile_select' ],
+				self::USERS_PAGE,
+				'workos_identity_linking'
+			);
+		}
 
 		// --- User Provisioning section ---
 		add_settings_section(
@@ -1229,7 +1266,7 @@ class Settings {
 			admin_url( 'admin.php' )
 		);
 
-		$counts = \WorkOS\Sync\RoleMapper::push_all_roles_to_workos();
+		$counts = RoleMapper::push_all_roles_to_workos();
 
 		if ( $counts['synced'] > 0 || ( 0 === $counts['failed'] ) ) {
 			add_settings_error(
@@ -1386,6 +1423,39 @@ class Settings {
 		if ( ! empty( $args['description'] ) ) {
 			echo '<p class="description">' . wp_kses( $args['description'], [ 'code' => [] ] ) . '</p>';
 		}
+	}
+
+	/**
+	 * Whether Re-link Protection is on for the environment being edited.
+	 *
+	 * @return bool
+	 */
+	private function is_editing_env_relink_protected(): bool {
+		$constant = Config::bool_constant( 'relink_protection', $this->get_editing_environment() );
+
+		return '' !== $constant
+			? (bool) constant( $constant )
+			: (bool) $this->get_editing_env_options()->get( 'relink_protection', false );
+	}
+
+	/**
+	 * Render the login profile select for the identity gate's "Connect account" button.
+	 */
+	public function render_identity_gate_profile_select(): void {
+		$name    = $this->env_option( 'identity_gate_profile' );
+		$current = (string) $this->get_editing_env_options()->get( 'identity_gate_profile', Profile::DEFAULT_SLUG );
+
+		echo '<select name="' . esc_attr( $name ) . '">';
+		foreach ( App::container()->get( ProfileRepository::class )->all() as $profile ) {
+			printf(
+				'<option value="%s" %s>%s</option>',
+				esc_attr( $profile->get_slug() ),
+				selected( $current, $profile->get_slug(), false ),
+				esc_html( $profile->get_title() )
+			);
+		}
+		echo '</select>';
+		echo '<p class="description">' . esc_html__( 'The Login Profile behind the "Connect account" button.', 'integration-workos' ) . '</p>';
 	}
 
 	/**
@@ -1672,34 +1742,13 @@ class Settings {
 	 * Render the role mapping table.
 	 */
 	public function render_role_map(): void {
-		$map          = \WorkOS\Sync\RoleMapper::get_role_map();
-		$wp_roles     = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$map          = RoleMapper::get_role_map();
+		$wp_roles     = RoleMapper::get_wp_roles();
 		$workos_roles = $this->get_workos_org_roles();
 		$env          = $this->get_editing_environment();
 		$has_dropdown = ! empty( $workos_roles );
 
-		// Out-of-sync warning banner.
-		$out_of_sync = \WorkOS\Sync\RoleMapper::get_out_of_sync_users();
-		if ( ! empty( $out_of_sync ) ) {
-			$count = count( $out_of_sync );
-			printf(
-				'<div class="notice notice-warning inline" id="workos-role-sync-warning"><p>%s <a href="%s">%s</a></p></div>',
-				esc_html(
-					sprintf(
-						/* translators: %d: number of out-of-sync users */
-						_n(
-							'%d user has a WordPress role that doesn\'t match their WorkOS role mapping.',
-							'%d users have a WordPress role that doesn\'t match their WorkOS role mapping.',
-							$count,
-							'integration-workos'
-						),
-						$count
-					)
-				),
-				esc_url( admin_url( 'users.php?workos_sync_status=out_of_sync' ) ),
-				esc_html__( 'View affected users', 'integration-workos' )
-			);
-		}
+		$this->render_role_sync_status();
 
 		echo '<table id="workos-role-map-table" class="widefat"><thead><tr>';
 		echo '<th>' . esc_html__( 'WorkOS Role', 'integration-workos' ) . '</th>';
@@ -1800,13 +1849,158 @@ class Settings {
 	}
 
 	/**
+	 * Last role sync check: what it found and when, a "Check now" button, and the schedule
+	 * when Action Scheduler is available. Shows the stored result; nothing is computed here.
+	 */
+	private function render_role_sync_status(): void {
+		if ( ! workos()->is_enabled() || empty( Config::get_organization_id() ) ) {
+			return;
+		}
+
+		$result  = RoleSyncCheck::result();
+		$running = RoleSyncCheck::is_running();
+
+		if ( $running ) {
+			$message = __( 'Role sync check is running in the background. Reload to see the result.', 'integration-workos' );
+			$class   = 'notice-info';
+		} elseif ( ! $result ) {
+			$message = __( 'Roles haven\'t been checked against this role map yet.', 'integration-workos' );
+			$class   = 'notice-info';
+		} elseif ( $result['count'] > 0 ) {
+			$message = sprintf(
+				/* translators: 1: number of out-of-sync users, 2: number of members checked, 3: time since the check */
+				_n(
+					'%1$s of %2$s members has a WordPress role that doesn\'t match their WorkOS role mapping. Checked %3$s ago.',
+					'%1$s of %2$s members have a WordPress role that doesn\'t match their WorkOS role mapping. Checked %3$s ago.',
+					$result['count'],
+					'integration-workos'
+				),
+				number_format_i18n( $result['count'] ),
+				number_format_i18n( $result['members'] ),
+				human_time_diff( $result['checked_at'] )
+			);
+			$class = 'notice-warning';
+		} else {
+			$message = sprintf(
+				/* translators: 1: number of members checked, 2: time since the check */
+				__( 'All %1$s members match the role mapping. Checked %2$s ago.', 'integration-workos' ),
+				number_format_i18n( $result['members'] ),
+				human_time_diff( $result['checked_at'] )
+			);
+			$class = 'notice-success';
+		}
+
+		printf( '<div class="notice %s inline" id="workos-role-sync-status"><p>%s ', esc_attr( $class ), esc_html( $message ) );
+		if ( $result && $result['count'] > 0 ) {
+			printf(
+				'<a href="%s">%s</a> ',
+				esc_url( admin_url( 'users.php?workos_sync_status=out_of_sync' ) ),
+				esc_html__( 'View affected users', 'integration-workos' )
+			);
+		}
+		if ( ! $running ) {
+			printf(
+				'<button type="submit" form="workos-role-check-form" class="button button-small">%s</button>',
+				esc_html__( 'Check now', 'integration-workos' )
+			);
+			if ( ! $this->role_check_form_queued ) {
+				add_action( 'admin_footer', [ $this, 'render_role_check_form' ] );
+				$this->role_check_form_queued = true;
+			}
+		}
+		echo '</p></div>';
+
+		if ( RoleSyncCheck::has_action_scheduler() ) {
+			$env      = $this->get_editing_environment();
+			$schedule = (string) ( $this->get_editing_env_options()->all()['role_sync_schedule'] ?? 'off' );
+			$labels   = [
+				'off'    => __( 'Only when I click "Check now"', 'integration-workos' ),
+				'hourly' => __( 'Every hour', 'integration-workos' ),
+				'daily'  => __( 'Every day', 'integration-workos' ),
+			];
+			echo '<p><label>' . esc_html__( 'Check roles automatically:', 'integration-workos' ) . ' ';
+			printf( '<select name="workos_%s[role_sync_schedule]">', esc_attr( $env ) );
+			foreach ( $labels as $value => $label ) {
+				printf( '<option value="%s" %s>%s</option>', esc_attr( $value ), selected( $schedule, $value, false ), esc_html( $label ) );
+			}
+			echo '</select></label> <span class="description">' . esc_html__( 'Runs in the background with Action Scheduler.', 'integration-workos' ) . '</span></p>';
+		}
+	}
+
+	/**
+	 * Hidden form behind "Check now" (deferred to admin_footer so it isn't nested
+	 * inside the settings form).
+	 */
+	public function render_role_check_form(): void {
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" id="workos-role-check-form" style="display:none">
+			<?php wp_nonce_field( 'workos_check_role_sync' ); ?>
+			<input type="hidden" name="action" value="workos_check_role_sync" />
+			<input type="hidden" name="editing_env" value="<?php echo esc_attr( $this->get_editing_environment() ); ?>" />
+		</form>
+		<?php
+	}
+
+	/**
+	 * "Check now" (admin_post action): run the role sync check, in the background when
+	 * Action Scheduler is available.
+	 */
+	public function handle_check_role_sync(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'integration-workos' ) );
+		}
+
+		check_admin_referer( 'workos_check_role_sync' );
+
+		$env = SuperGlobals::get_post_var( 'editing_env' ) ?? Config::get_active_environment();
+		if ( ! in_array( $env, [ 'production', 'staging' ], true ) ) {
+			$env = Config::get_active_environment();
+		}
+
+		$outcome = RoleSyncCheck::start();
+		$result  = RoleSyncCheck::result();
+
+		if ( 'queued' === $outcome ) {
+			add_settings_error( 'workos_messages', 'workos_role_check', __( 'Role sync check started in the background.', 'integration-workos' ), 'info' );
+		} elseif ( 'done' === $outcome && $result ) {
+			add_settings_error(
+				'workos_messages',
+				'workos_role_check',
+				sprintf(
+					/* translators: 1: members checked, 2: out-of-sync users */
+					__( 'Role sync check finished: %1$s members checked, %2$s out of sync.', 'integration-workos' ),
+					number_format_i18n( $result['members'] ),
+					number_format_i18n( $result['count'] )
+				),
+				$result['count'] > 0 ? 'warning' : 'success'
+			);
+		} else {
+			add_settings_error( 'workos_messages', 'workos_role_check', __( 'No organization is configured, so there is nothing to check.', 'integration-workos' ), 'error' );
+		}
+
+		set_transient( 'settings_errors', get_settings_errors(), 30 );
+		wp_safe_redirect(
+			add_query_arg(
+				[
+					'page'             => 'workos',
+					'tab'              => 'users',
+					'env'              => $env,
+					'settings-updated' => 'true',
+				],
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	/**
 	 * Render the redirect URLs table for the Users tab.
 	 */
 	public function render_redirect_urls(): void {
 		$env      = $this->get_editing_environment();
 		$options  = $this->get_editing_env_options()->all();
 		$raw_map  = is_array( $options['redirect_urls'] ?? null ) ? $options['redirect_urls'] : [];
-		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$wp_roles = RoleMapper::get_wp_roles();
 
 		// Prepend the default fallback option.
 		$all_roles = array_merge(
@@ -1926,7 +2120,7 @@ class Settings {
 		$env      = $this->get_editing_environment();
 		$options  = $this->get_editing_env_options()->all();
 		$raw_map  = is_array( $options['logout_redirect_urls'] ?? null ) ? $options['logout_redirect_urls'] : [];
-		$wp_roles = \WorkOS\Sync\RoleMapper::get_wp_roles();
+		$wp_roles = RoleMapper::get_wp_roles();
 
 		// Prepend the default fallback option.
 		$all_roles = array_merge(
@@ -2133,6 +2327,7 @@ class Settings {
 		$choices = [
 			'login_mode'         => [ 'custom', 'redirect', 'headless' ],
 			'deprovision_action' => [ 'deactivate', 'demote', 'delete' ],
+			'role_sync_schedule' => array_keys( RoleSyncCheck::SCHEDULES ),
 		];
 		foreach ( $choices as $key => $allowed ) {
 			if ( isset( $input[ $key ] ) && in_array( $input[ $key ], $allowed, true ) ) {
@@ -2141,11 +2336,17 @@ class Settings {
 		}
 
 		// Boolean fields.
-		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation', 'allow_magic_code_registration', 'allow_legacy_magic_code_registration', 'relink_protection' ];
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation', 'allow_magic_code_registration', 'allow_legacy_magic_code_registration', 'relink_protection', 'require_linked_identity' ];
 		foreach ( $bool_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );
 			}
+		}
+
+		// Login profile slug for the identity gate.
+		if ( isset( $input['identity_gate_profile'] ) ) {
+			$slug                               = sanitize_title( $input['identity_gate_profile'] );
+			$sanitized['identity_gate_profile'] = '' !== $slug ? $slug : Profile::DEFAULT_SLUG;
 		}
 
 		// Integer fields.

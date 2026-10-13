@@ -54,6 +54,7 @@ Defined in `Plugin::init()`:
 - `WORKOS_ENVIRONMENT_ID` — Environment ID (overrides DB option)
 - `WORKOS_ENVIRONMENT` — Lock active environment (`production` or `staging`)
 - `WORKOS_RELINK_PROTECTION` — Re-link Protection on/off (see [`docs/identity-linking.md`](docs/identity-linking.md)); read on every call, so the settings page can't override it
+- `WORKOS_REQUIRE_LINKED_IDENTITY` — Require Linked Identity gate (only while Re-link Protection is on; see [`docs/identity-linking.md`](docs/identity-linking.md))
 
 Per-environment constants (take priority over generic):
 - `WORKOS_PRODUCTION_API_KEY`, `WORKOS_PRODUCTION_CLIENT_ID`, etc.
@@ -94,6 +95,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/Controller.php` | Auth controller (login, registration, password reset, redirects) |
 | `src/WorkOS/Auth/Login.php` | SSO login flow (redirect + headless modes) |
 | `src/WorkOS/Auth/LoginBypass.php` | Login bypass (`?fallback=1`) when WorkOS is unavailable |
+| `src/WorkOS/Auth/Deactivation.php` | Deactivated accounts (`_workos_deactivated`, set by `user.deleted` deprovisioning) can't sign in: a late `authenticate` filter (WP passwords, headless WorkOS), plus checks in `LoginCompleter::complete()` and `UI\Ajax`. Filter `workos_user_is_deactivated`. Deprovisioning also ends the account's sessions. |
 | `src/WorkOS/Auth/Registration.php` | User registration redirect |
 | `src/WorkOS/Auth/PasswordReset.php` | Legacy guard — blocks WP's native password-reset flow for WorkOS-linked users so they're funneled to the WorkOS-backed reset (`PasswordResetAdmin/*`) instead. |
 | **Auth — Password Reset Admin** ([`docs/password-reset.md`](docs/password-reset.md)) | |
@@ -164,6 +166,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound) |
 | `src/WorkOS/Sync/UserLinks.php` | WorkOS user ID → WP user lookups through `{base_prefix}workos_user_links` (indexed), mirrored from the `_workos_user_id` meta by the user meta hooks and filled by the v4 schema upgrade. `find()` / `find_many()` check every hit against the meta and use the meta until the table is filled (`workos_user_links_ready`). Writes to the meta that skip the meta API (raw SQL) aren't seen; `UserLinks::rebuild()` refills. |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
+| `src/WorkOS/Sync/RoleSyncCheck.php` | Which members' WP role doesn't match the role map. Batched (one JOIN query per 1,000 members), run by "Check now" on WorkOS → Users or on an Action Scheduler schedule (`role_sync_schedule`: off/hourly/daily, only offered when AS is loaded). Stores the result in `workos_role_sync_check` (not autoloaded, stale when env/org/role map change) and rechecks single users on role and `workos_org_membership_changed`. Admin screens read `result()`; nothing is computed on page load. |
 | `src/WorkOS/Sync/DirectorySync.php` | Directory sync (SCIM) |
 | `src/WorkOS/Sync/AuditLog.php` | Forward WP events to WorkOS Audit Logs |
 | `src/WorkOS/Sync/AuditLogController.php` | Audit log controller |
@@ -183,6 +186,7 @@ Per-environment constants (take priority over generic):
 | **Webhook** | |
 | `src/WorkOS/Webhook/Controller.php` | Webhook controller |
 | `src/WorkOS/Webhook/Receiver.php` | Webhook event processing and signature verification |
+| `src/WorkOS/Webhook/EventGuard.php` | Retried and late deliveries: handled event IDs are remembered (transient, 3 days, `workos_webhook_seen_ttl`) so a repeat runs no handlers; `user.updated` and `organization_membership.updated` skip payloads whose `updated_at` isn't newer than the last applied (`_workos_updated_at`, `_workos_membership_updated_at`). |
 | **CLI** | |
 | `src/WorkOS/CLI/Controller.php` | CLI controller, registers WP-CLI commands |
 | `src/WorkOS/CLI/StatusCommand.php` | `wp workos status` command |
@@ -231,7 +235,7 @@ bun run start         # Development with watch
 bun run lint:ts       # Type-check TypeScript (tsc --noEmit)
 bun run lint:php      # Lint PHP via PHPCS
 bun run lint:php:fix  # Auto-fix PHP lint issues
-composer phpstan      # Static analysis (PHPStan level 5, --memory-limit=1G)
+composer phpstan      # Static analysis (PHPStan level 5, --memory-limit=2G)
 ```
 
 `@wordpress/scripts` v30 transpiles `.ts` / `.tsx` natively via its default
@@ -333,6 +337,7 @@ tests/
     ├── DirectorySyncTest.php                       # Directory sync tests
     ├── EntitlementGateTest.php                     # Entitlement gate tests
     ├── EventLoggerTest.php                         # Activity log event logger tests
+    ├── IdentityGateTest.php                        # Require Linked Identity: setting, who is blocked, REST 403, page, connect URLs
     ├── LoginBypassTest.php                         # Login bypass tests
     ├── LoginLogoutTest.php                         # Login logout session revocation tests
     ├── LoginSessionTest.php                        # Login session tests
@@ -349,6 +354,7 @@ tests/
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
     ├── RoleMapperTest.php                          # Role mapper tests
+    ├── RoleSyncCheckTest.php                       # Batched role sync check: parity with the per-user check, stored result, rechecks, list-screen reads
     ├── SchemaTest.php                              # Database schema tests
     ├── TokenAuthRefreshTest.php                    # TokenAuth regression: rejects unsigned/expired Bearer JWTs
     ├── UserHelperTest.php                          # WorkOS\User + `workos_is_sso_user`/`workos_has_active_session` helpers

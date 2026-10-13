@@ -358,6 +358,76 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	}
 
 	/**
+	 * A correct password on an unverified account returns the verification
+	 * step, so the shell can collect the code WorkOS already mailed.
+	 */
+	public function test_authenticate_email_verification_required_is_surfaced(): void {
+		$this->response_queue = [ $this->email_verification_required( 'ghost@example.com' ) ];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'ghost@example.com',
+				'password' => 'CorrectPassword!1',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['email_verification_required'] );
+		$this->assertSame( 'pat_verify', $data['pending_authentication_token'] );
+		$this->assertSame( 'ghost@example.com', $data['email'] );
+	}
+
+	/**
+	 * The password was accepted, so the WP fallback has nothing to add: it
+	 * must not sync the password or authenticate again (which would mail a
+	 * second code).
+	 */
+	public function test_authenticate_email_verification_skips_wp_fallback(): void {
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', 'user_wos_fallback' );
+		$this->response_queue = [ $this->email_verification_required( 'fallback@example.com' ) ];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'fallback@example.com',
+				'password' => 'wp_password_123',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['email_verification_required'] );
+		$this->assertCount( 1, $this->captured, 'Only the first authenticate call may reach WorkOS.' );
+	}
+
+	/**
+	 * WorkOS's `email_verification_required` rejection for an account.
+	 *
+	 * @param string $email Account email.
+	 *
+	 * @return array HTTP response for the interceptor.
+	 */
+	private function email_verification_required( string $email ): array {
+		return [
+			'response' => [ 'code' => 403, 'message' => 'Forbidden' ],
+			'body'     => wp_json_encode(
+				[
+					'code'                         => 'email_verification_required',
+					'message'                      => 'Email ownership must be verified before authentication.',
+					'email'                        => $email,
+					'pending_authentication_token' => 'pat_verify',
+					'email_verification_id'        => 'email_verification_1',
+				]
+			),
+		];
+	}
+
+	/**
 	 * Radar header is forwarded to WorkOS.
 	 */
 	public function test_authenticate_forwards_radar_header(): void {
@@ -886,7 +956,7 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		for ( $i = 0; $i < 3; $i++ ) {
 			$this->response_queue = [ $verification_reject ];
 			$response             = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/authenticate', $body );
-			$this->assertSame( 403, $response->get_status(), "Attempt {$i} should reach WorkOS." );
+			$this->assertTrue( $response->get_data()['email_verification_required'] ?? false, "Attempt {$i} should reach WorkOS." );
 		}
 
 		$response = $this->dispatch_with_nonce( 'POST', '/workos/v1/auth/password/authenticate', $body );

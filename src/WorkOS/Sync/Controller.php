@@ -30,6 +30,9 @@ class Controller extends BaseController {
 		$this->container->singleton( RoleMapper::class );
 		$this->container->get( RoleMapper::class );
 
+		$this->container->singleton( RoleSyncCheck::class );
+		$this->container->get( RoleSyncCheck::class );
+
 		$this->container->singleton( DirectorySync::class );
 		$this->container->get( DirectorySync::class );
 

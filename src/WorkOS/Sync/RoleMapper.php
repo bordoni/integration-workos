@@ -7,12 +7,24 @@
 
 namespace WorkOS\Sync;
 
+use WorkOS\App;
+use WorkOS\Config;
+use WorkOS\Options\Production;
+use WorkOS\Options\Staging;
+use WorkOS\Organization\Manager;
+use WorkOS\Webhook\EventGuard;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
  * Phase 1: Simple 1:1 role mapping from WorkOS roles to WP roles.
  */
 class RoleMapper {
+
+	/**
+	 * User meta: `updated_at` of the last membership payload applied, by membership ID.
+	 */
+	public const META_MEMBERSHIP_UPDATED_AT = '_workos_membership_updated_at';
 
 	/**
 	 * Default role mapping.
@@ -49,13 +61,29 @@ class RoleMapper {
 	}
 
 	/**
+	 * A WorkOS role as its slug. WorkOS sends roles as objects (`{"slug": "admin"}`) on
+	 * memberships; older payloads and JWT claims carry the bare slug.
+	 *
+	 * @param mixed  $role          Role object or slug.
+	 * @param string $default_value Returned when there is no slug.
+	 *
+	 * @return string
+	 */
+	public static function role_slug( $role, string $default_value = '' ): string {
+		if ( is_array( $role ) ) {
+			$role = $role['slug'] ?? '';
+		}
+		return is_string( $role ) && '' !== $role ? $role : $default_value;
+	}
+
+	/**
 	 * Sync the WP role when a user logs in via WorkOS.
 	 *
 	 * @param int   $wp_user_id  WordPress user ID.
 	 * @param array $workos_data WorkOS user/auth data.
 	 */
 	public function sync_role_on_login( int $wp_user_id, array $workos_data ): void {
-		$workos_role = $workos_data['role'] ?? $workos_data['organization_membership']['role'] ?? '';
+		$workos_role = self::role_slug( $workos_data['role'] ?? $workos_data['organization_membership']['role'] ?? '' );
 		if ( empty( $workos_role ) ) {
 			return;
 		}
@@ -71,7 +99,7 @@ class RoleMapper {
 	public function handle_membership_updated( array $event ): void {
 		$membership     = $event['data'] ?? [];
 		$workos_user_id = $membership['user_id'] ?? '';
-		$workos_role    = $membership['role'] ?? '';
+		$workos_role    = self::role_slug( $membership['role'] ?? '' );
 		$workos_org_id  = $membership['organization_id'] ?? '';
 
 		if ( empty( $workos_user_id ) || empty( $workos_role ) ) {
@@ -83,12 +111,28 @@ class RoleMapper {
 			return;
 		}
 
+		// A retried or late event older than the last one applied would roll the role back.
+		$membership_id = (string) ( $membership['id'] ?? '' );
+		$applied       = get_user_meta( $wp_user_id, self::META_MEMBERSHIP_UPDATED_AT, true );
+		$applied       = is_array( $applied ) ? $applied : [];
+		if ( '' !== $membership_id ) {
+			$last = $applied[ $membership_id ] ?? '';
+			if ( EventGuard::is_stale( $membership['updated_at'] ?? '', $last ) ) {
+				return;
+			}
+			$latest = EventGuard::latest( $membership['updated_at'] ?? '', $last );
+			if ( '' !== $latest ) {
+				$applied[ $membership_id ] = $latest;
+				update_user_meta( $wp_user_id, self::META_MEMBERSHIP_UPDATED_AT, $applied );
+			}
+		}
+
 		$this->apply_role( $wp_user_id, $workos_role );
 
 		// Keep local membership record in sync.
 		if ( ! empty( $workos_org_id ) ) {
 			$wp_role = $this->map_role( $workos_role );
-			\WorkOS\Organization\Manager::update_membership_role( $wp_user_id, $workos_org_id, $workos_role, $wp_role );
+			Manager::update_membership_role( $wp_user_id, $workos_org_id, $workos_role, $wp_role );
 		}
 	}
 
@@ -164,7 +208,7 @@ class RoleMapper {
 			return;
 		}
 
-		$workos_org_id = \WorkOS\Config::get_organization_id();
+		$workos_org_id = Config::get_organization_id();
 		if ( empty( $workos_org_id ) ) {
 			return;
 		}
@@ -177,7 +221,7 @@ class RoleMapper {
 		}
 
 		// Find the WorkOS membership ID.
-		$membership_id = \WorkOS\Organization\Manager::get_membership_id_for_user( $user_id, $workos_org_id );
+		$membership_id = Manager::get_membership_id_for_user( $user_id, $workos_org_id );
 
 		// Fallback: query the API if not stored locally.
 		if ( empty( $membership_id ) ) {
@@ -195,7 +239,7 @@ class RoleMapper {
 
 			$membership_id = $memberships['data'][0]['id'] ?? '';
 			if ( ! empty( $membership_id ) ) {
-				\WorkOS\Organization\Manager::store_membership_id( $user_id, $workos_org_id, $membership_id );
+				Manager::store_membership_id( $user_id, $workos_org_id, $membership_id );
 			}
 		}
 
@@ -212,7 +256,7 @@ class RoleMapper {
 		}
 
 		// Update local record.
-		\WorkOS\Organization\Manager::update_membership_role( $user_id, $workos_org_id, $workos_role, $role );
+		Manager::update_membership_role( $user_id, $workos_org_id, $workos_role, $role );
 	}
 
 	/**
@@ -233,12 +277,12 @@ class RoleMapper {
 			'failed'  => 0,
 		];
 
-		$workos_org_id = \WorkOS\Config::get_organization_id();
+		$workos_org_id = Config::get_organization_id();
 		if ( empty( $workos_org_id ) ) {
 			return $counts;
 		}
 
-		$local_org = \WorkOS\Organization\Manager::get_by_workos_id( $workos_org_id );
+		$local_org = Manager::get_by_workos_id( $workos_org_id );
 		if ( ! $local_org ) {
 			return $counts;
 		}
@@ -304,7 +348,7 @@ class RoleMapper {
 
 				$membership_id = $api_memberships['data'][0]['id'] ?? '';
 				if ( ! empty( $membership_id ) ) {
-					\WorkOS\Organization\Manager::store_membership_id( $membership->user_id, $workos_org_id, $membership_id );
+					Manager::store_membership_id( $membership->user_id, $workos_org_id, $membership_id );
 				}
 			}
 
@@ -321,7 +365,7 @@ class RoleMapper {
 				continue;
 			}
 
-			\WorkOS\Organization\Manager::update_membership_role( $membership->user_id, $workos_org_id, $workos_role, $wp_role );
+			Manager::update_membership_role( $membership->user_id, $workos_org_id, $workos_role, $wp_role );
 			++$counts['synced'];
 		}
 
@@ -344,10 +388,10 @@ class RoleMapper {
 	 * @param array $map WorkOS role => WP role.
 	 */
 	public static function save_role_map( array $map ): void {
-		$env   = \WorkOS\Config::get_active_environment();
-		$class = 'staging' === $env ? \WorkOS\Options\Staging::class : \WorkOS\Options\Production::class;
+		$env   = Config::get_active_environment();
+		$class = 'staging' === $env ? Staging::class : Production::class;
 
-		\WorkOS\App::container()->get( $class )->set( 'role_map', array_map( 'sanitize_text_field', $map ) );
+		App::container()->get( $class )->set( 'role_map', array_map( 'sanitize_text_field', $map ) );
 	}
 
 	/**
@@ -367,65 +411,14 @@ class RoleMapper {
 	/**
 	 * Get users whose WP role doesn't match the expected WorkOS role mapping.
 	 *
-	 * Queries the org_memberships table for the configured organization and
-	 * compares each user's current WP role against what the role map says.
+	 * Computed now, in batches (see RoleSyncCheck::check_batch()). Admin screens read
+	 * the stored result from RoleSyncCheck::result() instead of calling this.
 	 *
 	 * @return array Array of mismatched user info arrays with keys:
 	 *               user_id, display_name, workos_role, expected_wp_role, actual_wp_role.
 	 */
 	public static function get_out_of_sync_users(): array {
-		global $wpdb;
-
-		$org_id = \WorkOS\Config::get_organization_id();
-		if ( empty( $org_id ) ) {
-			return [];
-		}
-
-		$local_org = \WorkOS\Organization\Manager::get_by_workos_id( $org_id );
-		if ( ! $local_org ) {
-			return [];
-		}
-
-		$mem_table = $wpdb->prefix . 'workos_org_memberships';
-
-		$memberships = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->prepare(
-				"SELECT user_id, workos_role FROM %i WHERE org_id = %d AND workos_role != ''",
-				$mem_table,
-				$local_org->id
-			)
-		);
-
-		if ( empty( $memberships ) ) {
-			return [];
-		}
-
-		$role_map    = self::get_role_map();
-		$out_of_sync = [];
-
-		foreach ( $memberships as $membership ) {
-			$user = get_user_by( 'id', $membership->user_id );
-			if ( ! $user ) {
-				continue;
-			}
-
-			$workos_role    = $membership->workos_role;
-			$expected       = $role_map[ $workos_role ] ?? $role_map['member'] ?? 'subscriber';
-			$actual_roles   = $user->roles;
-			$actual_wp_role = ! empty( $actual_roles ) ? $actual_roles[0] : '';
-
-			if ( $expected !== $actual_wp_role ) {
-				$out_of_sync[] = [
-					'user_id'          => (int) $membership->user_id,
-					'display_name'     => $user->display_name,
-					'workos_role'      => $workos_role,
-					'expected_wp_role' => $expected,
-					'actual_wp_role'   => $actual_wp_role,
-				];
-			}
-		}
-
-		return $out_of_sync;
+		return array_values( RoleSyncCheck::compute_all() );
 	}
 
 	/**

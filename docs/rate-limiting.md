@@ -78,6 +78,8 @@ Every public auth route is throttled by requester. A subset also counts as a sen
 | `POST /auth/password/reset/confirm` | — | shared (IP only) | no |
 | `POST /auth/magic/send` | mailbox | shared | yes (`otp_send`) |
 | `POST /auth/magic/verify` | email, exact | shared | no |
+| `POST /auth/email-verification/verify` | pending token | shared | no |
+| `POST /auth/email-verification/resend` | — | shared (IP only) | yes (`password_otp`) |
 | `POST /auth/signup/create` | mailbox | `Signup` constants | no — see below |
 | `POST /auth/signup/verify` | — | `Signup` constants (IP only) | no |
 | `POST /auth/mfa/challenge` | factor ID | shared | no |
@@ -90,7 +92,7 @@ Every public auth route is throttled by requester. A subset also counts as a sen
 
 "Shared" means `REQUEST_IP` plus, where there is a subject, `REQUEST_SUBJECT`. "Exact" and "mailbox" are the two email keyings described under [Which mailbox](#which-mailbox).
 
-`magic_send` and `pw_reset` share the `otp_send` bucket prefix, so rotating between those two endpoints buys an attacker nothing. `password` uses its own `password_otp` prefix: it reserves before it knows whether a send happens, and sharing would let heavy magic-code use lock an account out of password sign-in.
+`magic_send` and `pw_reset` share the `otp_send` bucket prefix, so rotating between those two endpoints buys an attacker nothing. `password` uses its own `password_otp` prefix: it reserves before it knows whether a send happens, and sharing would let heavy magic-code use lock an account out of password sign-in. The email-verification resend charges the same `password_otp` pair, so the code WorkOS mailed on the password attempt and its resends share one allowance.
 
 Two routes deliberately have no send policy. `signup` sends one verification email per created account, and a duplicate `create_user` fails at WorkOS before the send is reached, so it is not repeatable per address. `pw_reset_admin` requires `edit_user` on the target and mails that account's own address, so the recipient is never caller-chosen.
 
