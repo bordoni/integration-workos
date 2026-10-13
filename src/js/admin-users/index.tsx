@@ -511,53 +511,55 @@ function App(): JSX.Element {
 									{ formatRelative( user.created_at ) }
 								</td>
 								<td>
-									{ user.dashboard_url ? (
-										<a
-											className="button button-small"
-											href={ user.dashboard_url }
-											target="_blank"
-											rel="noopener noreferrer"
-											title={ __(
-												'Open this user in the WorkOS Dashboard — use the Emails section to re-enable a suppressed email.',
-												'integration-workos'
-											) }
-										>
-											{ __( 'Open in WorkOS', 'integration-workos' ) }
-										</a>
-									) : (
-										<span className="workos-users-no-link">
-											{ __( '—', 'integration-workos' ) }
-										</span>
-									) }
-									{ user.wp_user_id > 0 && (
-										<button
-											type="button"
-											className="button button-small workos-pwreset-trigger"
-											data-user-id={ user.wp_user_id }
-											title={ __(
-												'Send this user a WorkOS password reset email.',
-												'integration-workos'
-											) }
-										>
-											{ __( 'Send password reset', 'integration-workos' ) }
-										</button>
-									) }
-									{ user.wp_user_id > 0 && cfg.changeEmailEnabled && (
-										<button
-											type="button"
-											className="button button-small"
-											onClick={ () => handleChangeEmail( user ) }
-											disabled={ busyUserId === user.wp_user_id }
-											title={ __(
-												'Change this user’s email. Updates WorkOS and the portal immediately — no verification email is sent.',
-												'integration-workos'
-											) }
-										>
-											{ busyUserId === user.wp_user_id
-												? __( 'Changing…', 'integration-workos' )
-												: __( 'Change email', 'integration-workos' ) }
-										</button>
-									) }
+									<div className="workos-users-actions">
+										{ user.dashboard_url ? (
+											<a
+												className="button button-small"
+												href={ user.dashboard_url }
+												target="_blank"
+												rel="noopener noreferrer"
+												title={ __(
+													'Open this user in the WorkOS Dashboard — use the Emails section to re-enable a suppressed email.',
+													'integration-workos'
+												) }
+											>
+												{ __( 'Open in WorkOS', 'integration-workos' ) }
+											</a>
+										) : (
+											<span className="workos-users-no-link">
+												{ __( '—', 'integration-workos' ) }
+											</span>
+										) }
+										{ user.wp_user_id > 0 && (
+											<button
+												type="button"
+												className="button button-small workos-pwreset-trigger"
+												data-user-id={ user.wp_user_id }
+												title={ __(
+													'Send this user a WorkOS password reset email.',
+													'integration-workos'
+												) }
+											>
+												{ __( 'Send password reset', 'integration-workos' ) }
+											</button>
+										) }
+										{ user.wp_user_id > 0 && cfg.changeEmailEnabled && (
+											<button
+												type="button"
+												className="button button-small"
+												onClick={ () => handleChangeEmail( user ) }
+												disabled={ busyUserId === user.wp_user_id }
+												title={ __(
+													'Change this user’s email. Updates WorkOS and the portal immediately — no verification email is sent.',
+													'integration-workos'
+												) }
+											>
+												{ busyUserId === user.wp_user_id
+													? __( 'Changing…', 'integration-workos' )
+													: __( 'Change email', 'integration-workos' ) }
+											</button>
+										) }
+									</div>
 								</td>
 							</tr>
 						) ) }
