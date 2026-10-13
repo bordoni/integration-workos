@@ -212,7 +212,9 @@ class UserCommand extends \WP_CLI_Command {
 	/**
 	 * Link a WordPress user to a WorkOS user ID.
 	 *
-	 * Validates the WorkOS user exists via API before linking.
+	 * Validates the WorkOS user exists via API before linking. A user that is
+	 * already linked keeps its link unless --force is given; this is the
+	 * explicit way to reassign an account when Re-link Protection is on.
 	 *
 	 * ## OPTIONS
 	 *
@@ -222,9 +224,21 @@ class UserCommand extends \WP_CLI_Command {
 	 * <workos_user_id>
 	 * : WorkOS user ID.
 	 *
+	 * [--force]
+	 * : Replace an existing link to a different WorkOS user.
+	 *
+	 * [--reactivate]
+	 * : Also clear the deactivation. Required to link an account that was
+	 * deactivated because its WorkOS user was deleted.
+	 *
+	 * [--yes]
+	 * : Skip the confirmation for --force.
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp workos user link 1 user_01ABC
+	 *     wp workos user link 1 user_01XYZ --force
+	 *     wp workos user link 1 user_01XYZ --force --reactivate
 	 *
 	 * @param array $args       Positional arguments.
 	 * @param array $assoc_args Associative arguments.
@@ -234,15 +248,35 @@ class UserCommand extends \WP_CLI_Command {
 
 		$wp_user_id     = (int) $args[0];
 		$workos_user_id = $args[1];
+		$force          = ! empty( $assoc_args['force'] );
+		$reactivate     = ! empty( $assoc_args['reactivate'] );
 
 		$user = get_user_by( 'id', $wp_user_id );
 		if ( ! $user ) {
 			WP_CLI::error( "WordPress user #{$wp_user_id} not found." );
 		}
 
-		$existing_link = get_user_meta( $wp_user_id, '_workos_user_id', true );
-		if ( $existing_link ) {
-			WP_CLI::error( "User #{$wp_user_id} is already linked to WorkOS ID: {$existing_link}" );
+		$existing_link = (string) get_user_meta( $wp_user_id, '_workos_user_id', true );
+		if ( $existing_link === $workos_user_id ) {
+			WP_CLI::success( "User #{$wp_user_id} is already linked to WorkOS user {$workos_user_id}." );
+			return;
+		}
+
+		if ( $existing_link && ! $force ) {
+			WP_CLI::error( "User #{$wp_user_id} is already linked to WorkOS ID: {$existing_link}. Use --force to replace the link." );
+		}
+
+		// One WorkOS user maps to one WP user.
+		$other_user_id = UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
+		if ( $other_user_id && $other_user_id !== $wp_user_id ) {
+			WP_CLI::error( "WorkOS user {$workos_user_id} is already linked to WordPress user #{$other_user_id}. Unlink that user first." );
+		}
+
+		// An account deactivated by user.deleted belongs to a WorkOS user that no longer
+		// exists. Handing it to a new identity is a separate decision from re-linking.
+		$deactivated = (bool) get_user_meta( $wp_user_id, '_workos_deactivated', true );
+		if ( $deactivated && ! $reactivate ) {
+			WP_CLI::error( "User #{$wp_user_id} was deactivated when its WorkOS user was deleted. Pass --reactivate to link it to {$workos_user_id} and reactivate it." );
 		}
 
 		// Validate the WorkOS user exists.
@@ -251,7 +285,19 @@ class UserCommand extends \WP_CLI_Command {
 			WP_CLI::error( 'Failed to fetch WorkOS user: ' . $workos_user->get_error_message() );
 		}
 
-		UserSync::link_user( $wp_user_id, $workos_user );
+		if ( $existing_link ) {
+			WP_CLI::confirm( "Replace the link of user #{$wp_user_id} ({$user->user_email}) from WorkOS user {$existing_link} to {$workos_user_id}?", $assoc_args );
+		}
+
+		if ( ! UserSync::link_user( $wp_user_id, $workos_user, 'cli_link', $force ) ) {
+			WP_CLI::error( "Could not link WordPress user #{$wp_user_id} to WorkOS user {$workos_user_id}. See the debug log." );
+		}
+
+		if ( $deactivated ) {
+			delete_user_meta( $wp_user_id, '_workos_deactivated' );
+			WP_CLI::log( "Reactivated WordPress user #{$wp_user_id}. Check its role: a demoted account keeps the role it was demoted to." );
+		}
+
 		WP_CLI::success( "Linked WordPress user #{$wp_user_id} to WorkOS user {$workos_user_id}." );
 	}
 
@@ -382,7 +428,7 @@ class UserCommand extends \WP_CLI_Command {
 			$assoc_args
 		);
 
-		$wp_user = UserSync::find_or_create_wp_user( $workos_user );
+		$wp_user = UserSync::find_or_create_wp_user( $workos_user, 'cli_import' );
 		if ( is_wp_error( $wp_user ) ) {
 			WP_CLI::error( $wp_user->get_error_message() );
 		}

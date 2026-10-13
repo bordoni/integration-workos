@@ -38,7 +38,7 @@ class DirectorySync {
 			return;
 		}
 
-		UserSync::find_or_create_wp_user( $workos_user );
+		UserSync::find_or_create_wp_user( $workos_user, 'directory_sync' );
 	}
 
 	/**
@@ -59,7 +59,7 @@ class DirectorySync {
 			// User not in WP, create them.
 			$workos_user = $this->normalize_directory_user( $directory_user );
 			if ( $workos_user ) {
-				UserSync::find_or_create_wp_user( $workos_user );
+				UserSync::find_or_create_wp_user( $workos_user, 'directory_sync' );
 			}
 			return;
 		}

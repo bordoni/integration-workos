@@ -261,6 +261,33 @@ class Client {
 	}
 
 	/**
+	 * Complete a pending authentication with an email-verification code.
+	 *
+	 * @param string      $code               Code WorkOS mailed when it required verification.
+	 * @param string      $pending_auth_token Pending authentication token from that response.
+	 * @param string|null $radar_action_token Optional Radar action token.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function authenticate_with_email_verification(
+		string $code,
+		string $pending_auth_token,
+		?string $radar_action_token = null
+	) {
+		return $this->post(
+			'/user_management/authenticate',
+			[
+				'code'                         => $code,
+				'pending_authentication_token' => $pending_auth_token,
+				'client_id'                    => $this->client_id,
+				'client_secret'                => $this->api_key,
+				'grant_type'                   => 'urn:workos:oauth:grant-type:email-verification:code',
+			],
+			$this->radar_headers( $radar_action_token )
+		);
+	}
+
+	/**
 	 * Complete a pending authentication with a TOTP code.
 	 *
 	 * @param string      $pending_auth_token Pending authentication token returned from prior auth.
@@ -833,11 +860,18 @@ class Client {
 			return false;
 		}
 
-		$timestamp = (int) $parts['t'];
-		if ( abs( time() - $timestamp ) > $tolerance ) {
+		$timestamp = $parts['t'];
+		if ( ! ctype_digit( $timestamp ) ) {
 			return false;
 		}
 
+		// WorkOS sends the timestamp in milliseconds; seconds are accepted too.
+		$seconds = strlen( $timestamp ) > 10 ? intdiv( (int) $timestamp, 1000 ) : (int) $timestamp;
+		if ( abs( time() - $seconds ) > $tolerance ) {
+			return false;
+		}
+
+		// The signed string uses the timestamp exactly as sent.
 		$expected = hash_hmac( 'sha256', "{$timestamp}.{$payload}", $secret );
 
 		return hash_equals( $expected, $parts['v1'] );

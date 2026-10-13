@@ -25,17 +25,6 @@ defined( 'ABSPATH' ) || exit;
 class Password extends BaseEndpoint {
 
 	/**
-	 * Buckets for the sign-in OTP reservation.
-	 *
-	 * Constants because reserve and refund must name the same bucket: a
-	 * mismatch would leave every reservation charged forever. Separate
-	 * from the shared `otp_send` pair so heavy magic-code use can't lock
-	 * an account out of password sign-in.
-	 */
-	private const BUCKET_PASSWORD_OTP_IP        = 'password_otp_ip';
-	private const BUCKET_PASSWORD_OTP_RECIPIENT = 'password_otp_recipient';
-
-	/**
 	 * Minimum observable response time for reset_start, in microseconds.
 	 *
 	 * The WorkOS send-reset API answers visibly faster when the email is
@@ -159,7 +148,9 @@ class Password extends BaseEndpoint {
 			$this->get_radar_token( $request )
 		);
 
-		if ( is_wp_error( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
+		// An unverified account already passed the password check; the
+		// fallback would only sync it again and mail a second code.
+		if ( is_wp_error( $workos_response ) && ! $this->triggered_verification_email( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
 			// WorkOS rejected the password — fall back to WordPress authentication.
 			// Handles migrated users whose passwords were never synced to WorkOS.
 			$wp_user = wp_authenticate( $email, $password );
@@ -537,7 +528,7 @@ class Password extends BaseEndpoint {
 
 		$existing = workos()->api()->list_users( [ 'email' => $email ] );
 		if ( ! is_wp_error( $existing ) && ! empty( $existing['data'][0] ) ) {
-			\WorkOS\Sync\UserSync::link_user( $wp_user->ID, $existing['data'][0] );
+			\WorkOS\Sync\UserSync::link_user( $wp_user->ID, $existing['data'][0], 'password_reset' );
 			return (string) $existing['data'][0]['id'];
 		}
 

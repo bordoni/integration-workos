@@ -151,7 +151,7 @@ class Login {
 		}
 
 		$workos_user = $result['user'] ?? $result;
-		$wp_user     = \WorkOS\Sync\UserSync::find_or_create_wp_user( $workos_user );
+		$wp_user     = \WorkOS\Sync\UserSync::find_or_create_wp_user( $workos_user, 'login' );
 
 		if ( is_wp_error( $wp_user ) ) {
 			return $wp_user;
@@ -275,6 +275,17 @@ class Login {
 		if ( ! empty( $outcome['mfa_required'] ) ) {
 			wp_die(
 				esc_html__( 'This login requires multi-factor authentication, which is not supported on the hosted callback. Try signing in from the login page.', 'integration-workos' ),
+				esc_html__( 'Authentication Error', 'integration-workos' ),
+				[ 'response' => 403 ]
+			);
+		}
+
+		// Hosted AuthKit verifies email before it issues a code, so this
+		// shouldn't happen, and there's no code step here to recover with.
+		// Without this the redirect below would land without a session.
+		if ( ! empty( $outcome['email_verification_required'] ) ) {
+			wp_die(
+				esc_html__( 'We couldn’t finish signing you in. Please try again.', 'integration-workos' ),
 				esc_html__( 'Authentication Error', 'integration-workos' ),
 				[ 'response' => 403 ]
 			);

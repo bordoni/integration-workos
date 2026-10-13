@@ -53,6 +53,8 @@ Defined in `Plugin::init()`:
 - `WORKOS_ORGANIZATION_ID` — Organization ID (overrides DB option)
 - `WORKOS_ENVIRONMENT_ID` — Environment ID (overrides DB option)
 - `WORKOS_ENVIRONMENT` — Lock active environment (`production` or `staging`)
+- `WORKOS_RELINK_PROTECTION` — Re-link Protection on/off (see [`docs/identity-linking.md`](docs/identity-linking.md)); read on every call, so the settings page can't override it
+- `WORKOS_REQUIRE_LINKED_IDENTITY` — Require Linked Identity gate (only while Re-link Protection is on; see [`docs/identity-linking.md`](docs/identity-linking.md))
 
 Per-environment constants (take priority over generic):
 - `WORKOS_PRODUCTION_API_KEY`, `WORKOS_PRODUCTION_CLIENT_ID`, etc.
@@ -182,6 +184,7 @@ Per-environment constants (take priority over generic):
 | **Webhook** | |
 | `src/WorkOS/Webhook/Controller.php` | Webhook controller |
 | `src/WorkOS/Webhook/Receiver.php` | Webhook event processing and signature verification |
+| `src/WorkOS/Webhook/EventGuard.php` | Retried and late deliveries: handled event IDs are remembered (transient, 3 days, `workos_webhook_seen_ttl`) so a repeat runs no handlers; `user.updated` and `organization_membership.updated` skip payloads whose `updated_at` isn't newer than the last applied (`_workos_updated_at`, `_workos_membership_updated_at`). |
 | **CLI** | |
 | `src/WorkOS/CLI/Controller.php` | CLI controller, registers WP-CLI commands |
 | `src/WorkOS/CLI/StatusCommand.php` | `wp workos status` command |
@@ -332,6 +335,7 @@ tests/
     ├── DirectorySyncTest.php                       # Directory sync tests
     ├── EntitlementGateTest.php                     # Entitlement gate tests
     ├── EventLoggerTest.php                         # Activity log event logger tests
+    ├── IdentityGateTest.php                        # Require Linked Identity: setting, who is blocked, REST 403, page, connect URLs
     ├── LoginBypassTest.php                         # Login bypass tests
     ├── LoginLogoutTest.php                         # Login logout session revocation tests
     ├── LoginSessionTest.php                        # Login session tests
@@ -354,6 +358,7 @@ tests/
     ├── UserSyncDeprovisionTest.php                 # User deprovisioning tests
     ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
     ├── UserSyncLinkTest.php                        # User linking tests
+    ├── UserSyncRelinkProtectionTest.php            # Re-link Protection: refuse/force/actions, sign-in, webhook, directory sync
     ├── UserSyncPushTest.php                        # Outbound user sync tests
     ├── UserSyncResyncTest.php                      # User re-sync tests
     ├── WebhookReceiverTest.php                     # Webhook receiver tests

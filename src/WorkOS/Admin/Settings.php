@@ -8,6 +8,8 @@
 namespace WorkOS\Admin;
 
 use WorkOS\App;
+use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Config;
 use WorkOS\Options\Options;
 use WorkOS\Options\Production;
@@ -798,6 +800,58 @@ class Settings {
 	 * Register sections and fields for the Users tab.
 	 */
 	private function register_users_fields(): void {
+		// --- Identity Linking section ---
+		add_settings_section(
+			'workos_identity_linking',
+			__( 'Identity Linking', 'integration-workos' ),
+			function () {
+				echo '<p>' . esc_html__( 'How WordPress accounts stay tied to their WorkOS user.', 'integration-workos' ) . '</p>';
+			},
+			self::USERS_PAGE
+		);
+
+		add_settings_field(
+			'workos_env_relink_protection',
+			__( 'Re-link Protection', 'integration-workos' ),
+			[ $this, 'render_constant_checkbox' ],
+			self::USERS_PAGE,
+			'workos_identity_linking',
+			[
+				'setting'     => 'relink_protection',
+				'label'       => __( 'Never move a linked account to a different WorkOS user automatically.', 'integration-workos' ),
+				'description' => sprintf(
+					/* translators: %s: WP-CLI command. */
+					esc_html__( 'Sign-in, webhooks, directory sync and imports that match an account already linked to someone else are refused, logged to the Activity Log, and shown on the user\'s profile. To reassign an account on purpose, run %s.', 'integration-workos' ),
+					'<code>' . esc_html( 'wp workos user link <id> <workos_user_id> --force' ) . '</code>'
+				),
+			]
+		);
+
+		// The gate trusts links, and only Re-link Protection keeps them from
+		// moving, so it is only offered while the protection is on.
+		if ( $this->is_editing_env_relink_protected() ) {
+			add_settings_field(
+				'workos_env_require_linked_identity',
+				__( 'Require Linked Identity', 'integration-workos' ),
+				[ $this, 'render_constant_checkbox' ],
+				self::USERS_PAGE,
+				'workos_identity_linking',
+				[
+					'setting'     => 'require_linked_identity',
+					'label'       => __( 'Signed-in users without a WorkOS link can\'t use the site until they connect one.', 'integration-workos' ),
+					'description' => esc_html__( 'They see only a "Connect your account" page, which signs them in through WorkOS, and the REST API answers them with 403. Administrators are exempt.', 'integration-workos' ),
+				]
+			);
+
+			add_settings_field(
+				'workos_env_identity_gate_profile',
+				__( 'Connect With', 'integration-workos' ),
+				[ $this, 'render_identity_gate_profile_select' ],
+				self::USERS_PAGE,
+				'workos_identity_linking'
+			);
+		}
+
 		// --- User Provisioning section ---
 		add_settings_section(
 			'workos_provisioning',
@@ -1324,6 +1378,74 @@ class Settings {
 			checked( $value, true, false ),
 			esc_html( $args['label'] )
 		);
+	}
+
+	/**
+	 * Render a checkbox for a boolean setting that a wp-config.php constant can lock.
+	 *
+	 * When the constant is defined for the environment being edited, the
+	 * checkbox is shown disabled with the constant's value, and nothing is
+	 * submitted for it.
+	 *
+	 * @param array $args Field arguments: setting, label, description (escaped HTML; only <code> is kept).
+	 */
+	public function render_constant_checkbox( array $args ): void {
+		$setting  = $args['setting'];
+		$constant = Config::bool_constant( $setting, $this->get_editing_environment() );
+
+		if ( '' === $constant ) {
+			$this->render_checkbox(
+				[
+					'name'  => $this->env_option( $setting ),
+					'label' => $args['label'],
+				]
+			);
+		} else {
+			printf(
+				'<label><input type="checkbox" %s disabled /> %s</label> <em>%s</em>',
+				checked( (bool) constant( $constant ), true, false ),
+				esc_html( $args['label'] ),
+				/* translators: %s: PHP constant name. */
+				esc_html( sprintf( __( 'Set by %s in wp-config.php.', 'integration-workos' ), $constant ) )
+			);
+		}
+
+		if ( ! empty( $args['description'] ) ) {
+			echo '<p class="description">' . wp_kses( $args['description'], [ 'code' => [] ] ) . '</p>';
+		}
+	}
+
+	/**
+	 * Whether Re-link Protection is on for the environment being edited.
+	 *
+	 * @return bool
+	 */
+	private function is_editing_env_relink_protected(): bool {
+		$constant = Config::bool_constant( 'relink_protection', $this->get_editing_environment() );
+
+		return '' !== $constant
+			? (bool) constant( $constant )
+			: (bool) $this->get_editing_env_options()->get( 'relink_protection', false );
+	}
+
+	/**
+	 * Render the login profile select for the identity gate's "Connect account" button.
+	 */
+	public function render_identity_gate_profile_select(): void {
+		$name    = $this->env_option( 'identity_gate_profile' );
+		$current = (string) $this->get_editing_env_options()->get( 'identity_gate_profile', Profile::DEFAULT_SLUG );
+
+		echo '<select name="' . esc_attr( $name ) . '">';
+		foreach ( App::container()->get( ProfileRepository::class )->all() as $profile ) {
+			printf(
+				'<option value="%s" %s>%s</option>',
+				esc_attr( $profile->get_slug() ),
+				selected( $current, $profile->get_slug(), false ),
+				esc_html( $profile->get_title() )
+			);
+		}
+		echo '</select>';
+		echo '<p class="description">' . esc_html__( 'The Login Profile behind the "Connect account" button.', 'integration-workos' ) . '</p>';
 	}
 
 	/**
@@ -2079,11 +2201,17 @@ class Settings {
 		}
 
 		// Boolean fields.
-		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation', 'allow_magic_code_registration', 'allow_legacy_magic_code_registration' ];
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation', 'allow_magic_code_registration', 'allow_legacy_magic_code_registration', 'relink_protection', 'require_linked_identity' ];
 		foreach ( $bool_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );
 			}
+		}
+
+		// Login profile slug for the identity gate.
+		if ( isset( $input['identity_gate_profile'] ) ) {
+			$slug                               = sanitize_title( $input['identity_gate_profile'] );
+			$sanitized['identity_gate_profile'] = '' !== $slug ? $slug : Profile::DEFAULT_SLUG;
 		}
 
 		// Integer fields.

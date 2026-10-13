@@ -51,7 +51,7 @@ class Ajax {
 		}
 
 		$workos_user = $result['user'] ?? $result;
-		$wp_user     = UserSync::find_or_create_wp_user( $workos_user );
+		$wp_user     = UserSync::find_or_create_wp_user( $workos_user, 'ajax_login' );
 
 		if ( is_wp_error( $wp_user ) ) {
 			wp_send_json_error( [ 'message' => $wp_user->get_error_message() ] );

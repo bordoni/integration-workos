@@ -46,6 +46,18 @@ abstract class BaseEndpoint {
 	protected const BUCKET_OTP_SEND_RECIPIENT = 'otp_send_recipient';
 
 	/**
+	 * Buckets for verification codes sent during password sign-in, and
+	 * their resends.
+	 *
+	 * Constants because reserve and refund must name the same bucket: a
+	 * mismatch would leave every reservation charged forever. Separate
+	 * from the shared `otp_send` pair so heavy magic-code use can't lock
+	 * an account out of password sign-in.
+	 */
+	protected const BUCKET_PASSWORD_OTP_IP        = 'password_otp_ip';
+	protected const BUCKET_PASSWORD_OTP_RECIPIENT = 'password_otp_recipient';
+
+	/**
 	 * Profile repository.
 	 *
 	 * @var ProfileRepository

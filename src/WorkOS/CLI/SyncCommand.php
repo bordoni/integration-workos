@@ -277,7 +277,7 @@ class SyncCommand extends \WP_CLI_Command {
 					WP_CLI::log( "Would import: {$workos_id} ({$workos_user['email']})" );
 					++$imported;
 				} else {
-					$wp_user = UserSync::find_or_create_wp_user( $workos_user );
+					$wp_user = UserSync::find_or_create_wp_user( $workos_user, 'cli_import' );
 					if ( is_wp_error( $wp_user ) ) {
 						WP_CLI::warning( "User {$workos_id}: " . $wp_user->get_error_message() );
 						++$failed;
