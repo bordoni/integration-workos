@@ -164,6 +164,7 @@ Per-environment constants (take priority over generic):
 | **Sync** | |
 | `src/WorkOS/Sync/Controller.php` | Sync controller |
 | `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound) |
+| `src/WorkOS/Sync/UserLinks.php` | WorkOS user ID → WP user lookups through `{base_prefix}workos_user_links` (indexed), mirrored from the `_workos_user_id` meta by the user meta hooks and filled by the v4 schema upgrade. `find()` / `find_many()` check every hit against the meta and use the meta until the table is filled (`workos_user_links_ready`). Writes to the meta that skip the meta API (raw SQL) aren't seen; `UserLinks::rebuild()` refills. |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
 | `src/WorkOS/Sync/RoleSyncCheck.php` | Which members' WP role doesn't match the role map. Batched (one JOIN query per 1,000 members), run by "Check now" on WorkOS → Users or on an Action Scheduler schedule (`role_sync_schedule`: off/hourly/daily, only offered when AS is loaded). Stores the result in `workos_role_sync_check` (not autoloaded, stale when env/org/role map change) and rechecks single users on role and `workos_org_membership_changed`. Admin screens read `result()`; nothing is computed on page load. |
 | `src/WorkOS/Sync/DirectorySync.php` | Directory sync (SCIM) |
@@ -359,6 +360,7 @@ tests/
     ├── UserHelperTest.php                          # WorkOS\User + `workos_is_sso_user`/`workos_has_active_session` helpers
     ├── UserSyncDeprovisionTest.php                 # User deprovisioning tests
     ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
+    ├── UserLinksTest.php                           # Link table: follows meta writes, backfill, parity with the get_users() meta lookup, batched lookups
     ├── UserSyncLinkTest.php                        # User linking tests
     ├── UserSyncRelinkProtectionTest.php            # Re-link Protection: refuse/force/actions, sign-in, webhook, directory sync
     ├── UserSyncPushTest.php                        # Outbound user sync tests

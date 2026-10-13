@@ -20,6 +20,10 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
+		// First, so the link table follows every write to the link meta.
+		$this->container->singleton( UserLinks::class );
+		$this->container->get( UserLinks::class );
+
 		$this->container->singleton( UserSync::class );
 		$this->container->get( UserSync::class );
 

@@ -7,6 +7,8 @@
 
 namespace WorkOS\Database;
 
+use WorkOS\Sync\UserLinks;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -22,13 +24,14 @@ class Schema {
 	/**
 	 * Current schema version.
 	 */
-	private const CURRENT_VERSION = 3;
+	private const CURRENT_VERSION = 4;
 
 	/**
 	 * Activation hook — create tables.
 	 */
 	public static function activate(): void {
 		self::create_tables();
+		UserLinks::rebuild();
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
 	}
 
@@ -47,6 +50,9 @@ class Schema {
 		// Idempotent: the migration short-circuits when the standalone option
 		// is already populated, so it's safe to call on every upgrade.
 		self::migrate_active_environment_to_standalone_option();
+
+		// v4: fill the WorkOS ID → WP user table from the existing meta.
+		UserLinks::rebuild();
 
 		update_option( self::VERSION_OPTION, self::CURRENT_VERSION );
 	}
@@ -142,6 +148,13 @@ class Schema {
 			KEY idx_event_type (event_type),
 			KEY idx_user_id (user_id),
 			KEY idx_created_at (created_at)
+		) {$charset_collate};
+
+		CREATE TABLE {$wpdb->base_prefix}workos_user_links (
+			workos_user_id varchar(191) NOT NULL,
+			wp_user_id bigint(20) unsigned NOT NULL,
+			PRIMARY KEY  (workos_user_id,wp_user_id),
+			KEY idx_wp_user_id (wp_user_id)
 		) {$charset_collate};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -159,6 +172,7 @@ class Schema {
 		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}workos_org_sites" );
 		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}workos_org_memberships" );
 		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}workos_organizations" );
+		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->base_prefix}workos_user_links" );
 		// phpcs:enable
 	}
 }

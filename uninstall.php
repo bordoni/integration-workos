@@ -27,6 +27,7 @@ $workos_options = [
 	'workos_role_map',
 	'workos_audit_logging_enabled',
 	'workos_db_version',
+	'workos_user_links_ready',
 	'workos_role_sync_check',
 ];
 

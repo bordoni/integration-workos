@@ -93,7 +93,7 @@ class ConfigTest extends WPTestCase {
 	}
 
 	/**
-	 * Schema::maybe_upgrade() (db_version 2 → 3) copies the legacy value into
+	 * Schema::maybe_upgrade() (db_version 2 → current) copies the legacy value into
 	 * the standalone option and strips it from the global row.
 	 */
 	public function test_migrate_active_environment_moves_legacy_value_to_standalone_option(): void {
@@ -115,7 +115,7 @@ class ConfigTest extends WPTestCase {
 		$this->assertIsArray( $global );
 		$this->assertArrayNotHasKey( 'active_environment', $global );
 
-		$this->assertSame( 3, (int) get_option( 'workos_db_version' ) );
+		$this->assertSame( 4, (int) get_option( 'workos_db_version' ) );
 	}
 
 	/**
