@@ -50,6 +50,45 @@ class WebhookSignatureTest extends WPTestCase {
 	}
 
 	/**
+	 * Test a millisecond timestamp, the format WorkOS sends, returns true.
+	 */
+	public function test_valid_signature_with_millisecond_timestamp_returns_true(): void {
+		$payload   = '{"event":"user.updated"}';
+		$timestamp = time() * 1000 + 227;
+		$signature = $this->build_signature( $payload, $this->secret, $timestamp );
+
+		$this->assertTrue(
+			Client::verify_webhook_signature( $payload, $signature, $this->secret )
+		);
+	}
+
+	/**
+	 * Test an expired millisecond timestamp returns false.
+	 */
+	public function test_expired_millisecond_timestamp_returns_false(): void {
+		$payload   = '{"event":"user.updated"}';
+		$timestamp = ( time() - 600 ) * 1000;
+		$signature = $this->build_signature( $payload, $this->secret, $timestamp );
+
+		$this->assertFalse(
+			Client::verify_webhook_signature( $payload, $signature, $this->secret )
+		);
+	}
+
+	/**
+	 * Test a non-numeric timestamp returns false.
+	 */
+	public function test_non_numeric_timestamp_returns_false(): void {
+		$payload   = '{"event":"user.updated"}';
+		$hash      = hash_hmac( 'sha256', "abc.{$payload}", $this->secret );
+		$signature = "t=abc, v1={$hash}";
+
+		$this->assertFalse(
+			Client::verify_webhook_signature( $payload, $signature, $this->secret )
+		);
+	}
+
+	/**
 	 * Test invalid signature returns false.
 	 */
 	public function test_invalid_signature_returns_false(): void {

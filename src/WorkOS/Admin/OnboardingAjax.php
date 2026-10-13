@@ -10,6 +10,7 @@ namespace WorkOS\Admin;
 use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Config;
 use WorkOS\Sync\RoleMapper;
+use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -190,9 +191,10 @@ class OnboardingAjax {
 			return new \WP_Error( 'workos_error', 'Failed to get WorkOS user ID.' );
 		}
 
-		// Link the user.
-		update_user_meta( $user_id, '_workos_user_id', $workos_user_id );
-		update_user_meta( $user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
+		// Link the user through the same path as every other link.
+		if ( ! UserSync::link_user( $user_id, $workos_user, 'onboarding' ) ) {
+			return new \WP_Error( 'workos_link_conflict', 'User is already linked to a different WorkOS user.' );
+		}
 
 		// Ensure organization membership.
 		$org_id = Config::get_organization_id();

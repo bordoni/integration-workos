@@ -46,6 +46,8 @@ $workos_meta_keys = [
 	'_workos_refresh_token',
 	'_workos_session_id',
 	'_workos_deactivated',
+	'_workos_updated_at',
+	'_workos_membership_updated_at',
 ];
 
 foreach ( $workos_meta_keys as $workos_key ) {

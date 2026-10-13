@@ -99,6 +99,25 @@ export function isMfaRequired( result: AuthResult ): result is MfaRequired {
 	return ( result as MfaRequired ).mfa_required === true;
 }
 
+/**
+ * A correct password on an account whose email WorkOS hasn't verified.
+ * WorkOS has already mailed a code; the sign-in finishes with it.
+ */
+export interface EmailVerificationRequired {
+	email_verification_required: true;
+	pending_authentication_token: string;
+	email: string;
+}
+
+export function isEmailVerificationRequired(
+	result: unknown
+): result is EmailVerificationRequired {
+	return (
+		( result as EmailVerificationRequired )?.email_verification_required ===
+		true
+	);
+}
+
 export interface NonceResponse {
 	nonce: string;
 	radar_site_key: string;
@@ -149,6 +168,7 @@ export type Step =
 	| 'password'
 	| 'magic_send'
 	| 'magic_verify'
+	| 'email_verify'
 	| 'mfa'
 	| 'signup'
 	| 'signup_verify'

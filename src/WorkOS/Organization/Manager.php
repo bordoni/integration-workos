@@ -8,6 +8,7 @@
 namespace WorkOS\Organization;
 
 use WorkOS\Config;
+use WorkOS\Sync\RoleMapper;
 use WorkOS\Sync\UserSync;
 
 defined( 'ABSPATH' ) || exit;
@@ -82,7 +83,7 @@ class Manager {
 			$wp_user_id,
 			[
 				'workos_membership_id' => $membership['id'] ?? '',
-				'workos_role'          => $membership['role'] ?? 'member',
+				'workos_role'          => RoleMapper::role_slug( $membership['role'] ?? '', 'member' ),
 			]
 		);
 	}
@@ -146,7 +147,7 @@ class Manager {
 
 		// Extract role and membership ID from auth result when available.
 		$membership    = $auth_result['organization_membership'] ?? [];
-		$workos_role   = $membership['role'] ?? $auth_result['role'] ?? 'member';
+		$workos_role   = RoleMapper::role_slug( $membership['role'] ?? $auth_result['role'] ?? '', 'member' );
 		$membership_id = $membership['id'] ?? '';
 
 		$extra = [

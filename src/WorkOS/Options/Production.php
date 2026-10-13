@@ -50,6 +50,8 @@ class Production extends Options {
 			'change_email_confirm_path'               => 'workos/change-email',
 			'allow_magic_code_registration'           => true,
 			'allow_legacy_magic_code_registration'    => true,
+			// Identity linking (see UserSync::link_user()).
+			'relink_protection'                       => false,
 		];
 	}
 }

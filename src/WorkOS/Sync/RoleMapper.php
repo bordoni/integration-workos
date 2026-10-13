@@ -12,6 +12,7 @@ use WorkOS\Config;
 use WorkOS\Options\Production;
 use WorkOS\Options\Staging;
 use WorkOS\Organization\Manager;
+use WorkOS\Webhook\EventGuard;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -19,6 +20,11 @@ defined( 'ABSPATH' ) || exit;
  * Phase 1: Simple 1:1 role mapping from WorkOS roles to WP roles.
  */
 class RoleMapper {
+
+	/**
+	 * User meta: `updated_at` of the last membership payload applied, by membership ID.
+	 */
+	public const META_MEMBERSHIP_UPDATED_AT = '_workos_membership_updated_at';
 
 	/**
 	 * Default role mapping.
@@ -55,13 +61,29 @@ class RoleMapper {
 	}
 
 	/**
+	 * A WorkOS role as its slug. WorkOS sends roles as objects (`{"slug": "admin"}`) on
+	 * memberships; older payloads and JWT claims carry the bare slug.
+	 *
+	 * @param mixed  $role          Role object or slug.
+	 * @param string $default_value Returned when there is no slug.
+	 *
+	 * @return string
+	 */
+	public static function role_slug( $role, string $default_value = '' ): string {
+		if ( is_array( $role ) ) {
+			$role = $role['slug'] ?? '';
+		}
+		return is_string( $role ) && '' !== $role ? $role : $default_value;
+	}
+
+	/**
 	 * Sync the WP role when a user logs in via WorkOS.
 	 *
 	 * @param int   $wp_user_id  WordPress user ID.
 	 * @param array $workos_data WorkOS user/auth data.
 	 */
 	public function sync_role_on_login( int $wp_user_id, array $workos_data ): void {
-		$workos_role = $workos_data['role'] ?? $workos_data['organization_membership']['role'] ?? '';
+		$workos_role = self::role_slug( $workos_data['role'] ?? $workos_data['organization_membership']['role'] ?? '' );
 		if ( empty( $workos_role ) ) {
 			return;
 		}
@@ -77,7 +99,7 @@ class RoleMapper {
 	public function handle_membership_updated( array $event ): void {
 		$membership     = $event['data'] ?? [];
 		$workos_user_id = $membership['user_id'] ?? '';
-		$workos_role    = $membership['role'] ?? '';
+		$workos_role    = self::role_slug( $membership['role'] ?? '' );
 		$workos_org_id  = $membership['organization_id'] ?? '';
 
 		if ( empty( $workos_user_id ) || empty( $workos_role ) ) {
@@ -87,6 +109,22 @@ class RoleMapper {
 		$wp_user_id = self::get_wp_user_by_workos_id( $workos_user_id );
 		if ( ! $wp_user_id ) {
 			return;
+		}
+
+		// A retried or late event older than the last one applied would roll the role back.
+		$membership_id = (string) ( $membership['id'] ?? '' );
+		$applied       = get_user_meta( $wp_user_id, self::META_MEMBERSHIP_UPDATED_AT, true );
+		$applied       = is_array( $applied ) ? $applied : [];
+		if ( '' !== $membership_id ) {
+			$last = $applied[ $membership_id ] ?? '';
+			if ( EventGuard::is_stale( $membership['updated_at'] ?? '', $last ) ) {
+				return;
+			}
+			$latest = EventGuard::latest( $membership['updated_at'] ?? '', $last );
+			if ( '' !== $latest ) {
+				$applied[ $membership_id ] = $latest;
+				update_user_meta( $wp_user_id, self::META_MEMBERSHIP_UPDATED_AT, $applied );
+			}
 		}
 
 		$this->apply_role( $wp_user_id, $workos_role );

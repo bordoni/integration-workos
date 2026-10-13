@@ -144,6 +144,35 @@ class OnboardingSyncTest extends WPTestCase {
 	}
 
 	/**
+	 * Test sync links through UserSync::link_user(), so the linked action fires.
+	 */
+	public function test_sync_links_through_link_user(): void {
+		$user_id = self::factory()->user->create( [ 'user_email' => 'onboarding_link@example.com' ] );
+
+		$this->response_queue[] = [
+			'response' => [ 'code' => 200, 'message' => 'OK' ],
+			'body'     => wp_json_encode( [ 'data' => [ [ 'id' => 'user_onboarding_link', 'email' => 'onboarding_link@example.com' ] ] ] ),
+		];
+		$this->response_queue[] = [
+			'response' => [ 'code' => 201, 'message' => 'Created' ],
+			'body'     => wp_json_encode( [ 'id' => 'om_new' ] ),
+		];
+
+		$linked = [];
+		$record = function ( $wp_user_id, $workos_id, $previous_id, $source ) use ( &$linked ) {
+			$linked[] = [ $wp_user_id, $workos_id, $previous_id, $source ];
+		};
+		add_action( 'workos_user_linked', $record, 10, 4 );
+
+		$this->call_sync_single_user( $user_id );
+
+		remove_action( 'workos_user_linked', $record, 10 );
+
+		$this->assertSame( [ [ $user_id, 'user_onboarding_link', '', 'onboarding' ] ], $linked );
+		$this->assertNotEmpty( get_user_meta( $user_id, '_workos_profile_hash', true ) );
+	}
+
+	/**
 	 * Test sync creates WorkOS user when not found.
 	 */
 	public function test_sync_creates_workos_user_when_not_found(): void {
