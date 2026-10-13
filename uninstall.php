@@ -27,6 +27,7 @@ $workos_options = [
 	'workos_role_map',
 	'workos_audit_logging_enabled',
 	'workos_db_version',
+	'workos_role_sync_check',
 ];
 
 foreach ( $workos_options as $workos_option ) {
@@ -56,6 +57,11 @@ foreach ( $workos_meta_keys as $workos_key ) {
 // Drop custom tables.
 require_once plugin_dir_path( __FILE__ ) . 'src/WorkOS/Database/Schema.php';
 \WorkOS\Database\Schema::drop_tables();
+
+// Cancel scheduled role sync checks (Action Scheduler, when another plugin provides it).
+if ( function_exists( 'as_unschedule_all_actions' ) ) {
+	as_unschedule_all_actions( 'workos_role_sync_check' );
+}
 
 // Clear transients.
 delete_transient( 'workos_jwks' );

@@ -7,7 +7,9 @@
 
 namespace WorkOS\Organization;
 
+use WorkOS\Config;
 use WorkOS\Sync\RoleMapper;
+use WorkOS\Sync\UserSync;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -69,7 +71,7 @@ class Manager {
 			return;
 		}
 
-		$wp_user_id = \WorkOS\Sync\UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
+		$wp_user_id = UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
 		$local_org  = self::get_by_workos_id( $workos_org_id );
 
 		if ( ! $wp_user_id || ! $local_org ) {
@@ -100,7 +102,7 @@ class Manager {
 			return;
 		}
 
-		$wp_user_id = \WorkOS\Sync\UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
+		$wp_user_id = UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
 		$local_org  = self::get_by_workos_id( $workos_org_id );
 
 		if ( ! $wp_user_id || ! $local_org ) {
@@ -123,7 +125,7 @@ class Manager {
 	 * @param array $auth_result Full WorkOS auth response.
 	 */
 	public static function ensure_user_org_membership( int $wp_user_id, array $auth_result ): void {
-		$workos_org_id = \WorkOS\Config::get_organization_id();
+		$workos_org_id = Config::get_organization_id();
 		if ( empty( $workos_org_id ) ) {
 			return;
 		}
@@ -385,6 +387,13 @@ class Manager {
 
 		// Invalidate caches.
 		wp_cache_delete( "user_orgs_{$user_id}", 'workos' );
+
+		/**
+		 * Fires after a user's local organization membership is added, changed or removed.
+		 *
+		 * @param int $user_id WP user ID.
+		 */
+		do_action( 'workos_org_membership_changed', $user_id );
 	}
 
 	/**
@@ -409,6 +418,13 @@ class Manager {
 
 		// Invalidate caches.
 		wp_cache_delete( "user_orgs_{$user_id}", 'workos' );
+
+		/**
+		 * Fires after a user's local organization membership is added, changed or removed.
+		 *
+		 * @param int $user_id WP user ID.
+		 */
+		do_action( 'workos_org_membership_changed', $user_id );
 	}
 
 	/**
@@ -446,6 +462,60 @@ class Manager {
 		wp_cache_set( $cache_key, $result, 'workos' );
 
 		return $result;
+	}
+
+	/**
+	 * Load the organizations of many users in one query and cache them for get_user_orgs().
+	 *
+	 * The users list renders one row at a time; priming the page's users first turns
+	 * one membership query per row into one per page. Users with no membership are
+	 * cached as an empty list too, so their rows don't query either.
+	 *
+	 * @param int[] $user_ids WP user IDs.
+	 */
+	public static function prime_user_orgs( array $user_ids ): void {
+		$user_ids = array_values( array_unique( array_filter( array_map( 'intval', $user_ids ) ) ) );
+		$missing  = array_values(
+			array_filter(
+				$user_ids,
+				static fn( int $id ): bool => false === wp_cache_get( "user_orgs_{$id}", 'workos' )
+			)
+		);
+		if ( empty( $missing ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$org_table = $wpdb->prefix . 'workos_organizations';
+		$mem_table = $wpdb->prefix . 'workos_org_memberships';
+		$in        = implode( ',', array_fill( 0, count( $missing ), '%d' ) );
+
+		// $in is only %d placeholders, one per ID in $missing.
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT o.*, m.workos_role, m.wp_role, m.joined_at, m.user_id AS member_user_id
+				FROM %i o
+				INNER JOIN %i m ON o.id = m.org_id
+				WHERE m.user_id IN ($in)
+				ORDER BY o.name",
+				$org_table,
+				$mem_table,
+				...$missing
+			)
+		);
+		// phpcs:enable
+
+		$by_user = array_fill_keys( $missing, [] );
+		foreach ( (array) $rows as $row ) {
+			$user_id = (int) $row->member_user_id;
+			unset( $row->member_user_id );
+			$by_user[ $user_id ][] = $row;
+		}
+
+		foreach ( $by_user as $user_id => $orgs ) {
+			wp_cache_set( "user_orgs_{$user_id}", $orgs, 'workos' );
+		}
 	}
 
 	/**
@@ -552,6 +622,13 @@ class Manager {
 
 		// Invalidate caches.
 		wp_cache_delete( "user_orgs_{$wp_user_id}", 'workos' );
+
+		/**
+		 * Fires after a user's local organization membership is added, changed or removed.
+		 *
+		 * @param int $wp_user_id WP user ID.
+		 */
+		do_action( 'workos_org_membership_changed', $wp_user_id );
 	}
 
 	// -------------------------------------------------------------------------

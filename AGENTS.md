@@ -165,6 +165,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Sync/Controller.php` | Sync controller |
 | `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound) |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
+| `src/WorkOS/Sync/RoleSyncCheck.php` | Which members' WP role doesn't match the role map. Batched (one JOIN query per 1,000 members), run by "Check now" on WorkOS → Users or on an Action Scheduler schedule (`role_sync_schedule`: off/hourly/daily, only offered when AS is loaded). Stores the result in `workos_role_sync_check` (not autoloaded, stale when env/org/role map change) and rechecks single users on role and `workos_org_membership_changed`. Admin screens read `result()`; nothing is computed on page load. |
 | `src/WorkOS/Sync/DirectorySync.php` | Directory sync (SCIM) |
 | `src/WorkOS/Sync/AuditLog.php` | Forward WP events to WorkOS Audit Logs |
 | `src/WorkOS/Sync/AuditLogController.php` | Audit log controller |
@@ -352,6 +353,7 @@ tests/
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
     ├── RoleMapperTest.php                          # Role mapper tests
+    ├── RoleSyncCheckTest.php                       # Batched role sync check: parity with the per-user check, stored result, rechecks, list-screen reads
     ├── SchemaTest.php                              # Database schema tests
     ├── TokenAuthRefreshTest.php                    # TokenAuth regression: rejects unsigned/expired Bearer JWTs
     ├── UserHelperTest.php                          # WorkOS\User + `workos_is_sso_user`/`workos_has_active_session` helpers
