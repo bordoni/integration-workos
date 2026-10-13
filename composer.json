@@ -49,8 +49,8 @@
 		"test:wpunit": "vendor/bin/codecept run wpunit",
 		"lint": "phpcs",
 		"lint:fix": "phpcbf",
-		"phpstan": "phpstan analyse --memory-limit=1G",
-		"phpstan:baseline": "phpstan analyse --memory-limit=1G --generate-baseline",
+		"phpstan": "phpstan analyse --memory-limit=2G",
+		"phpstan:baseline": "phpstan analyse --memory-limit=2G --generate-baseline",
 		"strauss-install": [
 			"test -f ./bin/strauss-0.27.3.phar || (mkdir -p bin && curl -o bin/strauss-0.27.3.phar -L https://github.com/BrianHenryIE/strauss/releases/download/0.27.3/strauss.phar)"
 		],

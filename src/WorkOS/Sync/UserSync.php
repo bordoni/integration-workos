@@ -12,6 +12,7 @@ use WorkOS\Auth\ChangeEmail\RestApi as ChangeEmailRestApi;
 use WorkOS\Config;
 use WorkOS\Organization\Manager as OrganizationManager;
 use WorkOS\Webhook\EventGuard;
+use WP_Session_Tokens;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -774,11 +775,14 @@ class UserSync {
 					$user->set_role( 'subscriber' );
 				}
 				update_user_meta( $wp_user_id, '_workos_deactivated', true );
+				// Sign-in is refused from now on (Auth\Deactivation); end the sessions it already has.
+				WP_Session_Tokens::get_instance( $wp_user_id )->destroy_all();
 				break;
 
 			case 'deactivate':
 			default:
 				update_user_meta( $wp_user_id, '_workos_deactivated', true );
+				WP_Session_Tokens::get_instance( $wp_user_id )->destroy_all();
 				break;
 		}
 	}

@@ -7,6 +7,7 @@
 
 namespace WorkOS\Auth\AuthKit;
 
+use WorkOS\Auth\Deactivation;
 use WorkOS\Auth\Login;
 use WorkOS\Auth\Redirect;
 use WorkOS\Config;
@@ -153,6 +154,10 @@ class LoginCompleter {
 		$wp_user = UserSync::find_or_create_wp_user( $workos_user, 'authkit' );
 		if ( is_wp_error( $wp_user ) ) {
 			return $wp_user;
+		}
+
+		if ( Deactivation::is_deactivated( $wp_user->ID ) ) {
+			return Deactivation::error();
 		}
 
 		$entitlement = EntitlementGate::evaluate( $wp_user->ID, $workos_response );
