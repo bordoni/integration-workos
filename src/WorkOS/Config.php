@@ -38,6 +38,7 @@ class Config {
 		'allow_password_fallback'                 => 'WORKOS_ALLOW_PASSWORD_FALLBACK',
 		'wp_password_fallback_email_confirmation' => 'WORKOS_WP_PASSWORD_FALLBACK_EMAIL_CONFIRMATION',
 		'relink_protection'                       => 'WORKOS_RELINK_PROTECTION',
+		'require_linked_identity'                 => 'WORKOS_REQUIRE_LINKED_IDENTITY',
 	];
 
 	/**
@@ -184,6 +185,35 @@ class Config {
 		 * @param bool $enabled Whether automatic re-linking is refused.
 		 */
 		return (bool) apply_filters( 'workos_relink_protection_enabled', $enabled );
+	}
+
+	/**
+	 * Whether signed-in users must have a linked WorkOS identity to use the site.
+	 *
+	 * Only offered on top of Re-link Protection: the gate trusts links, and
+	 * only the protection keeps them from moving. With the protection off,
+	 * this is off whatever the setting says. See {@see Auth\IdentityGate}.
+	 *
+	 * @return bool
+	 */
+	public static function is_linked_identity_required(): bool {
+		if ( ! self::is_relink_protection_enabled() ) {
+			return false;
+		}
+
+		$constant = self::bool_constant( 'require_linked_identity' );
+		$required = '' !== $constant
+			? (bool) constant( $constant )
+			: (bool) workos()->option( 'require_linked_identity', false );
+
+		/**
+		 * Filter whether signed-in users must have a linked WorkOS identity.
+		 *
+		 * Only consulted while Re-link Protection is on.
+		 *
+		 * @param bool $required Whether the identity gate is on.
+		 */
+		return (bool) apply_filters( 'workos_require_linked_identity', $required );
 	}
 
 	/**
