@@ -67,6 +67,13 @@
 	margin-left: 4px;
 }
 
+#workos-users-admin-root .workos-users-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
 #workos-users-admin-root .workos-users-no-link {
 	color: #8c8f94;
 }
