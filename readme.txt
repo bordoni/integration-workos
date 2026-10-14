@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.9
+Stable tag: 1.0.10
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,21 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.10 - 2026-10-14 =
+
+* Fix: Accounts deactivated by WorkOS can no longer sign in. The deactivation was recorded but never checked, so the account could still sign in through WorkOS when a new WorkOS user matched its email, or with its WordPress password. Every sign-in path now refuses it, and deprovisioning ends its existing sessions. (#48)
+* Fix: Webhooks from WorkOS now verify. WorkOS signs deliveries with a millisecond timestamp, which the plugin compared with the time in seconds, so every real delivery was rejected with a 401. Sites with a webhook secret have been dropping every WorkOS event; after the update they apply again, including pending retries. (#45)
+* Fix: A webhook event delivered twice runs once, and a user or membership update older than the last one applied is skipped, so a late retry can't roll a profile or role back. Membership roles sent as objects are read correctly instead of erroring or being stored as "Array". (#45)
+* New: Re-link Protection. A WordPress account already linked to one WorkOS user no longer moves silently to another WorkOS user with the same email; the sign-in or event is refused and recorded on the user's profile and in the Activity Log. Set it under WorkOS → Users → Identity Linking or lock it with `WORKOS_RELINK_PROTECTION`. On for new installs, off for upgraded sites until turned on. (#46)
+* New: `wp workos user link --force` reassigns an account to a different WorkOS user, with `--reactivate` for an account deactivated when its WorkOS user was deleted. (#46)
+* New: `workos_user_linked` and `workos_user_link_refused` actions. (#46)
+* New: Require Linked Identity. An optional gate, available while Re-link Protection is on, that shows signed-in users without a linked WorkOS user a "Connect your account" page and blocks their REST and admin-ajax requests until they sign in through WorkOS. WooCommerce order-received and order-pay pages stay reachable. Administrators are exempt. Lock it with `WORKOS_REQUIRE_LINKED_IDENTITY`. (#47)
+* New: Accounts whose email WorkOS hasn't verified can finish a password sign-in with the code WorkOS emails, and ask for a new one. (#51)
+* Fix: Signing in with a WordPress password at `wp-login.php?fallback=1` (or `?workos=0`) no longer drops the password and returns to the WorkOS sign-in. (#48)
+* Fix: The users screens no longer check every organization member's role on every load (about 50,000 queries on a site with 25,000 members). They read the last check, which runs from Check now under WorkOS → Users → Role Mapping, or on a schedule when Action Scheduler is available. (#49)
+* Fix: Looking up the WordPress user behind a WorkOS user ID uses a new indexed table instead of scanning user meta, under 1 ms instead of about 40 ms on large sites. The table is created and filled on upgrade. (#50)
+* Fix: The action buttons on WorkOS → Users are spaced apart. (#52)
+
 = 1.0.9 - 2026-08-05 =
 
 * Fix: Unlimited verification emails from the sign-in endpoint. Credentials from an account that never finished email verification could be replayed to make WorkOS send a fresh code every time, bounded only at 5 per minute against the caller. Email sends are now counted against the recipient across 5 minute, 1 hour, and 8 hour windows, and a reserved slot is refunded when the response shows nothing was sent. (#39)
@@ -282,6 +297,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.10 =
+Accounts deactivated by WorkOS can no longer sign in. Webhooks from WorkOS verify again: sites with a webhook secret have been rejecting every event, and pending retries apply after the update. Adds Re-link Protection (off on upgraded sites until you turn it on), an optional Require Linked Identity gate, and email-code verification during password sign-in. Adds a database table for WorkOS user lookups, created and filled on upgrade.
 
 = 1.0.9 =
 Security release. Closes an unlimited-verification-email path on the sign-in endpoint and stops the activity log trusting spoofable IP headers. Rate limits now count the mailbox an address lands in, so plus-tags no longer multiply an inbox's allowance. Removes the `change_email_rate_limit_*` options in favour of the shared tiered limiter; sites behind a CDN should set `WORKOS_CLIENT_IP_HEADER`.
