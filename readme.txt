@@ -189,6 +189,7 @@ WorkOS is provided by WorkOS, Inc.
 * Fix: The users screens no longer check every organization member's role on every load (about 50,000 queries on a site with 25,000 members). They read the last check, which runs from Check now under WorkOS → Users → Role Mapping, or on a schedule when Action Scheduler is available. (#49)
 * Fix: Looking up the WordPress user behind a WorkOS user ID uses a new indexed table instead of scanning user meta, under 1 ms instead of about 40 ms on large sites. The table is created and filled on upgrade. (#50)
 * Fix: The action buttons on WorkOS → Users are spaced apart. (#52)
+* Fix: Updated the bundled `lucatume/di52` container to 4.1.0, bringing `composer.lock` back in sync. (#44)
 
 = 1.0.9 - 2026-08-05 =
 
