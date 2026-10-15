@@ -766,7 +766,7 @@ All commands that display data support these output formats:
 
 - PHP 7.4+
 - Composer
-- Node.js 20+
+- Node.js 24+
 - bun
 - [slic](https://github.com/stellarwp/slic) (for running tests)
 
