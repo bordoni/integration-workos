@@ -40,6 +40,13 @@ jobs:
           php-version: '8.2'
           tools: composer
 
+      # wp-scripts runs on Node (bun only installs and launches it), so pin the
+      # same version the tests build with instead of the runner's default.
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+
       - name: Install bun
         run: |
           curl -fsSL https://bun.sh/install | bash
