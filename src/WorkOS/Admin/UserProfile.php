@@ -138,10 +138,17 @@ class UserProfile {
 			'<code>' . esc_html( $workos_user_id ) . '</code>'
 		);
 		echo '</p><p>';
+
+		// `wp workos user link` refuses a deactivated account without --reactivate.
+		$command = sprintf( 'wp workos user link %d %s --force', $wp_user_id, $refused['workos_user_id'] );
+		if ( get_user_meta( $wp_user_id, '_workos_deactivated', true ) ) {
+			$command .= ' --reactivate';
+		}
+
 		printf(
 			/* translators: %s: WP-CLI command. */
 			esc_html__( 'If the account should move, run %s.', 'integration-workos' ),
-			'<code>' . esc_html( sprintf( 'wp workos user link %d %s --force', $wp_user_id, $refused['workos_user_id'] ) ) . '</code>'
+			'<code>' . esc_html( $command ) . '</code>'
 		);
 		echo '</p></div>';
 	}
