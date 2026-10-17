@@ -185,7 +185,7 @@ export function LockoutLookup( { url, nonce }: Props ): JSX.Element {
 									<td>
 										<code>{ b.bucket }</code>
 									</td>
-									<td>
+									<td data-colname={ __( 'Used', 'integration-workos' ) }>
 										{ b.tiers.map( ( t ) => (
 											<div key={ t.window }>
 												{ sprintf(
@@ -198,7 +198,7 @@ export function LockoutLookup( { url, nonce }: Props ): JSX.Element {
 											</div>
 										) ) }
 									</td>
-									<td>
+									<td data-colname={ __( 'Status', 'integration-workos' ) }>
 										{ b.locked ? (
 											<strong className="workos-lockouts-locked">
 												{ sprintf(

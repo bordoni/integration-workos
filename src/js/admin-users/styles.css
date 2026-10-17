@@ -130,3 +130,40 @@
 #workos-users-admin-root .workos-lockouts-locked {
 	color: #d63638;
 }
+
+/*
+ * Below WP's list-table breakpoint the cells stack, so the column header
+ * row no longer lines up with anything. Hide it and label the values that
+ * need one instead (`data-colname`, as core list tables do).
+ */
+@media screen and (max-width: 782px) {
+	#workos-users-admin-root .workos-lockouts-table thead {
+		display: none;
+	}
+
+	/* The row is a wrapping flex container here; give each cell a full line. */
+	#workos-users-admin-root .workos-lockouts-table td {
+		display: block;
+		flex: 0 0 100%;
+		box-sizing: border-box;
+		padding: 4px 12px;
+	}
+
+	#workos-users-admin-root .workos-lockouts-table td:first-child {
+		padding-top: 12px;
+	}
+
+	#workos-users-admin-root .workos-lockouts-table td:last-child {
+		padding-bottom: 12px;
+	}
+
+	#workos-users-admin-root .workos-lockouts-table td[data-colname]::before {
+		content: attr(data-colname);
+		position: static;
+		display: block;
+		width: auto;
+		color: #50575e;
+		font-size: 12px;
+		font-weight: 600;
+	}
+}
