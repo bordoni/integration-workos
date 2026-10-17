@@ -121,3 +121,12 @@
 	font-size: 12px;
 	margin-left: 8px;
 }
+
+#workos-users-admin-root .workos-lockouts {
+	margin-top: 32px;
+	max-width: 960px;
+}
+
+#workos-users-admin-root .workos-lockouts-locked {
+	color: #d63638;
+}

@@ -42,8 +42,8 @@ abstract class BaseEndpoint {
 	 * rotating between them earns an attacker no extra mail. Splitting
 	 * them per endpoint multiplies what one inbox can be sent.
 	 */
-	protected const BUCKET_OTP_SEND_IP        = 'otp_send_ip';
-	protected const BUCKET_OTP_SEND_RECIPIENT = 'otp_send_recipient';
+	public const BUCKET_OTP_SEND_IP        = 'otp_send_ip';
+	public const BUCKET_OTP_SEND_RECIPIENT = 'otp_send_recipient';
 
 	/**
 	 * Buckets for verification codes sent during password sign-in, and
@@ -54,8 +54,8 @@ abstract class BaseEndpoint {
 	 * from the shared `otp_send` pair so heavy magic-code use can't lock
 	 * an account out of password sign-in.
 	 */
-	protected const BUCKET_PASSWORD_OTP_IP        = 'password_otp_ip';
-	protected const BUCKET_PASSWORD_OTP_RECIPIENT = 'password_otp_recipient';
+	public const BUCKET_PASSWORD_OTP_IP        = 'password_otp_ip';
+	public const BUCKET_PASSWORD_OTP_RECIPIENT = 'password_otp_recipient';
 
 	/**
 	 * Profile repository.

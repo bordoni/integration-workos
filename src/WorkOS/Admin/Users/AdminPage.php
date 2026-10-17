@@ -127,6 +127,8 @@ class AdminPage {
 				'defaultLimit'       => 25,
 				'pluginEnabled'      => workos()->is_enabled(),
 				'changeEmailEnabled' => $change_email_enabled,
+				'lockoutsUrl'        => esc_url_raw( rest_url( LockoutsRestApi::NAMESPACE . LockoutsRestApi::BASE ) ),
+				'canManageLockouts'  => current_user_can( 'edit_users' ),
 			]
 		);
 

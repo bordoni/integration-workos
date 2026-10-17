@@ -25,8 +25,10 @@ Everything lives in `src/WorkOS/RateLimit/`:
 | `BaseRateLimiter` | Window arithmetic, key derivation, the `429` shape. |
 | `DatabaseRateLimiter` | Counters in transients. |
 | `ObjectCacheRateLimiter` | Counters in the object cache, incremented atomically. |
-| `TieredRateLimiter` | Stacks windows into a policy. Owns the policy constants. |
-| `Controller` | Binds the implementation and the wrapper. |
+| `TieredRateLimiter` | Stacks windows into a policy. Owns the policy constants, the policy filter and the `workos_rate_limited` action. |
+| `CountsAttempts` | Optional interface: read a counter without charging it. Both implementations provide it. |
+| `Lockouts` | Looks up and clears the email-keyed buckets for one address. |
+| `Controller` | Binds the implementation, the wrapper and `Lockouts`. |
 
 Client IP resolution lives outside this module, in `WorkOS\Http\ClientIp`, because the activity log and the audit log need the same answer. See [Who the caller is](#who-the-caller-is).
 
@@ -141,6 +143,37 @@ do_action( 'workos_rate_limited', string $bucket, string $subject_hash, int $ret
 `$subject_hash` is `TieredRateLimiter::hash_subject( $subject )`: the first 16 hex characters of an HMAC-SHA256 under `wp_salt( 'auth' )`. It is stable on one site, so repeated entries for the same address or IP line up, and it can't be checked against a guessed address without the salt. The raw subject is never passed to the hook.
 
 When the activity log is enabled, the plugin hooks this action and writes one `rate_limited` entry with the bucket, the subject hash and `retry_after` in its details. The entry's user and IP columns stay empty on purpose: for a per-IP or per-email bucket they would hold the subject the hash is hiding. The activity log screen can filter on `rate_limited`.
+
+## Looking up and clearing lockouts
+
+When a customer is locked out, support can see which limits are blocking an address and clear them, from WP-CLI or the WorkOS Users screen. Both go through `WorkOS\RateLimit\Lockouts`.
+
+Only the buckets keyed on an email address are covered: `password_email`, `magic_verify_email`, `magic_send_email`, `pw_reset_email`, `signup_email`, `otp_send_recipient` and `password_otp_recipient`. Per-IP buckets aren't tied to a customer, and the user-ID buckets guard admin and account actions, not sign-in.
+
+Each bucket is keyed the way its endpoint keys it, so the address a customer typed finds the counters their requests hit: lowercased and trimmed for the exact buckets, reduced to the mailbox for the rest (see [Which mailbox](#which-mailbox)). Limits come from the filtered policy.
+
+```sh
+# One row per window: count, limit, time left, locked.
+wp workos ratelimit check jane@example.com
+wp workos ratelimit check jane@example.com --format=json
+
+# Clear every bucket, or one.
+wp workos ratelimit clear jane@example.com
+wp workos ratelimit clear jane@example.com --bucket=password_email --user=admin
+```
+
+A bucket is locked while any of its windows is full, and stays locked until the last full window rolls. Clearing resets the current window of every tier, so the next request goes through.
+
+On **WorkOS → Users**, a "Sign-in lockouts" section below the user list takes an email and shows the same buckets, with a Clear button per bucket and a Clear all. It is shown to users with `edit_users`, and calls two routes gated by the same capability:
+
+| Route | Body | Returns |
+|---|---|---|
+| `POST /wp-json/workos/v1/admin/lockouts/check` | `email` | `buckets` (as `Lockouts::check()`), `locked` count |
+| `POST /wp-json/workos/v1/admin/lockouts/clear` | `email`, optional `bucket` | `cleared` bucket names |
+
+Both are POST so the address stays out of URLs and access logs.
+
+Every clear writes one `rate_limit_cleared` activity-log entry. The user column is whoever cleared it (on the CLI, the `--user` the command ran as), and the details hold `source` (`cli` or `admin`) and each cleared bucket with its subject hash, which matches the `subject_hash` of that bucket's `rate_limited` entries. The address itself is never stored.
 
 ## Where limits apply
 
@@ -306,7 +339,10 @@ Hooks and log entries carry `TieredRateLimiter::hash_subject()`, never the email
 
 | File | Covers |
 |---|---|
-| `tests/wpunit/RateLimiterTest.php` | The single-window contract, run against **both** implementations via a data provider. |
+| `tests/wpunit/RateLimiterTest.php` | The single-window contract, run against **both** implementations via a data provider, including `count()`. |
+| `tests/wpunit/LockoutsTest.php` | Lookup keyed like the endpoints (exact and mailbox), filtered limits, clearing one or all buckets and every tier, the `rate_limit_cleared` entry. |
+| `tests/wpunit/LockoutsRestApiTest.php` | The admin routes: `edit_users` required (signed out, subscriber, editor refused), check, clear, bad input. |
+| `tests/wpunit/RateLimitCommandTest.php` | `wp workos ratelimit check` / `clear`, run against WP-CLI doubles in `tests/_support/WpCliStubs.php`. |
 | `tests/wpunit/TieredRateLimiterTest.php` | Tier ordering and charging, against an in-memory fake limiter, plus a guard on the shipped policy constants; the policy filter (attempt, refund, reset, bad return values); the `workos_rate_limited` action and the subject hash. |
 | `tests/wpunit/RateLimitActivityLogTest.php` | One `rate_limited` entry per refused attempt, with no raw email or IP in it; nothing written when the log is off. |
 | `tests/wpunit/AuthKitRestPasswordTest.php` | Reserve/refund on authenticate; reset-start send caps; the shared bucket. |
@@ -316,7 +352,9 @@ Hooks and log entries carry `TieredRateLimiter::hash_subject()`, never the email
 
 ## Internal references
 
-- `src/WorkOS/RateLimit/` — the module.
+- `src/WorkOS/RateLimit/` — the module, including `Lockouts`.
+- `src/WorkOS/CLI/RateLimitCommand.php` — `wp workos ratelimit`.
+- `src/WorkOS/Admin/Users/LockoutsRestApi.php` and `src/js/admin-users/lockouts.tsx` — the lookup on the Users screen.
 - `src/WorkOS/REST/Auth/BaseEndpoint.php` — the `rate_limit()` helper endpoints call.
 - `src/WorkOS/Http/ClientIp.php` — caller identity, shared with the logs.
 - `src/WorkOS/Email/AddressCanonicalizer.php` — which strings mean one mailbox.

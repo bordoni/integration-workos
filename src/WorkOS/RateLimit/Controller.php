@@ -36,6 +36,9 @@ class Controller extends BaseController {
 		);
 
 		$this->container->singleton( TieredRateLimiter::class );
+
+		// Lookup and clearing for the WP-CLI command and the Users screen.
+		$this->container->singleton( Lockouts::class );
 	}
 
 	/**

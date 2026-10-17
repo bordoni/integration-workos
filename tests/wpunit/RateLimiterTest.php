@@ -9,6 +9,7 @@ namespace WorkOS\Tests\Wpunit;
 
 use Codeception\Attribute\DataProvider;
 use lucatume\WPBrowser\TestCase\WPTestCase;
+use WorkOS\RateLimit\CountsAttempts;
 use WorkOS\RateLimit\DatabaseRateLimiter;
 use WorkOS\RateLimit\ObjectCacheRateLimiter;
 use WorkOS\RateLimit\RateLimiter;
@@ -149,6 +150,31 @@ class RateLimiterTest extends WPTestCase {
 		$limiter->reset( 'test_bucket', '192.168.0.1', 60 );
 
 		$this->assertTrue( $limiter->attempt( 'test_bucket', '192.168.0.1', 3, 60 ) );
+	}
+
+	/**
+	 * `count()` reads a counter without charging it, including attempts
+	 * past the limit, and reads zero after a reset.
+	 *
+	 * @param string $class Limiter implementation.
+	 */
+	#[DataProvider( 'limiter_provider' )]
+	public function test_count_reads_without_charging( string $class ): void {
+		$limiter = $this->limiter( $class );
+		$this->assertInstanceOf( CountsAttempts::class, $limiter );
+
+		$this->assertSame( 0, $limiter->count( 'test_count', 'a@example.com', 60 ) );
+
+		for ( $i = 0; $i < 4; $i++ ) {
+			$limiter->attempt( 'test_count', 'a@example.com', 3, 60 );
+		}
+
+		$this->assertSame( 4, $limiter->count( 'test_count', 'a@example.com', 60 ) );
+		$this->assertSame( 4, $limiter->count( 'test_count', 'a@example.com', 60 ), 'Reading must not charge.' );
+		$this->assertSame( 0, $limiter->count( 'test_count', 'b@example.com', 60 ) );
+
+		$limiter->reset( 'test_count', 'a@example.com', 60 );
+		$this->assertSame( 0, $limiter->count( 'test_count', 'a@example.com', 60 ) );
 	}
 
 	/**
