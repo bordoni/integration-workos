@@ -31,13 +31,13 @@ Verification is owned WP-side because WorkOS's `email_verification` endpoints ve
 
 | Surface | Endpoint | Auth | Audience |
 | --- | --- | --- | --- |
-| Initiate (self-service) | `POST /wp-json/workos/v1/users/{id}/email-change` | WP REST nonce (`X-WP-Nonce`) + `edit_user($id)` | A logged-in user changing their own address |
+| Initiate (self-service) | `POST /wp-json/workos/v1/users/{id}/email-change` | WP REST nonce (`X-WP-Nonce`) + `workos_change_email($id)` (maps to `edit_user($id)`; see [capabilities](capabilities.md)) | A logged-in user changing their own address |
 | Initiate (admin-of-other) | Same endpoint | WP REST nonce + `edit_users` (and `initiator ≠ target`) | Editors / admins acting on another account — **commits immediately** |
 | Confirm | `POST /wp-json/workos/v1/users/{id}/email-change/confirm` | The confirm **token** (no capability) | The person who clicked the verification link |
-| Cancel | `POST /wp-json/workos/v1/users/{id}/email-change/cancel` | Cancel **token** *or* `edit_user($id)` | Old-address recipient, or an admin |
-| WP Users list (row action under the WorkOS column) | Posts to the initiate endpoint | WP REST nonce + `edit_user($id)` | Admins, in the linked-user row only |
-| WorkOS → Users admin page ("Change email" action) | Posts to the initiate endpoint | WP REST nonce + `edit_user($id)` | Admins, on the WorkOS user list |
-| User-edit / profile panel | Posts to the initiate endpoint | WP REST nonce + `edit_user($id)` | Admins / the user on their own profile |
+| Cancel | `POST /wp-json/workos/v1/users/{id}/email-change/cancel` | Cancel **token** *or* `workos_change_email($id)` | Old-address recipient, or an admin |
+| WP Users list (row action under the WorkOS column) | Posts to the initiate endpoint | WP REST nonce + `workos_change_email($id)` | Admins, in the linked-user row only |
+| WorkOS → Users admin page ("Change email" action) | Posts to the initiate endpoint | WP REST nonce + `workos_change_email($id)` | Admins, on the WorkOS user list |
+| User-edit / profile panel | Posts to the initiate endpoint | WP REST nonce + `workos_change_email($id)` | Admins / the user on their own profile |
 | Shortcode | `[workos:change-email]` | Rendered server-side; posts to the initiate endpoint | Page authors |
 
 All entry points commit through the same shared path — a WorkOS `update_user` call followed by `wp_update_user()`, guarded by the conflict resolver and the in-progress transient. **Self-service** initiates email a hashed-token verification link and only commit on confirm (and are rate-limited); an **admin acting on another account** commits immediately, with no token, no rate limit, and no notification. See [Admin-direct vs. self-service](#admin-direct-vs-self-service).
@@ -82,6 +82,8 @@ The initiate endpoint branches on **who is acting**, decided by `is_admin_action
 
 > The caller holds the `edit_users` capability **and** is not the target user.
 
+This check stays on `edit_users`. A custom role granted only `workos_change_email` (see [capabilities](capabilities.md)) can start a change for another account, but it goes through the verified flow, the same as self-service.
+
 That single condition is the trust boundary. A caller who clears it can already manage every account, so the flow drops the ceremony that exists to protect a self-service user (or a hijacked session) from an unverified change:
 
 | Behavior | Self-service (or admin editing self) | Admin acting on another account |
@@ -103,7 +105,7 @@ This is gated purely by capability; there is no setting to toggle it. It superse
 
 ## Endpoint reference
 
-All endpoints live under `/wp-json/workos/v1/`. The initiate path requires the WP REST nonce **and** `edit_user($id)`; confirm and cancel are publicly routable (the token is the gatekeeper), but the shipped client still sends `X-WP-Nonce` on every request.
+All endpoints live under `/wp-json/workos/v1/`. The initiate path requires the WP REST nonce **and** `workos_change_email($id)` (maps to `edit_user($id)`); confirm and cancel are publicly routable (the token is the gatekeeper), but the shipped client still sends `X-WP-Nonce` on every request.
 
 ### `POST /wp-json/workos/v1/users/{id}/email-change` — initiate
 
@@ -153,7 +155,7 @@ See [Admin-direct vs. self-service](#admin-direct-vs-self-service) for the full 
 | --- | --- | --- |
 | 400 | `workos_invalid_user` | `id` path segment is not a positive integer |
 | 400 | `workos_invalid_email` | `new_email` is empty or fails `is_email()` |
-| 403 | `workos_forbidden` | Caller lacks `edit_user` on the target, or `workos_change_email_can_initiate` returned `false` |
+| 403 | `workos_forbidden` | Caller lacks `workos_change_email` on the target, or `workos_change_email_can_initiate` returned `false` |
 | 404 | `workos_user_not_found` | No WP user with that ID |
 | 409 | `workos_change_email_conflict` | New address already belongs to another account — **admin-of-other only**; self-service gets the enumeration-safe `200` instead |
 | 429 | (rate-limit) | Per-IP or per-user initiate window exhausted (see [Rate limiting](#rate-limiting)) — **self-service only**; admin-of-other actions bypass rate limiting |
@@ -216,11 +218,11 @@ X-WP-Nonce: <wp_rest nonce>
 ```jsonc
 {
   "token": "def456…"                             // cancel token from the old-address notice;
-                                                 // omit when relying on the edit_user capability path
+                                                 // omit when relying on the workos_change_email capability path
 }
 ```
 
-**Auth:** EITHER a valid cancel token (from the old-address notice link) OR `edit_user` on the target.
+**Auth:** EITHER a valid cancel token (from the old-address notice link) OR `workos_change_email` on the target.
 
 **200 response**
 
@@ -234,7 +236,7 @@ If there is no pending change to cancel, the endpoint still returns `200 { ok: t
 
 | Status | Code | Cause |
 | --- | --- | --- |
-| 403 | `workos_forbidden` | Neither a valid cancel token nor `edit_user` on the target |
+| 403 | `workos_forbidden` | Neither a valid cancel token nor `workos_change_email` on the target |
 | 404 | `workos_user_not_found` | No WP user with that ID |
 
 ---
@@ -297,7 +299,7 @@ function my_plugin_start_workos_email_change( int $wp_user_id, string $new_email
         return new WP_Error( 'forbidden', 'Must be logged in.' );
     }
 
-    if ( ! current_user_can( 'edit_user', $wp_user_id ) ) {
+    if ( ! current_user_can( 'workos_change_email', $wp_user_id ) ) {
         return new WP_Error( 'forbidden', 'You do not have permission to edit this user.' );
     }
 
@@ -560,7 +562,7 @@ wp_localize_script(
 <!-- Same with a redirect after confirm. -->
 [workos:change-email redirect_url="/welcome"]
 
-<!-- Admin-of-other (visible only when the viewer has edit_user on the target). -->
+<!-- Admin-of-other (visible only when the viewer has workos_change_email on the target). -->
 [workos:change-email user="42"]
 [workos:change-email user="jane@example.com"]
 
@@ -572,7 +574,7 @@ The shortcode silently renders nothing when:
 
 - No `user` attribute and the viewer is logged out.
 - The target user is not linked to WorkOS (no `_workos_user_id` meta).
-- The viewer lacks `edit_user` on the target.
+- The viewer lacks `workos_change_email` on the target.
 
 ## Hooks
 
