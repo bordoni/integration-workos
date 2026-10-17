@@ -42,6 +42,44 @@ function workos_log( string $message, string $level = 'debug' ): void {
 }
 
 /**
+ * Whether mail sent to an address can be delivered.
+ *
+ * False for addresses on reserved domains, which sites use to park accounts
+ * during cleanups and merges (`someone@sanitized.fake`): the `.fake`,
+ * `.invalid`, `.test`, `.example` and `.localhost` TLDs and `example.com`,
+ * `example.net` and `example.org` (with their subdomains), and for anything
+ * without a domain. The plugin won't push such an address to WorkOS or
+ * create a WordPress user from it.
+ *
+ * @param string $email Email address.
+ *
+ * @return bool
+ */
+function workos_is_deliverable_email( string $email ): bool {
+	$at     = strrpos( $email, '@' );
+	$domain = false === $at ? '' : strtolower( rtrim( trim( substr( $email, $at + 1 ) ), '.' ) );
+
+	$deliverable = '' !== $domain;
+
+	if ( $deliverable ) {
+		$labels = explode( '.', $domain );
+		$tld    = end( $labels );
+		$sld    = count( $labels ) >= 2 ? $labels[ count( $labels ) - 2 ] . '.' . $tld : '';
+
+		$deliverable = ! in_array( $tld, [ 'fake', 'invalid', 'test', 'example', 'localhost' ], true )
+			&& ! in_array( $sld, [ 'example.com', 'example.net', 'example.org' ], true );
+	}
+
+	/**
+	 * Filters whether an email address is deliverable.
+	 *
+	 * @param bool   $deliverable Whether mail to the address can be delivered.
+	 * @param string $email       Email address.
+	 */
+	return (bool) apply_filters( 'workos_is_deliverable_email', $deliverable, $email );
+}
+
+/**
  * Whether a user is linked to a WorkOS identity.
  *
  * Thin shortcut for {@see \WorkOS\User::is_sso()}. Remains true after
