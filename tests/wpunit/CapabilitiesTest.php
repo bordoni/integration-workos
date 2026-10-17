@@ -228,6 +228,15 @@ class CapabilitiesTest extends WPTestCase {
 
 		foreach ( $this->checks( 0 ) as $label => [ $cap, $core, $target ] ) {
 			$actual = null === $target ? current_user_can( $cap ) : current_user_can( $cap, $target );
+
+			// "Self" for a visitor is user 0, which no route targets. Core's
+			// own `edit_user` answer for 0 on 0 differs between WP versions,
+			// so only parity is asserted there.
+			if ( 0 === $target ) {
+				$this->assertSame( current_user_can( $core, $target ), $actual, "Logged out: {$label}." );
+				continue;
+			}
+
 			$this->assertFalse( $actual, "Logged out: {$label}." );
 		}
 	}
