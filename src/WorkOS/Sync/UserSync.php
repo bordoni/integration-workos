@@ -140,7 +140,19 @@ class UserSync {
 			return $existing;
 		}
 
-		// 3. Create new WP user.
+		// 3. Create new WP user, unless the WorkOS user sits on a placeholder
+		// address: an account parked there during a cleanup must not come
+		// back as a fresh WP user.
+		if ( ! workos_is_deliverable_email( (string) $email ) ) {
+			workos_log( sprintf( 'Refused to create a WP user for WorkOS user %s: undeliverable email %s (source: %s).', $workos_id, $email, $source ? $source : 'unknown' ), 'warning' );
+
+			return new \WP_Error(
+				'workos_undeliverable_email',
+				__( 'This sign-in uses an email address that can\'t receive mail, so no account was created. Contact support.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
 		$username = self::generate_username( $workos_user );
 		$user_id  = wp_insert_user(
 			[
@@ -418,6 +430,32 @@ class UserSync {
 		// latency-sensitive confirm path. Same transient the webhook handler
 		// checks; see ChangeEmail\RestApi::confirm().
 		if ( get_transient( ChangeEmailRestApi::TRANSIENT_PREFIX . $user_id ) ) {
+			return;
+		}
+
+		// Never move the WorkOS login email to a placeholder address; the
+		// other fields still go.
+		if ( isset( $update['email'] ) && ! workos_is_deliverable_email( (string) $update['email'] ) ) {
+			workos_log( sprintf( 'Not pushing undeliverable email %s for WP user #%d to WorkOS user %s.', $update['email'], $user_id, $workos_id ), 'warning' );
+			unset( $update['email'] );
+
+			if ( empty( $update ) ) {
+				return;
+			}
+		}
+
+		/**
+		 * Filters the fields about to be pushed to WorkOS for a profile change.
+		 *
+		 * Return false or an empty array to skip the push.
+		 *
+		 * @param array  $update    WorkOS fields to update (`first_name`, `last_name`, `email`).
+		 * @param int    $user_id   WP user ID.
+		 * @param string $workos_id WorkOS user ID.
+		 */
+		$update = apply_filters( 'workos_pre_push_profile', $update, $user_id, $workos_id );
+
+		if ( empty( $update ) || ! is_array( $update ) ) {
 			return;
 		}
 

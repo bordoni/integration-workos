@@ -163,7 +163,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Api/Client.php` | WorkOS API client wrapper |
 | **Sync** | |
 | `src/WorkOS/Sync/Controller.php` | Sync controller |
-| `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound). Profile edits on linked users push to WorkOS: email on `profile_update`, names recorded on `added_user_meta`/`updated_user_meta` and sent on `profile_update` or `shutdown`. A rejected push is stored in `_workos_sync_error`, logged as `profile_push_failed` and fires `workos_profile_push_failed` (see [`docs/profile-sync.md`](docs/profile-sync.md)) |
+| `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound). Profile edits on linked users push to WorkOS: email on `profile_update`, names recorded on `added_user_meta`/`updated_user_meta` and sent on `profile_update` or `shutdown`. A rejected push is stored in `_workos_sync_error`, logged as `profile_push_failed` and fires `workos_profile_push_failed`. Placeholder emails (`workos_is_deliverable_email()`) are never pushed and never become new WP users; `workos_pre_push_profile` can veto a push (see [`docs/profile-sync.md`](docs/profile-sync.md)) |
 | `src/WorkOS/Sync/UserLinks.php` | WorkOS user ID → WP user lookups through `{base_prefix}workos_user_links` (indexed), mirrored from the `_workos_user_id` meta by the user meta hooks and filled by the v4 schema upgrade. `find()` / `find_many()` check every hit against the meta and use the meta until the table is filled (`workos_user_links_ready`). Writes to the meta that skip the meta API (raw SQL) aren't seen; `UserLinks::rebuild()` refills. |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
 | `src/WorkOS/Sync/RoleSyncCheck.php` | Which members' WP role doesn't match the role map. Batched (one JOIN query per 1,000 members), run by "Check now" on WorkOS → Users or on an Action Scheduler schedule (`role_sync_schedule`: off/hourly/daily, only offered when AS is loaded). Stores the result in `workos_role_sync_check` (not autoloaded, stale when env/org/role map change) and rechecks single users on role and `workos_org_membership_changed`. Admin screens read `result()`; nothing is computed on page load. |
@@ -196,7 +196,7 @@ Per-environment constants (take priority over generic):
 | **Database** | |
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
 | **Helpers** | |
-| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User` |
+| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_deliverable_email()` (false for reserved/placeholder domains; filterable), `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User` |
 | **Browser — Custom AuthKit (TypeScript + TSX)** | |
 | `src/js/authkit/index.tsx` | Entry + data-* hydration |
 | `src/js/authkit/App.tsx` | Top-level step machine. Renders `FlowSkeleton` while `client.bootstrap()` is in-flight (replaces the prior `return null;` blank window). The `reset_confirm` step receives the `onSignedIn` + `onMfa` callbacks so the auto-login-after-reset path can navigate to the validated redirect or hand off to the MFA challenge step. |
@@ -334,6 +334,7 @@ tests/
     ├── AuthKitRestPasswordTest.php                 # password/{authenticate,reset/start,reset/confirm}
     ├── AuthKitRestSignupInvitationOAuthTest.php    # signup/{create,verify}, invitation/{token,accept}, oauth/authorize-url
     ├── ConfigTest.php                              # Config class tests
+    ├── DeliverableEmailTest.php                    # workos_is_deliverable_email(), placeholder email skipped on push, workos_pre_push_profile veto, refused user creation
     ├── DirectorySyncTest.php                       # Directory sync tests
     ├── EntitlementGateTest.php                     # Entitlement gate tests
     ├── EventLoggerTest.php                         # Activity log event logger tests
@@ -379,6 +380,7 @@ Use the global `/slic` skill for comprehensive guidance on test structure, envir
 - **Pattern:** AAA (Arrange, Act, Assert)
 - **HTTP mocking:** Use the `pre_http_request` filter to intercept outbound HTTP calls
 - **WordPress factories:** Use `static::factory()` to create test posts, users, etc.
+- **Placeholder emails:** `tests/wpunit/_bootstrap.php` makes `workos_is_deliverable_email` return true so fixtures can keep using `example.com` and `.test` addresses. Tests that check the real rules remove that filter first (see `DeliverableEmailTest`).
 
 ### Existing Config Files
 
