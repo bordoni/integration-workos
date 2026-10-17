@@ -33,6 +33,14 @@ class UserSync {
 	public const META_LINK_REFUSED = '_workos_link_refused';
 
 	/**
+	 * User meta set when pushing a WP user to WorkOS failed because its email
+	 * already belongs to a WorkOS user: that user's ID, the source and the time.
+	 * Not a link; the person still has to sign in to prove the address is
+	 * theirs. Cleared when the account is linked.
+	 */
+	public const META_PENDING_MATCH = '_workos_pending_match';
+
+	/**
 	 * Flag to prevent infinite sync loops.
 	 *
 	 * @var bool
@@ -202,6 +210,7 @@ class UserSync {
 
 		if ( $previous_id !== $new_id ) {
 			delete_user_meta( $wp_user_id, self::META_LINK_REFUSED );
+			delete_user_meta( $wp_user_id, self::META_PENDING_MATCH );
 
 			if ( $is_relink ) {
 				workos_log( sprintf( 'Re-linked WP user #%d from WorkOS user %s to %s (source: %s).', $wp_user_id, $previous_id, $new_id, $source ? $source : 'unknown' ), 'warning' );
@@ -359,7 +368,7 @@ class UserSync {
 
 		$payload = [
 			'email'          => $email,
-			'email_verified' => true,
+			'email_verified' => self::push_email_verified( $user_id, $userdata ),
 		];
 
 		if ( ! empty( $userdata['first_name'] ) ) {
@@ -373,6 +382,7 @@ class UserSync {
 
 		if ( is_wp_error( $result ) ) {
 			workos_log( 'Failed to create user in WorkOS: ' . $result->get_error_message(), 'error' );
+			self::handle_push_failure( $user_id, $email, $result, 'user_register' );
 			return;
 		}
 
@@ -412,9 +422,15 @@ class UserSync {
 			return new \WP_Error( 'workos_user_not_found', __( 'WordPress user not found.', 'integration-workos' ) );
 		}
 
+		$userdata = [
+			'user_email' => $user->user_email,
+			'first_name' => $user->first_name,
+			'last_name'  => $user->last_name,
+		];
+
 		$payload = [
 			'email'          => $user->user_email,
-			'email_verified' => true,
+			'email_verified' => self::push_email_verified( $user_id, $userdata ),
 		];
 
 		if ( ! empty( $user->first_name ) ) {
@@ -430,6 +446,7 @@ class UserSync {
 
 		if ( is_wp_error( $result ) ) {
 			workos_log( 'Failed to sync existing user #' . $user_id . ' to WorkOS: ' . $result->get_error_message(), 'error' );
+			self::handle_push_failure( $user_id, $user->user_email, $result, 'manual_sync' );
 			return $result;
 		}
 
@@ -440,6 +457,113 @@ class UserSync {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Whether to send a pushed WP user's email to WorkOS as verified.
+	 *
+	 * @param int   $user_id  WP user ID.
+	 * @param array $userdata User data (`user_email`, `first_name`, `last_name`, …).
+	 *
+	 * @return bool
+	 */
+	private static function push_email_verified( int $user_id, array $userdata ): bool {
+		/**
+		 * Filters `email_verified` on a WP user created in WorkOS.
+		 *
+		 * WordPress doesn't verify addresses, so sites that create users from
+		 * unverified input (guest checkout, imports) can return false and let
+		 * WorkOS verify the address on first sign-in.
+		 *
+		 * @param bool  $verified Defaults to true.
+		 * @param int   $user_id  WP user ID.
+		 * @param array $userdata Data passed to wp_insert_user() for new users; email
+		 *                        and names for `sync_existing_user()`.
+		 */
+		return (bool) apply_filters( 'workos_push_user_email_verified', true, $user_id, $userdata );
+	}
+
+	/**
+	 * Handle a failed create in WorkOS for a WP user.
+	 *
+	 * When the email already belongs to a WorkOS user, records that user as a
+	 * pending match on the WP user. It is not linked: the person still has to
+	 * sign in to prove the address is theirs, and that sign-in links them.
+	 *
+	 * @param int       $user_id WP user ID.
+	 * @param string    $email   Email sent to WorkOS.
+	 * @param \WP_Error $error   Error from WorkOS.
+	 * @param string    $source  What pushed (`user_register` or `manual_sync`).
+	 */
+	private static function handle_push_failure( int $user_id, string $email, \WP_Error $error, string $source ): void {
+		$existing_id = null;
+
+		if ( self::is_email_not_available( $error ) ) {
+			$existing = workos()->api()->list_users( [ 'email' => $email ] );
+			if ( ! is_wp_error( $existing ) && ! empty( $existing['data'][0]['id'] ) ) {
+				$existing_id = (string) $existing['data'][0]['id'];
+			}
+		}
+
+		if ( null !== $existing_id ) {
+			$holder = self::get_wp_user_id_by_workos_id( $existing_id );
+
+			if ( $holder && $holder !== $user_id ) {
+				workos_log( sprintf( 'Email of WP user #%d belongs to WorkOS user %s, which is linked to WP user #%d; no pending match stored (source: %s).', $user_id, $existing_id, $holder, $source ), 'warning' );
+			} else {
+				update_user_meta(
+					$user_id,
+					self::META_PENDING_MATCH,
+					[
+						'workos_user_id' => $existing_id,
+						'source'         => $source,
+						'time'           => time(),
+					]
+				);
+
+				workos_log( sprintf( 'Email of WP user #%d belongs to WorkOS user %s; stored as a pending match until they sign in (source: %s).', $user_id, $existing_id, $source ), 'warning' );
+			}
+		}
+
+		/**
+		 * Fires when a WP user couldn't be created in WorkOS.
+		 *
+		 * `$existing_id` is set when the email already belongs to a WorkOS user:
+		 * the site can ask the person to sign in with that account, which links
+		 * it (`workos_user_linked` fires then).
+		 *
+		 * @param int         $user_id     WP user ID.
+		 * @param \WP_Error   $error       Error from WorkOS.
+		 * @param string|null $existing_id WorkOS user ID that has the email, or null.
+		 */
+		do_action( 'workos_user_push_failed', $user_id, $error, $existing_id );
+	}
+
+	/**
+	 * Whether a WorkOS error says the email belongs to another user.
+	 *
+	 * WorkOS sends it as a `user_creation_error` with `email_not_available` in
+	 * `errors`; the top-level code is checked too.
+	 *
+	 * @param \WP_Error $error Error from the WorkOS API client.
+	 *
+	 * @return bool
+	 */
+	private static function is_email_not_available( \WP_Error $error ): bool {
+		$data = $error->get_error_data();
+		$body = is_array( $data ) && isset( $data['body'] ) && is_array( $data['body'] ) ? $data['body'] : [];
+
+		if ( 'email_not_available' === ( $body['code'] ?? '' ) ) {
+			return true;
+		}
+
+		foreach ( (array) ( $body['errors'] ?? [] ) as $detail ) {
+			if ( is_array( $detail ) && 'email_not_available' === ( $detail['code'] ?? '' ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
