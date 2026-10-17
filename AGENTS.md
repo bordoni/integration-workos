@@ -165,6 +165,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Sync/Controller.php` | Sync controller |
 | `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound) |
 | `src/WorkOS/Sync/UserLinks.php` | WorkOS user ID → WP user lookups through `{base_prefix}workos_user_links` (indexed), mirrored from the `_workos_user_id` meta by the user meta hooks and filled by the v4 schema upgrade. `find()` / `find_many()` check every hit against the meta and use the meta until the table is filled (`workos_user_links_ready`). Writes to the meta that skip the meta API (raw SQL) aren't seen; `UserLinks::rebuild()` refills. |
+| `src/WorkOS/Sync/LinkLock.php` | Short per-WorkOS-ID lock that `UserSync::link_user()` holds from its checks to the write (when Re-link Protection is on or `--force`), so two requests can't link one WorkOS user to two WP users. MySQL `GET_LOCK()`, falling back to an `INSERT IGNORE` options row when it returns NULL. Timeout `workos_link_lock_timeout` (5 s) → `WP_Error`, logged; the link fails. |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
 | `src/WorkOS/Sync/RoleSyncCheck.php` | Which members' WP role doesn't match the role map. Batched (one JOIN query per 1,000 members), run by "Check now" on WorkOS → Users or on an Action Scheduler schedule (`role_sync_schedule`: off/hourly/daily, only offered when AS is loaded). Stores the result in `workos_role_sync_check` (not autoloaded, stale when env/org/role map change) and rechecks single users on role and `workos_org_membership_changed`. Admin screens read `result()`; nothing is computed on page load. |
 | `src/WorkOS/Sync/DirectorySync.php` | Directory sync (SCIM) |
@@ -362,6 +363,7 @@ tests/
     ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
     ├── UserLinksTest.php                           # Link table: follows meta writes, backfill, parity with the get_users() meta lookup, batched lookups
     ├── UserSyncLinkTest.php                        # User linking tests
+    ├── UserSyncLinkLockTest.php                    # Link lock: second caller refused, release on success/exception, timeout, options-row fallback
     ├── UserSyncRelinkProtectionTest.php            # Re-link Protection: refuse/force/actions, sign-in, webhook, directory sync
     ├── UserSyncPushTest.php                        # Outbound user sync tests
     ├── UserSyncResyncTest.php                      # User re-sync tests
