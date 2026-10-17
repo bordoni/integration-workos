@@ -682,6 +682,49 @@ class ChangeEmailRestApiTest extends WPTestCase {
 		$this->assertSame( 403, $response->get_status() );
 	}
 
+	// ------------------------------------------------------- plugin capability
+
+	public function test_role_with_change_email_cap_uses_verified_flow_for_others(): void {
+		// The capability opens the route, but the immediate admin commit
+		// still needs edit_users, so the change waits for verification.
+		add_role( 'workos_test_support', 'WorkOS Support', [ 'read' => true, 'workos_change_email' => true ] );
+
+		try {
+			wp_set_current_user( $this->create_user( 'support-' . uniqid() . '@example.test', 'workos_test_support' ) );
+
+			$new_email = 'support-set-' . uniqid() . '@example.test';
+			$response  = $this->dispatch(
+				'POST',
+				'/workos/v1/users/' . $this->linked_user_id . '/email-change',
+				[ 'new_email' => $new_email ]
+			);
+
+			$this->assertSame( 200, $response->get_status() );
+			$this->assertArrayNotHasKey( 'committed', $response->get_data() );
+			$this->assertNotEmpty( get_user_meta( $this->linked_user_id, PendingChange::META_KEY, true ) );
+			$this->assertSame( $this->linked_email, get_userdata( $this->linked_user_id )->user_email );
+
+			// The same capability cancels it.
+			$cancel = $this->dispatch( 'POST', '/workos/v1/users/' . $this->linked_user_id . '/email-change/cancel', [] );
+			$this->assertSame( 200, $cancel->get_status() );
+			$this->assertEmpty( get_user_meta( $this->linked_user_id, PendingChange::META_KEY, true ) );
+		} finally {
+			remove_role( 'workos_test_support' );
+		}
+	}
+
+	public function test_editor_still_cannot_change_others_email(): void {
+		wp_set_current_user( $this->create_user( 'editor-' . uniqid() . '@example.test', 'editor' ) );
+
+		$response = $this->dispatch(
+			'POST',
+			'/workos/v1/users/' . $this->linked_user_id . '/email-change',
+			[ 'new_email' => 'free-' . uniqid() . '@example.test' ]
+		);
+
+		$this->assertSame( 403, $response->get_status() );
+	}
+
 	// ----------------------------------------------------------------- helpers
 
 }

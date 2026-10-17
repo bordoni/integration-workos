@@ -7,6 +7,8 @@
 
 namespace WorkOS\Auth\PasswordResetAdmin;
 
+use WorkOS\Capabilities;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -15,7 +17,8 @@ defined( 'ABSPATH' ) || exit;
  * Two modes, picked by the `user` attribute:
  *
  *  - `user="<id|email>"` — admin-of-other mode. Visible only to viewers
- *    with `edit_user` on the target. Useful on internal dashboards.
+ *    with `workos_send_password_reset` on the target (maps to
+ *    `edit_user`). Useful on internal dashboards.
  *
  *  - no `user` attribute — self-service mode. Visible to any logged-in
  *    user; pre-targets their own account.
@@ -65,7 +68,7 @@ class Shortcode {
 			return '';
 		}
 
-		if ( ! current_user_can( 'edit_user', $target ) ) {
+		if ( ! current_user_can( Capabilities::SEND_PASSWORD_RESET, $target ) ) {
 			return '';
 		}
 

@@ -13,6 +13,7 @@ use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Email\AddressMask;
 use WorkOS\Http\ClientIp;
+use WorkOS\Capabilities;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -24,7 +25,8 @@ defined( 'ABSPATH' ) || exit;
  * `POST /workos/v1/admin/users/{id}/password-reset`.
  *
  * Triggers a WorkOS password-reset email on behalf of another user.
- * Requires `edit_user` on the target — which is true for an admin acting
+ * Requires `workos_send_password_reset` on the target, which maps to
+ * `edit_user` (see {@see \WorkOS\Capabilities}) — true for an admin acting
  * on someone else and *also* true for any logged-in user acting on their
  * own ID (WP's default mapping). One endpoint, two valid call paths.
  *
@@ -125,9 +127,10 @@ class RestApi {
 	}
 
 	/**
-	 * Permission callback — `edit_user` on the target user.
+	 * Permission callback — `workos_send_password_reset` on the target user.
 	 *
-	 * Granular by design: this is the WP capability that maps to "can edit
+	 * Maps to `edit_user` unless a role is granted the capability directly.
+	 * Granular by design: `edit_user` is the WP capability for "can edit
 	 * the user with this ID", which is true for the user themselves (so
 	 * self-service via the shortcode works) and true for admins/editors
 	 * with the broader `edit_users` cap acting on others.
@@ -146,7 +149,7 @@ class RestApi {
 			);
 		}
 
-		if ( ! current_user_can( 'edit_user', $target_id ) ) {
+		if ( ! current_user_can( Capabilities::SEND_PASSWORD_RESET, $target_id ) ) {
 			return new WP_Error(
 				'workos_forbidden',
 				__( 'You do not have permission to send a password reset for this user.', 'integration-workos' ),
@@ -207,9 +210,9 @@ class RestApi {
 		}
 
 		$ip = $this->client_ip->get();
-		// No send policy here: this route needs `edit_user` on the target and
-		// mails that account's own address, so the recipient is never
-		// caller-chosen.
+		// No send policy here: this route needs `workos_send_password_reset`
+		// on the target and mails that account's own address, so the
+		// recipient is never caller-chosen.
 		$rate_ok = $this->rate_limiter->attempt( 'pw_reset_admin_ip', $ip, TieredRateLimiter::REQUEST_IP );
 		if ( is_wp_error( $rate_ok ) ) {
 			return $rate_ok;

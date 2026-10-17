@@ -444,6 +444,42 @@ class PasswordResetAdminRestApiTest extends WPTestCase {
 	}
 
 	/**
+	 * A role given only `workos_send_password_reset` can send a reset for
+	 * another user, and still can't reach the settings.
+	 */
+	public function test_role_with_only_send_password_reset_can_send_for_others(): void {
+		add_role( 'workos_test_support', 'WorkOS Support', [ 'read' => true, 'workos_send_password_reset' => true ] );
+
+		try {
+			wp_set_current_user( $this->create_user( 'support-' . uniqid() . '@example.test', 'workos_test_support' ) );
+
+			$response = $this->dispatch( $this->linked_user_id );
+
+			$this->assertSame( 200, $response->get_status() );
+			$this->assertNotNull( $this->find_send_password_reset_call() );
+
+			// Settings stay on manage_options.
+			$this->assertFalse( current_user_can( 'manage_options' ) );
+			$settings = rest_get_server()->dispatch( new WP_REST_Request( 'GET', '/workos/v1/admin/profiles' ) );
+			$this->assertSame( 403, $settings->get_status() );
+		} finally {
+			remove_role( 'workos_test_support' );
+		}
+	}
+
+	/**
+	 * Editors keep acting only on themselves.
+	 */
+	public function test_editor_still_cannot_send_for_others(): void {
+		wp_set_current_user( $this->create_user( 'editor-' . uniqid() . '@example.test', 'editor' ) );
+		// Drop the sync call user creation makes.
+		$this->captured = [];
+
+		$this->assertSame( 403, $this->dispatch( $this->linked_user_id )->get_status() );
+		$this->assertEmpty( $this->captured );
+	}
+
+	/**
 	 * Helper — locate the captured outbound call to send_password_reset.
 	 *
 	 * @return array|null

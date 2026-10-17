@@ -7,6 +7,7 @@
 
 namespace WorkOS\Admin\Users;
 
+use WorkOS\Capabilities;
 use WorkOS\Config;
 
 defined( 'ABSPATH' ) || exit;
@@ -45,7 +46,7 @@ class AdminPage {
 			'workos',
 			__( 'WorkOS Users', 'integration-workos' ),
 			__( 'Users', 'integration-workos' ),
-			'manage_options',
+			Capabilities::VIEW_USERS,
 			self::MENU_SLUG,
 			[ $this, 'render' ]
 		);

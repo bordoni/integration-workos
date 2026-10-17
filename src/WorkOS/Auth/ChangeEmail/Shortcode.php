@@ -7,6 +7,8 @@
 
 namespace WorkOS\Auth\ChangeEmail;
 
+use WorkOS\Capabilities;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -15,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
  * Modes:
  *
  *  - `user="<id|email>"` — admin-of-other mode. Visible only to viewers
- *    with `edit_user` on the target.
+ *    with `workos_change_email` on the target (maps to `edit_user`).
  *  - no `user` attribute — self-service: the form pre-targets the
  *    logged-in user.
  *
@@ -64,7 +66,7 @@ class Shortcode {
 			return '';
 		}
 
-		if ( ! current_user_can( 'edit_user', $target ) ) {
+		if ( ! current_user_can( Capabilities::CHANGE_EMAIL, $target ) ) {
 			return '';
 		}
 
