@@ -95,14 +95,23 @@ class Assets {
 				'restUrl' => esc_url_raw( rest_url( RestApi::NAMESPACE . '/admin/users/' ) ),
 				'nonce'   => wp_create_nonce( 'wp_rest' ),
 				'strings' => [
-					'modalTitle'   => __( 'Send password reset?', 'integration-workos' ),
-					'modalMessage' => __( 'The user will receive a link from WorkOS to set a new password.', 'integration-workos' ),
-					'modalConfirm' => __( 'Send reset email', 'integration-workos' ),
-					'modalCancel'  => __( 'Cancel', 'integration-workos' ),
-					'sending'      => __( 'Sending…', 'integration-workos' ),
+					'modalTitle'    => __( 'Send password reset?', 'integration-workos' ),
+					'modalMessage'  => __( 'The user will receive a link from WorkOS to set a new password.', 'integration-workos' ),
+					'modalConfirm'  => __( 'Send reset email', 'integration-workos' ),
+					'modalCancel'   => __( 'Cancel', 'integration-workos' ),
+					'sending'       => __( 'Sending…', 'integration-workos' ),
 					/* translators: %s: masked email address (e.g. "j•••@e•••.com"). */
-					'success'      => __( 'Password reset email sent to %s.', 'integration-workos' ),
-					'errorGeneric' => __( 'Could not send the reset email. Please try again.', 'integration-workos' ),
+					'success'       => __( 'Password reset email sent to %s.', 'integration-workos' ),
+					'errorGeneric'  => __( 'Could not send the reset email. Please try again.', 'integration-workos' ),
+					// "Mark email verified" on the user-edit WorkOS panel.
+					'verifyTitle'   => __( 'Mark email verified?', 'integration-workos' ),
+					'verifyMessage' => __( 'Only do this after confirming who the person is another way. WorkOS will treat the email as verified, so they can sign in with a password without a sign-in code.', 'integration-workos' ),
+					'verifyConfirm' => __( 'Mark verified', 'integration-workos' ),
+					'verifying'     => __( 'Marking…', 'integration-workos' ),
+					'verifySuccess' => __( 'Email marked verified in WorkOS.', 'integration-workos' ),
+					'verifyAlready' => __( 'This email was already verified in WorkOS.', 'integration-workos' ),
+					'verifyError'   => __( 'Could not mark the email verified. Please try again.', 'integration-workos' ),
+					'verifiedLabel' => __( 'Verified', 'integration-workos' ),
 				],
 			]
 		);
