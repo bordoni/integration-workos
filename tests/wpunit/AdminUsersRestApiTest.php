@@ -284,6 +284,95 @@ class AdminUsersRestApiTest extends WPTestCase {
 	}
 
 	// ---------------------------------------------------------------------
+	// Plugin capabilities.
+	// ---------------------------------------------------------------------
+
+	public function test_role_with_only_view_users_can_list(): void {
+		add_role( 'workos_test_support', 'WorkOS Support', [ 'read' => true, 'workos_view_users' => true ] );
+
+		try {
+			wp_set_current_user( self::factory()->user->create( [ 'role' => 'workos_test_support' ] ) );
+			$this->captured = [];
+
+			$response = $this->dispatch();
+
+			$this->assertSame( 200, $response->get_status() );
+			$this->assertFalse( current_user_can( 'manage_options' ) );
+		} finally {
+			remove_role( 'workos_test_support' );
+		}
+	}
+
+	public function test_editor_is_still_forbidden(): void {
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'editor' ] ) );
+		$this->captured = [];
+
+		$this->assertSame( 403, $this->dispatch()->get_status() );
+		$this->assertSame( [], $this->captured );
+	}
+
+	public function test_rows_carry_the_callers_action_permissions(): void {
+		$this->become_admin();
+		$alice = self::factory()->user->create( [ 'user_login' => 'alice_caps' ] );
+		update_user_meta( $alice, '_workos_user_id', 'user_alice_caps' );
+		$this->captured = [];
+
+		$this->queue_response(
+			200,
+			[
+				'data'          => [
+					[ 'id' => 'user_alice_caps', 'email' => 'alice@example.com' ],
+					[ 'id' => 'user_nobody_caps', 'email' => 'nobody@example.com' ],
+				],
+				'list_metadata' => [ 'before' => null, 'after' => null ],
+			]
+		);
+
+		$rows = $this->dispatch()->get_data()['data'];
+
+		$this->assertTrue( $rows[0]['can_send_password_reset'] );
+		$this->assertTrue( $rows[0]['can_change_email'] );
+		// No linked WP user, so there is nothing to act on.
+		$this->assertFalse( $rows[1]['can_send_password_reset'] );
+		$this->assertFalse( $rows[1]['can_change_email'] );
+	}
+
+	public function test_rows_hide_actions_the_caller_lacks(): void {
+		$alice = self::factory()->user->create( [ 'user_login' => 'alice_view_only' ] );
+		update_user_meta( $alice, '_workos_user_id', 'user_alice_view' );
+		add_role(
+			'workos_test_support',
+			'WorkOS Support',
+			[
+				'read'                       => true,
+				'workos_view_users'          => true,
+				'workos_send_password_reset' => true,
+			]
+		);
+
+		try {
+			wp_set_current_user( self::factory()->user->create( [ 'role' => 'workos_test_support' ] ) );
+			$this->captured = [];
+
+			$this->queue_response(
+				200,
+				[
+					'data'          => [ [ 'id' => 'user_alice_view', 'email' => 'alice@example.com' ] ],
+					'list_metadata' => [ 'before' => null, 'after' => null ],
+				]
+			);
+
+			$row = $this->dispatch()->get_data()['data'][0];
+
+			$this->assertSame( $alice, $row['wp_user_id'] );
+			$this->assertTrue( $row['can_send_password_reset'] );
+			$this->assertFalse( $row['can_change_email'] );
+		} finally {
+			remove_role( 'workos_test_support' );
+		}
+	}
+
+	// ---------------------------------------------------------------------
 	// Parameter forwarding.
 	// ---------------------------------------------------------------------
 
