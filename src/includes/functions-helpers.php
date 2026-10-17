@@ -102,3 +102,26 @@ function workos_get_user_id( int $user_id = 0 ): string {
 function workos_get_access_token( int $user_id = 0 ): string {
 	return User::get_access_token( $user_id );
 }
+
+/**
+ * Write a user's WorkOS metadata now.
+ *
+ * Call it after changing a value your `workos_user_metadata` filter reads (a
+ * customer number, a legacy ID). Otherwise the plugin writes metadata only on
+ * link, sign-in and profile save. It always reads the user from WorkOS, so it
+ * also restores keys removed outside WordPress.
+ *
+ * ```php
+ * update_user_meta( $user_id, 'billing_customer_id', $customer_id );
+ * workos_sync_user_metadata( $user_id );
+ * ```
+ *
+ * @param int $wp_user_id WP user ID.
+ *
+ * @return bool|\WP_Error True when metadata was written, false when WorkOS
+ *                        already had it, WP_Error when the user isn't linked,
+ *                        WorkOS isn't configured, or the API call failed.
+ */
+function workos_sync_user_metadata( int $wp_user_id ) {
+	return \WorkOS\Sync\UserSync::sync_user_metadata( $wp_user_id );
+}

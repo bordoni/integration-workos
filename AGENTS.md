@@ -163,7 +163,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Api/Client.php` | WorkOS API client wrapper |
 | **Sync** | |
 | `src/WorkOS/Sync/Controller.php` | Sync controller |
-| `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound) |
+| `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound). Writes WorkOS user metadata: the `puid:{site}` key plus keys from the `workos_user_metadata` filter, merged with existing keys, checked against WorkOS's limits (`METADATA_MAX_*`), skipped when unchanged via `_workos_metadata_hash` (only once the filter adds keys). See [`docs/user-metadata.md`](docs/user-metadata.md) |
 | `src/WorkOS/Sync/UserLinks.php` | WorkOS user ID → WP user lookups through `{base_prefix}workos_user_links` (indexed), mirrored from the `_workos_user_id` meta by the user meta hooks and filled by the v4 schema upgrade. `find()` / `find_many()` check every hit against the meta and use the meta until the table is filled (`workos_user_links_ready`). Writes to the meta that skip the meta API (raw SQL) aren't seen; `UserLinks::rebuild()` refills. |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
 | `src/WorkOS/Sync/RoleSyncCheck.php` | Which members' WP role doesn't match the role map. Batched (one JOIN query per 1,000 members), run by "Check now" on WorkOS → Users or on an Action Scheduler schedule (`role_sync_schedule`: off/hourly/daily, only offered when AS is loaded). Stores the result in `workos_role_sync_check` (not autoloaded, stale when env/org/role map change) and rechecks single users on role and `workos_org_membership_changed`. Admin screens read `result()`; nothing is computed on page load. |
@@ -196,7 +196,7 @@ Per-environment constants (take priority over generic):
 | **Database** | |
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
 | **Helpers** | |
-| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User` |
+| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User`. `workos_sync_user_metadata()` writes a user's WorkOS metadata now (proxies to `UserSync::sync_user_metadata()`) |
 | **Browser — Custom AuthKit (TypeScript + TSX)** | |
 | `src/js/authkit/index.tsx` | Entry + data-* hydration |
 | `src/js/authkit/App.tsx` | Top-level step machine. Renders `FlowSkeleton` while `client.bootstrap()` is in-flight (replaces the prior `return null;` blank window). The `reset_confirm` step receives the `onSignedIn` + `onMfa` callbacks so the auto-login-after-reset path can navigate to the validated redirect or hand off to the MFA challenge step. |
@@ -362,6 +362,7 @@ tests/
     ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
     ├── UserLinksTest.php                           # Link table: follows meta writes, backfill, parity with the get_users() meta lookup, batched lookups
     ├── UserSyncLinkTest.php                        # User linking tests
+    ├── UserSyncMetadataTest.php                    # WorkOS user metadata: workos_user_metadata merge, protected puid key, change hash, limits, workos_sync_user_metadata()
     ├── UserSyncRelinkProtectionTest.php            # Re-link Protection: refuse/force/actions, sign-in, webhook, directory sync
     ├── UserSyncPushTest.php                        # Outbound user sync tests
     ├── UserSyncResyncTest.php                      # User re-sync tests

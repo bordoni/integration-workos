@@ -33,6 +33,21 @@ class UserSync {
 	public const META_LINK_REFUSED = '_workos_link_refused';
 
 	/**
+	 * User meta: hash of the WorkOS ID and site metadata last sent, so an
+	 * unchanged set costs no API call. Only stored once a site adds its own keys.
+	 */
+	public const META_METADATA_HASH = '_workos_metadata_hash';
+
+	/**
+	 * WorkOS metadata limits, per https://workos.com/docs/authkit/metadata:
+	 * up to 10 key-value pairs per user, keys up to 40 characters and values
+	 * up to 600 characters, ASCII only.
+	 */
+	public const METADATA_MAX_KEYS      = 10;
+	public const METADATA_MAX_KEY_LEN   = 40;
+	public const METADATA_MAX_VALUE_LEN = 600;
+
+	/**
 	 * Flag to prevent infinite sync loops.
 	 *
 	 * @var bool
@@ -54,6 +69,9 @@ class UserSync {
 
 		// Sync platform metadata on login.
 		add_action( 'workos_user_authenticated', [ $this, 'sync_metadata_on_login' ], 10, 2 );
+
+		// Push the site's own metadata keys when a profile is saved.
+		add_action( 'profile_update', [ $this, 'sync_metadata_on_profile_update' ], 20 );
 	}
 
 	/**
@@ -288,6 +306,7 @@ class UserSync {
 		delete_user_meta( $wp_user_id, '_workos_refresh_token' );
 		delete_user_meta( $wp_user_id, '_workos_deactivated' );
 		delete_user_meta( $wp_user_id, self::META_LINK_REFUSED );
+		delete_user_meta( $wp_user_id, self::META_METADATA_HASH );
 	}
 
 	/**
@@ -635,10 +654,12 @@ class UserSync {
 	}
 
 	/**
-	 * Write the WP user ID to WorkOS user metadata.
+	 * Write the WP user ID, and any keys the site adds, to WorkOS user metadata.
 	 *
 	 * Key format: puid:{site_key} — allows multiple WP sites to share one WorkOS tenant.
-	 * Fetches existing metadata first to preserve other sites' keys.
+	 * Fetches existing metadata first to preserve other sites' keys. Keys from the
+	 * `workos_user_metadata` filter are merged in; once a site adds keys, an
+	 * unchanged set is skipped without an API call (see META_METADATA_HASH).
 	 *
 	 * @param string $workos_user_id WorkOS user ID.
 	 * @param int    $wp_user_id     WordPress user ID.
@@ -648,29 +669,226 @@ class UserSync {
 			return;
 		}
 
-		$meta_key = 'puid:' . Config::get_site_key();
+		self::write_metadata( $workos_user_id, $wp_user_id, self::build_metadata( $wp_user_id, $workos_user_id ), false );
+	}
+
+	/**
+	 * Write a linked user's metadata to WorkOS now, without waiting for a
+	 * sign-in or profile save. Backs `workos_sync_user_metadata()`.
+	 *
+	 * Always reads the WorkOS user (the stored hash is ignored), so it also
+	 * restores keys that were removed outside WordPress.
+	 *
+	 * @param int $wp_user_id WordPress user ID.
+	 *
+	 * @return bool|\WP_Error True when metadata was written, false when WorkOS already had it.
+	 */
+	public static function sync_user_metadata( int $wp_user_id ) {
+		if ( ! workos()->is_enabled() ) {
+			return new \WP_Error( 'workos_not_configured', __( 'WorkOS is not configured.', 'integration-workos' ) );
+		}
+
+		$workos_id = (string) get_user_meta( $wp_user_id, '_workos_user_id', true );
+		if ( '' === $workos_id ) {
+			return new \WP_Error( 'workos_not_linked', __( 'User is not linked to WorkOS.', 'integration-workos' ) );
+		}
+
+		return self::write_metadata( $workos_id, $wp_user_id, self::build_metadata( $wp_user_id, $workos_id ), true );
+	}
+
+	/**
+	 * Write the site's own metadata keys when a profile is saved.
+	 *
+	 * Hooked to `profile_update`. Name and email go out in
+	 * `push_profile_to_workos()`; this covers only keys from the
+	 * `workos_user_metadata` filter, so a site without any makes no call here.
+	 *
+	 * @param int $user_id WP user ID.
+	 */
+	public function sync_metadata_on_profile_update( int $user_id ): void {
+		if ( self::$syncing || ! workos()->is_enabled() ) {
+			return;
+		}
+
+		$workos_id = (string) get_user_meta( $user_id, '_workos_user_id', true );
+		if ( '' === $workos_id ) {
+			return;
+		}
+
+		$metadata = self::build_metadata( $user_id, $workos_id );
+		if ( count( $metadata ) < 2 ) {
+			return;
+		}
+
+		self::write_metadata( $workos_id, $user_id, $metadata, false );
+	}
+
+	/**
+	 * The plugin's own metadata key for this site.
+	 *
+	 * @return string
+	 */
+	private static function platform_metadata_key(): string {
+		return 'puid:' . Config::get_site_key();
+	}
+
+	/**
+	 * Build the metadata this site writes for a user: the `puid:` key plus
+	 * whatever `workos_user_metadata` adds, minus entries WorkOS would reject.
+	 *
+	 * @param int    $wp_user_id     WordPress user ID.
+	 * @param string $workos_user_id WorkOS user ID.
+	 *
+	 * @return array<string, string> The `puid:` key first, then the site's keys.
+	 */
+	private static function build_metadata( int $wp_user_id, string $workos_user_id ): array {
+		$puid_key = self::platform_metadata_key();
+		$metadata = [ $puid_key => (string) $wp_user_id ];
+
+		/**
+		 * Filters the metadata this site writes to the user's WorkOS record.
+		 *
+		 * Add your own IDs (a billing customer number, a legacy account ID) so
+		 * other apps that sign in through the same WorkOS environment can read
+		 * them. Returned keys are merged with the metadata already on the user;
+		 * keys you stop returning are left in place, not deleted.
+		 *
+		 * The plugin's `puid:{site}` key can't be changed or removed, and other
+		 * `puid:` keys are reserved. Entries over WorkOS's limits (10 keys per
+		 * user, keys up to 40 characters, values up to 600, ASCII only) are
+		 * skipped and logged; the rest are still written. Values must be
+		 * strings or integers.
+		 *
+		 * @param array  $metadata   Keys this site writes, starting with the plugin's `puid:{site}` key.
+		 * @param int    $wp_user_id WP user ID.
+		 * @param string $workos_id  WorkOS user ID.
+		 */
+		$filtered = apply_filters( 'workos_user_metadata', $metadata, $wp_user_id, $workos_user_id );
+
+		if ( ! is_array( $filtered ) ) {
+			workos_log( sprintf( 'workos_user_metadata returned %s for WP user #%d, not an array; writing only the plugin key.', gettype( $filtered ), $wp_user_id ), 'error' );
+			return $metadata;
+		}
+
+		foreach ( $filtered as $key => $value ) {
+			if ( $key === $puid_key ) {
+				continue;
+			}
+
+			$error = self::metadata_entry_error( $key, $value );
+			if ( null !== $error ) {
+				workos_log( sprintf( 'Skipped WorkOS metadata key "%s" for WP user #%d: %s.', $key, $wp_user_id, $error ), 'error' );
+				continue;
+			}
+
+			$metadata[ $key ] = (string) $value;
+		}
+
+		return $metadata;
+	}
+
+	/**
+	 * Why WorkOS would reject one metadata entry, or null when it's fine.
+	 *
+	 * @param int|string $key   Metadata key.
+	 * @param mixed      $value Metadata value.
+	 *
+	 * @return string|null
+	 */
+	private static function metadata_entry_error( $key, $value ): ?string {
+		if ( ! is_string( $key ) || '' === $key ) {
+			return 'keys must be non-empty, non-numeric strings';
+		}
+		if ( 0 === strpos( $key, 'puid:' ) ) {
+			return 'the puid: prefix is reserved for the plugin';
+		}
+		if ( strlen( $key ) > self::METADATA_MAX_KEY_LEN ) {
+			return sprintf( 'key is longer than %d characters', self::METADATA_MAX_KEY_LEN );
+		}
+		if ( preg_match( '/[^\x00-\x7F]/', $key ) ) {
+			return 'key is not ASCII';
+		}
+		if ( ! is_string( $value ) && ! is_int( $value ) ) {
+			return sprintf( 'value is %s; it must be a string or integer', gettype( $value ) );
+		}
+
+		$value = (string) $value;
+		if ( strlen( $value ) > self::METADATA_MAX_VALUE_LEN ) {
+			return sprintf( 'value is longer than %d characters', self::METADATA_MAX_VALUE_LEN );
+		}
+		if ( preg_match( '/[^\x00-\x7F]/', $value ) ) {
+			return 'value is not ASCII';
+		}
+
+		return null;
+	}
+
+	/**
+	 * Merge the site's metadata into the WorkOS user's and write it when it changed.
+	 *
+	 * @param string                $workos_user_id WorkOS user ID.
+	 * @param int                   $wp_user_id     WordPress user ID.
+	 * @param array<string, string> $metadata       Keys from build_metadata().
+	 * @param bool                  $force          Read WorkOS even when the stored hash matches.
+	 *
+	 * @return bool|\WP_Error True when a write was sent, false when nothing needed writing.
+	 */
+	private static function write_metadata( string $workos_user_id, int $wp_user_id, array $metadata, bool $force ) {
+		// The hash only applies once the site adds keys of its own, so a site
+		// without the filter reads the user on every sync exactly as before.
+		$use_hash = count( $metadata ) > 1;
+		$hash     = hash( 'sha256', $workos_user_id . '|' . (string) wp_json_encode( $metadata ) );
+
+		if ( $use_hash && ! $force && get_user_meta( $wp_user_id, self::META_METADATA_HASH, true ) === $hash ) {
+			return false;
+		}
 
 		// Fetch existing user to get current metadata.
 		$workos_user = workos()->api()->get_user( $workos_user_id );
 		if ( is_wp_error( $workos_user ) ) {
 			workos_log( 'Failed to fetch WorkOS user ' . $workos_user_id . ' for metadata update: ' . $workos_user->get_error_message(), 'error' );
-			return;
+			return $workos_user;
 		}
 
-		$metadata = $workos_user['metadata'] ?? [];
+		$existing = is_array( $workos_user['metadata'] ?? null ) ? $workos_user['metadata'] : [];
+		$merged   = $existing;
+		$puid_key = self::platform_metadata_key();
+		$changed  = false;
 
-		// Skip if already set to the correct value.
-		if ( isset( $metadata[ $meta_key ] ) && (string) $metadata[ $meta_key ] === (string) $wp_user_id ) {
-			return;
+		foreach ( $metadata as $key => $value ) {
+			if ( array_key_exists( $key, $merged ) ) {
+				if ( ! is_scalar( $merged[ $key ] ) || (string) $merged[ $key ] !== $value ) {
+					$merged[ $key ] = $value;
+					$changed        = true;
+				}
+				continue;
+			}
+
+			// WorkOS's key limit counts every key on the user, including other
+			// sites' and apps'. The plugin's own key is never held back.
+			if ( $key !== $puid_key && count( $merged ) >= self::METADATA_MAX_KEYS ) {
+				workos_log( sprintf( 'Skipped WorkOS metadata key "%s" for WP user #%d: WorkOS user %s already has %d keys.', $key, $wp_user_id, $workos_user_id, self::METADATA_MAX_KEYS ), 'error' );
+				continue;
+			}
+
+			$merged[ $key ] = $value;
+			$changed        = true;
 		}
 
-		$metadata[ $meta_key ] = (string) $wp_user_id;
+		if ( $changed ) {
+			$result = workos()->api()->update_user( $workos_user_id, [ 'metadata' => $merged ] );
 
-		$result = workos()->api()->update_user( $workos_user_id, [ 'metadata' => $metadata ] );
-
-		if ( is_wp_error( $result ) ) {
-			workos_log( 'Failed to update metadata for WorkOS user ' . $workos_user_id . ': ' . $result->get_error_message(), 'error' );
+			if ( is_wp_error( $result ) ) {
+				workos_log( 'Failed to update metadata for WorkOS user ' . $workos_user_id . ': ' . $result->get_error_message(), 'error' );
+				return $result;
+			}
 		}
+
+		if ( $use_hash ) {
+			update_user_meta( $wp_user_id, self::META_METADATA_HASH, $hash );
+		}
+
+		return $changed;
 	}
 
 	/**
