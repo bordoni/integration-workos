@@ -148,6 +148,9 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/ActivityLog/Controller.php` | Activity log controller |
 | `src/WorkOS/ActivityLog/EventLogger.php` | Logs WordPress events to local DB table |
 | `src/WorkOS/ActivityLog/AdminPage.php` | Activity log viewer in admin |
+| **Rate Limiting** ([`docs/rate-limiting.md`](docs/rate-limiting.md)) | |
+| `src/WorkOS/RateLimit/TieredRateLimiter.php` | Stacks windows into a policy and owns the policy constants. `policy()` applies the `workos_rate_limit_policy( $policy, $bucket )` filter on attempt, refund and reset. A refused attempt fires `workos_rate_limited( $bucket, $subject_hash, $retry_after )`; `hash_subject()` is a salted HMAC so hooks and logs never see the raw email or IP. `ActivityLog\Controller` records it as `rate_limited`. |
+| `src/WorkOS/RateLimit/RateLimiter.php`, `BaseRateLimiter.php`, `DatabaseRateLimiter.php`, `ObjectCacheRateLimiter.php`, `Controller.php` | Single-window contract, transient and object-cache storage, container binding |
 | **UI (Login Button)** | |
 | `src/WorkOS/UI/Controller.php` | UI controller, registers block/widget |
 | `src/WorkOS/UI/Block.php` | Gutenberg block registration |
@@ -351,11 +354,13 @@ tests/
     ├── PasswordResetAdminRestApiTest.php            # `POST /admin/users/{id}/password-reset` — capability matrix, missing user, unlinked user, masked-email response, redirect_url validation, rate limit, activity-log row content
     ├── PasswordResetAdminRowActionsTest.php         # `workos_user_list_column_actions` filter + RowActions injection (capability check, self-service, defensive empty-workos_id)
     ├── PluginTest.php                              # Plugin singleton + constants tests
+    ├── RateLimitActivityLogTest.php                # One `rate_limited` activity-log row per refused attempt, hashed subject, no raw email or IP
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
     ├── RoleMapperTest.php                          # Role mapper tests
     ├── RoleSyncCheckTest.php                       # Batched role sync check: parity with the per-user check, stored result, rechecks, list-screen reads
     ├── SchemaTest.php                              # Database schema tests
+    ├── TieredRateLimiterTest.php                   # Tier ordering/charging, shipped policies, `workos_rate_limit_policy` filter, `workos_rate_limited` action, subject hash
     ├── TokenAuthRefreshTest.php                    # TokenAuth regression: rejects unsigned/expired Bearer JWTs
     ├── UserHelperTest.php                          # WorkOS\User + `workos_is_sso_user`/`workos_has_active_session` helpers
     ├── UserSyncDeprovisionTest.php                 # User deprovisioning tests

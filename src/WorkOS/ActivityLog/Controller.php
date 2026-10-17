@@ -31,6 +31,9 @@ class Controller extends BaseController {
 		// Log failed logins.
 		add_action( 'wp_login_failed', [ $this, 'log_login_failed' ], 10, 2 );
 
+		// Log requests refused by a rate limit.
+		add_action( 'workos_rate_limited', [ $this, 'log_rate_limited' ], 10, 3 );
+
 		// Register admin page (always available to show stats even when logging is off).
 		if ( is_admin() ) {
 			$this->container->singleton( AdminPage::class );
@@ -88,6 +91,32 @@ class Controller extends BaseController {
 				'metadata' => [
 					'username' => $username,
 					'error'    => $error->get_error_code(),
+				],
+			]
+		);
+	}
+
+	/**
+	 * Log a request refused by a rate limit.
+	 *
+	 * Carries the bucket and the hashed subject only. The user and IP
+	 * columns stay empty on purpose: for a per-IP or per-email bucket they
+	 * would hold the very subject the hash is there to hide.
+	 *
+	 * @param string $bucket       Bucket that refused.
+	 * @param string $subject_hash Keyed hash of the subject.
+	 * @param int    $retry_after  Seconds until the refusing window rolls.
+	 */
+	public function log_rate_limited( string $bucket, string $subject_hash, int $retry_after ): void {
+		EventLogger::log(
+			'rate_limited',
+			[
+				'user_id'    => 0,
+				'ip_address' => '',
+				'metadata'   => [
+					'bucket'       => $bucket,
+					'subject_hash' => $subject_hash,
+					'retry_after'  => $retry_after,
 				],
 			]
 		);
