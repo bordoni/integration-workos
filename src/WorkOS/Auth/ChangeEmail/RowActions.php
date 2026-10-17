@@ -8,6 +8,8 @@
 
 namespace WorkOS\Auth\ChangeEmail;
 
+use WorkOS\Capabilities;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -44,7 +46,7 @@ class RowActions {
 			return $actions;
 		}
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+		if ( ! current_user_can( Capabilities::CHANGE_EMAIL, $user_id ) ) {
 			return $actions;
 		}
 

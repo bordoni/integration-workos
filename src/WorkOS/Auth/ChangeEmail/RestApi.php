@@ -11,6 +11,7 @@ use WorkOS\ActivityLog\EventLogger;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Email\AddressMask;
 use WorkOS\Http\ClientIp;
+use WorkOS\Capabilities;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -23,9 +24,10 @@ defined( 'ABSPATH' ) || exit;
  *
  *  - `POST users/{id}/email-change`          → initiate
  *  - `POST users/{id}/email-change/confirm`  → confirm (consumes token)
- *  - `POST users/{id}/email-change/cancel`   → cancel  (consumes cancel token OR uses edit_user)
+ *  - `POST users/{id}/email-change/cancel`   → cancel  (consumes cancel token OR uses workos_change_email)
  *
- * Auth model mirrors PasswordResetAdmin: `edit_user` on the target,
+ * Auth model mirrors PasswordResetAdmin: `workos_change_email` on the
+ * target, which maps to `edit_user` (see {@see \WorkOS\Capabilities}),
  * which the WP cap mapper grants both for self (the user's own ID) and
  * for admins acting on another account.
  *
@@ -190,7 +192,7 @@ class RestApi {
 			[
 				'methods'             => 'POST',
 				'callback'            => [ $this, 'cancel' ],
-				// Permission may be granted via edit_user OR a valid cancel
+				// Permission may be granted via workos_change_email OR a valid cancel
 				// token; the handler resolves both paths.
 				'permission_callback' => '__return_true',
 				'args'                => [
@@ -202,7 +204,7 @@ class RestApi {
 	}
 
 	/**
-	 * Permission callback for initiate — `edit_user` on the target.
+	 * Permission callback for initiate — `workos_change_email` on the target.
 	 *
 	 * @param WP_REST_Request $request REST request.
 	 *
@@ -218,7 +220,7 @@ class RestApi {
 			);
 		}
 
-		if ( ! current_user_can( 'edit_user', $target_id ) ) {
+		if ( ! current_user_can( Capabilities::CHANGE_EMAIL, $target_id ) ) {
 			return new WP_Error(
 				'workos_forbidden',
 				__( 'You do not have permission to change this user’s email.', 'integration-workos' ),
@@ -631,7 +633,7 @@ class RestApi {
 
 		$token         = (string) $request->get_param( 'token' );
 		$by_token      = '' !== $token && $this->pending->verify_cancel( $record, $token );
-		$by_capability = current_user_can( 'edit_user', $user->ID );
+		$by_capability = current_user_can( Capabilities::CHANGE_EMAIL, $user->ID );
 
 		if ( ! $by_token && ! $by_capability ) {
 			return new WP_Error(
