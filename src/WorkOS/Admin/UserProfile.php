@@ -85,6 +85,7 @@ class UserProfile {
 		echo '<h2>' . esc_html__( 'WorkOS', 'integration-workos' ) . '</h2>';
 
 		$this->render_link_refused_notice( $user->ID, $workos_user_id );
+		$this->render_sync_error_notice( $user->ID );
 		$this->render_dashboard_link( $workos_user_id, $environment_id );
 
 		// User Information.
@@ -142,6 +143,38 @@ class UserProfile {
 			/* translators: %s: WP-CLI command. */
 			esc_html__( 'If the account should move, run %s.', 'integration-workos' ),
 			'<code>' . esc_html( sprintf( 'wp workos user link %d %s --force', $wp_user_id, $refused['workos_user_id'] ) ) . '</code>'
+		);
+		echo '</p></div>';
+	}
+
+	/**
+	 * Render the last failed profile push, if any.
+	 *
+	 * Written by {@see UserSync} when WorkOS rejects a profile change made in
+	 * WordPress; cleared by the next successful push.
+	 *
+	 * @param int $wp_user_id WP user ID.
+	 */
+	private function render_sync_error_notice( int $wp_user_id ): void {
+		$error = get_user_meta( $wp_user_id, UserSync::META_SYNC_ERROR, true );
+		if ( ! is_array( $error ) || empty( $error['code'] ) ) {
+			return;
+		}
+
+		$when = ! empty( $error['time'] )
+			? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), (int) $error['time'] )
+			: '';
+
+		$fields = isset( $error['fields'] ) && is_array( $error['fields'] ) ? implode( ', ', $error['fields'] ) : '';
+
+		echo '<div class="notice notice-error inline"><p>';
+		printf(
+			/* translators: 1: changed fields, e.g. "email", 2: date, 3: WorkOS error code, 4: error message. */
+			esc_html__( 'Out of sync: WorkOS rejected the change to %1$s on %2$s (%3$s: %4$s). WordPress kept the change; WorkOS still has the old value.', 'integration-workos' ),
+			esc_html( $fields ),
+			esc_html( $when ),
+			'<code>' . esc_html( $error['code'] ) . '</code>',
+			esc_html( $error['message'] ?? '' )
 		);
 		echo '</p></div>';
 	}

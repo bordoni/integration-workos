@@ -16,3 +16,25 @@ Names live in user meta, which `wp_insert_user()` writes before `profile_update`
 - The user isn't linked (no `_workos_user_id`).
 - The change came from WorkOS: sign-in, the `user.updated` webhook, directory sync and re-sync write the profile while `UserSync::is_syncing()` is true, so nothing echoes back.
 - The email-change confirm flow is committing (`ChangeEmail\RestApi` pushes to WorkOS itself).
+
+## When WorkOS rejects it
+
+The common case is an email change to an address another WorkOS user already holds: WorkOS answers `email_not_available`, WordPress keeps the new email and WorkOS keeps the old one. On any error, including transport errors:
+
+- `_workos_last_synced_at` isn't updated, so the user stays marked as out of sync.
+- The error is stored on the user in `_workos_sync_error` (`UserSync::META_SYNC_ERROR`): `code` (the WorkOS code, e.g. `email_not_available`, or the `WP_Error` code for transport errors), `message`, `fields` and `time`. The WorkOS panel on the user-edit screen shows it.
+- It's written to the debug log and, when the Activity Log is on, logged as `profile_push_failed`.
+- `workos_profile_push_failed` fires.
+
+The next successful push clears `_workos_sync_error`. Unlinking the user clears it too.
+
+## Hooks
+
+```php
+/**
+ * A profile push to WorkOS failed. WordPress keeps its change.
+ *
+ * $update holds the fields that were sent (`first_name`, `last_name`, `email`).
+ */
+do_action( 'workos_profile_push_failed', int $user_id, string $workos_id, array $update, WP_Error $error );
+```
