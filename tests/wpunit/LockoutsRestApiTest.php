@@ -7,6 +7,8 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+require_once dirname( __DIR__ ) . '/_support/RateLimitWindow.php';
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Admin\Users\LockoutsRestApi;
 use WorkOS\ActivityLog\EventLogger;
@@ -32,6 +34,8 @@ class LockoutsRestApiTest extends WPTestCase {
 	 */
 	public function setUp(): void {
 		parent::setUp();
+
+		\workos_tests_wait_for_fresh_window();
 
 		\WorkOS\Config::set_active_environment( 'production' );
 		update_option(
