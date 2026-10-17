@@ -18,7 +18,24 @@ defined( 'ABSPATH' ) || exit;
  * lock, so the design leans on the longer tiers of a policy to bound the
  * damage, and on WorkOS's own back-end limits behind those.
  */
-class DatabaseRateLimiter extends BaseRateLimiter {
+class DatabaseRateLimiter extends BaseRateLimiter implements CountsAttempts {
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @param string $bucket  Operation identifier.
+	 * @param string $subject Caller identity.
+	 * @param int    $window  Window length in seconds.
+	 *
+	 * @return int
+	 */
+	public function count( string $bucket, string $subject, int $window ): int {
+		if ( $window <= 0 ) {
+			return 0;
+		}
+
+		return (int) get_transient( $this->key( $bucket, $subject, $window, time() ) );
+	}
 
 	/**
 	 * {@inheritDoc}

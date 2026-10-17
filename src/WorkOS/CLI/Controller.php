@@ -33,6 +33,7 @@ class Controller extends BaseController {
 		\WP_CLI::add_command( 'workos user', UserCommand::class );
 		\WP_CLI::add_command( 'workos org', OrgCommand::class );
 		\WP_CLI::add_command( 'workos sync', SyncCommand::class );
+		\WP_CLI::add_command( 'workos ratelimit', RateLimitCommand::class );
 	}
 
 	/**

@@ -17,6 +17,7 @@ import {
 } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { promptModal } from '../shared/modal';
+import { LockoutLookup } from './lockouts';
 import './styles.css';
 
 interface AdminConfig {
@@ -30,6 +31,10 @@ interface AdminConfig {
 	defaultLimit: number;
 	pluginEnabled: boolean;
 	changeEmailEnabled: boolean;
+	/** Base for the lockout endpoints: `${lockoutsUrl}/check`, `${lockoutsUrl}/clear`. */
+	lockoutsUrl: string;
+	/** Current user has `edit_users`, which the lockout endpoints require. */
+	canManageLockouts: boolean;
 }
 
 declare global {
@@ -83,6 +88,8 @@ function getConfig(): AdminConfig {
 			defaultLimit: 25,
 			pluginEnabled: false,
 			changeEmailEnabled: false,
+			lockoutsUrl: '',
+			canManageLockouts: false,
 		}
 	);
 }
@@ -590,6 +597,10 @@ function App(): JSX.Element {
 					</span>
 				) }
 			</div>
+
+			{ cfg.canManageLockouts && cfg.lockoutsUrl && (
+				<LockoutLookup url={ cfg.lockoutsUrl } nonce={ cfg.nonce } />
+			) }
 		</div>
 	);
 }

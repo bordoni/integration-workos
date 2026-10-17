@@ -86,7 +86,9 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Admin/Users/Controller.php` | Wires the WorkOS Users admin submenu + REST endpoint |
 | `src/WorkOS/Admin/Users/AdminPage.php` | Admin submenu (WorkOS → Users) that mounts the React user list and enqueues the shared `workos-admin-password-reset` JS/CSS so the per-row trigger button works. Also localizes `changeEmailUrl` + `changeEmailEnabled` for the React-native "Change email" action (handled in-bundle, so it does *not* enqueue the shared change-email handler). |
 | `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters, a server-computed `dashboard_url` per row, and a `wp_user_id` resolved via `_workos_user_id` meta so the React side can show the "Send password reset" trigger only for linked rows. |
+| `src/WorkOS/Admin/Users/LockoutsRestApi.php` | `POST /wp-json/workos/v1/admin/lockouts/{check,clear}` (`edit_users`) over `RateLimit\Lockouts`. POST so the address stays out of URLs. `AdminPage` localizes `lockoutsUrl` + `canManageLockouts`. |
 | `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link + per-row Send-password-reset button when `wp_user_id > 0` + native "Change email" button with its own modal, immediate POST, and in-place row refresh) |
+| `src/js/admin-users/lockouts.tsx` | "Sign-in lockouts" section below the user list (only with `canManageLockouts`): email in, one row per bucket with used/limit per window and lock time, Clear per bucket and Clear all |
 | **Admin — Login Profiles (Custom AuthKit)** | |
 | `src/WorkOS/Admin/LoginProfiles/Controller.php` | Wires Login Profile admin page + CRUD REST |
 | `src/WorkOS/Admin/LoginProfiles/AdminPage.php` | Admin submenu that mounts the React editor |
@@ -151,6 +153,8 @@ Per-environment constants (take priority over generic):
 | **Rate Limiting** ([`docs/rate-limiting.md`](docs/rate-limiting.md)) | |
 | `src/WorkOS/RateLimit/TieredRateLimiter.php` | Stacks windows into a policy and owns the policy constants. `policy()` applies the `workos_rate_limit_policy( $policy, $bucket )` filter on attempt, refund and reset. A refused attempt fires `workos_rate_limited( $bucket, $subject_hash, $retry_after )`; `hash_subject()` is a salted HMAC so hooks and logs never see the raw email or IP. `ActivityLog\Controller` records it as `rate_limited`. |
 | `src/WorkOS/RateLimit/RateLimiter.php`, `BaseRateLimiter.php`, `DatabaseRateLimiter.php`, `ObjectCacheRateLimiter.php`, `Controller.php` | Single-window contract, transient and object-cache storage, container binding |
+| `src/WorkOS/RateLimit/CountsAttempts.php` | Optional read-only `count()` on a limiter; both shipped implementations provide it, and `TieredRateLimiter::status()` uses it. |
+| `src/WorkOS/RateLimit/Lockouts.php` | Support lookup for one address: the email-keyed buckets (`password_email`, `magic_verify_email`, `magic_send_email`, `pw_reset_email`, `signup_email`, `otp_send_recipient`, `password_otp_recipient`), each keyed exact or by mailbox like its endpoint. `check()` returns per-tier counts and the lock time; `clear()` resets one or all and logs `rate_limit_cleared` (actor, source, bucket → subject hash). |
 | **UI (Login Button)** | |
 | `src/WorkOS/UI/Controller.php` | UI controller, registers block/widget |
 | `src/WorkOS/UI/Block.php` | Gutenberg block registration |
@@ -196,6 +200,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/CLI/UserCommand.php` | `wp workos user` commands |
 | `src/WorkOS/CLI/OrgCommand.php` | `wp workos org` commands |
 | `src/WorkOS/CLI/SyncCommand.php` | `wp workos sync` commands |
+| `src/WorkOS/CLI/RateLimitCommand.php` | `wp workos ratelimit check <email>` (one row per window: count, limit, time left, locked) and `clear <email> [--bucket=<bucket>]`, both through `RateLimit\Lockouts` |
 | **Database** | |
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
 | **Helpers** | |
@@ -344,6 +349,8 @@ tests/
     ├── LoginBypassTest.php                         # Login bypass tests
     ├── LoginLogoutTest.php                         # Login logout session revocation tests
     ├── LoginSessionTest.php                        # Login session tests
+    ├── LockoutsRestApiTest.php                     # `POST /admin/lockouts/{check,clear}`: edit_users gate, check, clear + log, bad input
+    ├── LockoutsTest.php                            # Lockout lookup keyed like the endpoints, filtered limits, clear one/all/every tier, `rate_limit_cleared` entry
     ├── LoginTokensTest.php                         # Login tokens tests
     ├── LogoutRedirectTest.php                      # Logout redirect tests
     ├── OnboardingSyncTest.php                      # Onboarding sync tests
@@ -355,6 +362,7 @@ tests/
     ├── PasswordResetAdminRowActionsTest.php         # `workos_user_list_column_actions` filter + RowActions injection (capability check, self-service, defensive empty-workos_id)
     ├── PluginTest.php                              # Plugin singleton + constants tests
     ├── RateLimitActivityLogTest.php                # One `rate_limited` activity-log row per refused attempt, hashed subject, no raw email or IP
+    ├── RateLimitCommandTest.php                    # `wp workos ratelimit check/clear` against WP-CLI doubles (`tests/_support/WpCliStubs.php`)
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
     ├── RoleMapperTest.php                          # Role mapper tests

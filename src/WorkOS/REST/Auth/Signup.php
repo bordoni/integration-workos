@@ -29,9 +29,9 @@ class Signup extends BaseEndpoint {
 	 * Tighter than the shared request policy: signup creates an account
 	 * for an address nobody has proven they own.
 	 */
-	private const RATE_LIMIT_CREATE_IP    = [ [ 5, MINUTE_IN_SECONDS ] ];
-	private const RATE_LIMIT_CREATE_EMAIL = [ [ 3, MINUTE_IN_SECONDS ] ];
-	private const RATE_LIMIT_VERIFY_IP    = [ [ 10, MINUTE_IN_SECONDS ] ];
+	private const RATE_LIMIT_CREATE_IP   = [ [ 5, MINUTE_IN_SECONDS ] ];
+	public const RATE_LIMIT_CREATE_EMAIL = [ [ 3, MINUTE_IN_SECONDS ] ];
+	private const RATE_LIMIT_VERIFY_IP   = [ [ 10, MINUTE_IN_SECONDS ] ];
 
 	/**
 	 * Register routes.

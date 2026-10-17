@@ -131,6 +131,35 @@ class TieredRateLimiter {
 	}
 
 	/**
+	 * Where a subject stands on every tier, without charging anything.
+	 *
+	 * Reads the filtered policy, so the limits are the ones a request
+	 * would meet. Counts read as zero when the wrapped limiter can't report
+	 * them ({@see CountsAttempts}).
+	 *
+	 * @param string                         $bucket  Operation identifier.
+	 * @param string                         $subject Caller identity.
+	 * @param array<int, array{0:int,1:int}> $policy  Default policy.
+	 *
+	 * @return array<int, array{limit:int, window:int, count:int, resets_in:int}> Shortest window first.
+	 */
+	public function status( string $bucket, string $subject, array $policy ): array {
+		$now  = time();
+		$rows = [];
+
+		foreach ( $this->tiers( $this->policy( $bucket, $policy ) ) as [ $limit, $window ] ) {
+			$rows[] = [
+				'limit'     => $limit,
+				'window'    => $window,
+				'count'     => $this->limiter instanceof CountsAttempts ? $this->limiter->count( $bucket, $subject, $window ) : 0,
+				'resets_in' => max( 1, ( intdiv( $now, $window ) + 1 ) * $window - $now ),
+			];
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * The policy a bucket actually runs with, after the filter.
 	 *
 	 * Applied on attempt, refund and reset alike, so all three touch the

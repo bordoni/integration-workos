@@ -27,6 +27,10 @@ class Controller extends BaseController {
 		$this->container->singleton( RestApi::class );
 		$this->container->get( RestApi::class );
 
+		// "Sign-in lockouts" lookup on the same screen.
+		$this->container->singleton( LockoutsRestApi::class );
+		$this->container->get( LockoutsRestApi::class );
+
 		$this->container->singleton( AdminPage::class );
 		$this->container->get( AdminPage::class )->register();
 	}

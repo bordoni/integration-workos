@@ -17,12 +17,29 @@ defined( 'ABSPATH' ) || exit;
  * requests get distinct counts and the limit cannot be overspent. That is
  * exactly the hole a read-modify-write leaves open under a burst.
  */
-class ObjectCacheRateLimiter extends BaseRateLimiter {
+class ObjectCacheRateLimiter extends BaseRateLimiter implements CountsAttempts {
 
 	/**
 	 * Cache group for every counter.
 	 */
 	private const CACHE_GROUP = 'workos_rate_limit';
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @param string $bucket  Operation identifier.
+	 * @param string $subject Caller identity.
+	 * @param int    $window  Window length in seconds.
+	 *
+	 * @return int
+	 */
+	public function count( string $bucket, string $subject, int $window ): int {
+		if ( $window <= 0 ) {
+			return 0;
+		}
+
+		return max( 0, (int) wp_cache_get( $this->key( $bucket, $subject, $window, time() ), self::CACHE_GROUP ) );
+	}
 
 	/**
 	 * {@inheritDoc}
