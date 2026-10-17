@@ -165,8 +165,36 @@ class RestApi {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function send_reset( WP_REST_Request $request ) {
-		$target_id = absint( $request['id'] );
-		$user      = get_userdata( $target_id );
+		$result = $this->send_for_user(
+			absint( $request['id'] ),
+			(string) $request->get_param( 'redirect_url' ),
+			(string) $request->get_param( 'profile' )
+		);
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return new WP_REST_Response( $result, 200 );
+	}
+
+	/**
+	 * Send a WorkOS reset email for a WP user.
+	 *
+	 * The work behind the REST route, minus the capability check: the route
+	 * checks `edit_user` before calling this, and `workos_send_password_reset()`
+	 * leaves that to its caller. Everything else (linked-user and email
+	 * checks, profile policy, rate limits, redirect validation, the activity
+	 * log row) is shared.
+	 *
+	 * @param int    $target_id    WP user ID.
+	 * @param string $redirect_url Optional post-reset redirect; checked by RedirectValidator.
+	 * @param string $profile_slug Optional Login Profile slug; defaults to the default profile.
+	 *
+	 * @return array{ok: true, email_hint: string, profile: string, redirect_url: string}|WP_Error
+	 */
+	public function send_for_user( int $target_id, string $redirect_url = '', string $profile_slug = '' ) {
+		$user = get_userdata( $target_id );
 		if ( ! $user instanceof WP_User ) {
 			return new WP_Error(
 				'workos_user_not_found',
@@ -193,7 +221,7 @@ class RestApi {
 			);
 		}
 
-		$profile = $this->resolve_profile( (string) $request->get_param( 'profile' ) );
+		$profile = $this->resolve_profile( $profile_slug );
 		if ( ! $profile instanceof Profile ) {
 			return $profile;
 		}
@@ -219,10 +247,7 @@ class RestApi {
 			return $rate_ok;
 		}
 
-		$redirect_url = $this->redirect_validator->validate(
-			(string) $request->get_param( 'redirect_url' ),
-			$profile
-		);
+		$redirect_url = $this->redirect_validator->validate( $redirect_url, $profile );
 
 		$reset_url = $this->build_reset_url( $profile, $redirect_url );
 
@@ -246,15 +271,12 @@ class RestApi {
 			]
 		);
 
-		return new WP_REST_Response(
-			[
-				'ok'           => true,
-				'email_hint'   => $this->masker->mask( $email ),
-				'profile'      => $profile->get_slug(),
-				'redirect_url' => $redirect_url,
-			],
-			200
-		);
+		return [
+			'ok'           => true,
+			'email_hint'   => $this->masker->mask( $email ),
+			'profile'      => $profile->get_slug(),
+			'redirect_url' => $redirect_url,
+		];
 	}
 
 	/**
