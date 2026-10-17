@@ -10,6 +10,7 @@
 
 namespace WorkOS\Admin;
 
+use WorkOS\Capabilities;
 use WorkOS\Config;
 use WorkOS\Sync\UserSync;
 
@@ -93,7 +94,7 @@ class UserProfile {
 			$workos_user = $this->get_cached_workos_user( $workos_user_id );
 		}
 
-		$this->render_user_info( $workos_user, $local_meta, $environment_id );
+		$this->render_user_info( $workos_user, $local_meta, $environment_id, $user->ID );
 
 		// Organization Memberships.
 		if ( $plugin_enabled ) {
@@ -176,8 +177,9 @@ class UserProfile {
 	 * @param array|null $workos_user    WorkOS user data from the API (null if unavailable).
 	 * @param array      $local_meta     Local user meta.
 	 * @param string     $environment_id WorkOS environment ID.
+	 * @param int        $wp_user_id     WP user being edited.
 	 */
-	private function render_user_info( ?array $workos_user, array $local_meta, string $environment_id ): void {
+	private function render_user_info( ?array $workos_user, array $local_meta, string $environment_id, int $wp_user_id ): void {
 		echo '<h3>' . esc_html__( 'User Information', 'integration-workos' ) . '</h3>';
 
 		if ( null === $workos_user ) {
@@ -216,6 +218,13 @@ class UserProfile {
 			$email_html = esc_html( $workos_user['email'] ?? '' );
 			if ( ! empty( $workos_user['email_verified'] ) ) {
 				$email_html .= ' <span style="color:#00a32a;" title="' . esc_attr__( 'Verified', 'integration-workos' ) . '">&#10003;</span>';
+			} elseif ( current_user_can( Capabilities::VERIFY_EMAIL ) ) {
+				// Handled by the shared admin script (admin-password-reset).
+				$email_html .= sprintf(
+					' <button type="button" class="button button-small workos-verify-email-trigger" data-user-id="%d">%s</button>',
+					$wp_user_id,
+					esc_html__( 'Mark email verified', 'integration-workos' )
+				);
 			}
 			$this->render_form_row( __( 'Email', 'integration-workos' ), $email_html );
 

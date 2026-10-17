@@ -131,6 +131,7 @@ class CapabilitiesTest extends WPTestCase {
 		return [
 			'view users'                  => [ Capabilities::VIEW_USERS, 'manage_options', null ],
 			'manage lockouts'             => [ Capabilities::MANAGE_LOCKOUTS, 'edit_users', null ],
+			'verify email'                => [ Capabilities::VERIFY_EMAIL, 'edit_users', null ],
 			'password reset, self'        => [ Capabilities::SEND_PASSWORD_RESET, 'edit_user', $self ],
 			'password reset, other'       => [ Capabilities::SEND_PASSWORD_RESET, 'edit_user', $this->other_subscriber ],
 			'password reset, other admin' => [ Capabilities::SEND_PASSWORD_RESET, 'edit_user', $this->other_admin ],
@@ -162,6 +163,7 @@ class CapabilitiesTest extends WPTestCase {
 		$self_service_only = [
 			'view users'                  => false,
 			'manage lockouts'             => false,
+			'verify email'                => false,
 			'password reset, self'        => true,
 			'password reset, other'       => false,
 			'password reset, other admin' => false,
@@ -233,7 +235,7 @@ class CapabilitiesTest extends WPTestCase {
 	}
 
 	/**
-	 * The documented set is exactly these four, each with its core mapping.
+	 * The documented set, each with its core mapping.
 	 */
 	public function test_map_lists_every_capability(): void {
 		$this->assertSame(
@@ -242,6 +244,7 @@ class CapabilitiesTest extends WPTestCase {
 				'workos_send_password_reset' => 'edit_user',
 				'workos_change_email'        => 'edit_user',
 				'workos_manage_lockouts'     => 'edit_users',
+				'workos_verify_email'        => 'edit_users',
 			],
 			Capabilities::MAP
 		);
@@ -273,6 +276,7 @@ class CapabilitiesTest extends WPTestCase {
 		$this->assertTrue( current_user_can( Capabilities::CHANGE_EMAIL, $support ), 'Self-service still comes from edit_user.' );
 		$this->assertFalse( current_user_can( Capabilities::VIEW_USERS ) );
 		$this->assertFalse( current_user_can( Capabilities::MANAGE_LOCKOUTS ) );
+		$this->assertFalse( current_user_can( Capabilities::VERIFY_EMAIL ) );
 
 		// No core rights came along with it.
 		$this->assertFalse( current_user_can( 'manage_options' ) );

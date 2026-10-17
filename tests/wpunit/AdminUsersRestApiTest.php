@@ -332,9 +332,11 @@ class AdminUsersRestApiTest extends WPTestCase {
 
 		$this->assertTrue( $rows[0]['can_send_password_reset'] );
 		$this->assertTrue( $rows[0]['can_change_email'] );
+		$this->assertTrue( $rows[0]['can_verify_email'] );
 		// No linked WP user, so there is nothing to act on.
 		$this->assertFalse( $rows[1]['can_send_password_reset'] );
 		$this->assertFalse( $rows[1]['can_change_email'] );
+		$this->assertFalse( $rows[1]['can_verify_email'] );
 	}
 
 	public function test_rows_hide_actions_the_caller_lacks(): void {
@@ -367,6 +369,7 @@ class AdminUsersRestApiTest extends WPTestCase {
 			$this->assertSame( $alice, $row['wp_user_id'] );
 			$this->assertTrue( $row['can_send_password_reset'] );
 			$this->assertFalse( $row['can_change_email'] );
+			$this->assertFalse( $row['can_verify_email'] );
 		} finally {
 			remove_role( 'workos_test_support' );
 		}
