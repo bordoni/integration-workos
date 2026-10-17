@@ -49,6 +49,9 @@ class Capabilities {
 	/** Clear sign-in lockouts. */
 	public const MANAGE_LOCKOUTS = 'workos_manage_lockouts';
 
+	/** Mark a user's WorkOS email as verified. No self-service: maps to edit_users. */
+	public const VERIFY_EMAIL = 'workos_verify_email';
+
 	/**
 	 * Plugin capability → the core capability it stands in for.
 	 *
@@ -63,6 +66,7 @@ class Capabilities {
 		self::SEND_PASSWORD_RESET => 'edit_user',
 		self::CHANGE_EMAIL        => 'edit_user',
 		self::MANAGE_LOCKOUTS     => 'edit_users',
+		self::VERIFY_EMAIL        => 'edit_users',
 	];
 
 	/**

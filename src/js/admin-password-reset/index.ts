@@ -7,6 +7,10 @@
  * shortcode. POSTs to `POST /workos/v1/admin/users/{id}/password-reset`
  * with the per-element `data-user-id`, `data-redirect-url`, and
  * `data-profile` attributes.
+ *
+ * Also handles the "Mark email verified" button (`.workos-verify-email-trigger`)
+ * on the user-edit WorkOS panel, which POSTs to
+ * `POST /workos/v1/admin/users/{id}/verify-email`.
  */
 
 import { __, sprintf } from '@wordpress/i18n';
@@ -32,6 +36,14 @@ interface PasswordResetConfig {
 		sending: string;
 		success: string;
 		errorGeneric: string;
+		verifyTitle: string;
+		verifyMessage: string;
+		verifyConfirm: string;
+		verifying: string;
+		verifySuccess: string;
+		verifyAlready: string;
+		verifyError: string;
+		verifiedLabel: string;
 	};
 }
 
@@ -190,6 +202,85 @@ async function sendReset( button: HTMLElement ): Promise< void > {
 }
 
 /**
+ * Mark the WorkOS email of the user on a `.workos-verify-email-trigger`
+ * button verified.
+ *
+ * Lives here because this script is already loaded on the user-edit
+ * screen, where the button sits in the WorkOS panel's Email row. POSTs to
+ * `POST /workos/v1/admin/users/{id}/verify-email` and, on success, swaps
+ * the button for the same check mark the panel shows for a verified email.
+ *
+ * @param button Trigger element clicked by the operator.
+ */
+async function verifyEmail( button: HTMLElement ): Promise< void > {
+	const config = getConfig();
+	if ( ! config ) {
+		return;
+	}
+
+	const userId = Number( button.getAttribute( 'data-user-id' ) || '0' );
+	if ( ! userId ) {
+		return;
+	}
+
+	const confirmed = await confirmModal( {
+		title: config.strings.verifyTitle,
+		message: config.strings.verifyMessage,
+		confirmLabel: config.strings.verifyConfirm,
+		cancelLabel: config.strings.modalCancel,
+	} );
+	if ( ! confirmed ) {
+		return;
+	}
+
+	const original = button.innerHTML;
+	button.setAttribute( 'disabled', 'disabled' );
+	button.classList.add( 'is-busy' );
+	button.textContent = config.strings.verifying;
+
+	let done = false;
+	try {
+		const response = await fetch( `${ config.restUrl }${ userId }/verify-email`, {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-WP-Nonce': config.nonce,
+			},
+		} );
+
+		const data = ( await response.json() ) as {
+			already_verified?: boolean;
+		} & ErrorResponse;
+
+		if ( ! response.ok ) {
+			showNotice( data.message || config.strings.verifyError, 'error' );
+			return;
+		}
+
+		const mark = document.createElement( 'span' );
+		mark.style.color = '#00a32a';
+		mark.title = config.strings.verifiedLabel;
+		mark.textContent = '✓';
+		button.replaceWith( mark );
+		done = true;
+
+		showNotice(
+			data.already_verified ? config.strings.verifyAlready : config.strings.verifySuccess,
+			'success'
+		);
+	} catch ( _ ) {
+		showNotice( config.strings.verifyError, 'error' );
+	} finally {
+		if ( ! done ) {
+			button.removeAttribute( 'disabled' );
+			button.classList.remove( 'is-busy' );
+			button.innerHTML = original;
+		}
+	}
+}
+
+/**
  * Document-level click listener — delegates to {@link sendReset} when the
  * click originates inside a `.workos-pwreset-trigger` element.
  *
@@ -212,4 +303,19 @@ document.addEventListener( 'click', ( event ) => {
 
 	event.preventDefault();
 	void sendReset( trigger );
+} );
+
+/**
+ * Same delegation for the "Mark email verified" button.
+ */
+document.addEventListener( 'click', ( event ) => {
+	const trigger = ( event.target as HTMLElement | null )?.closest< HTMLElement >(
+		'.workos-verify-email-trigger'
+	);
+	if ( ! trigger ) {
+		return;
+	}
+
+	event.preventDefault();
+	void verifyEmail( trigger );
 } );

@@ -62,7 +62,7 @@ Per-environment constants (take priority over generic):
 
 ### Capabilities
 
-WorkOS user-management checks use plugin capabilities (`workos_view_users`, `workos_send_password_reset`, `workos_change_email`, `workos_manage_lockouts`) mapped through `map_meta_cap` in `src/WorkOS/Capabilities.php`. Each maps to the core capability the check used before, so default roles behave the same; sites grant them to custom roles for narrower access. Settings pages stay on `manage_options`. New user-management checks should use a plugin capability, not a core one. See [`docs/capabilities.md`](docs/capabilities.md).
+WorkOS user-management checks use plugin capabilities (`workos_view_users`, `workos_send_password_reset`, `workos_change_email`, `workos_manage_lockouts`, `workos_verify_email`) mapped through `map_meta_cap` in `src/WorkOS/Capabilities.php`. Each maps to the core capability the check used before, so default roles behave the same; sites grant them to custom roles for narrower access. Settings pages stay on `manage_options`. New user-management checks should use a plugin capability, not a core one. See [`docs/capabilities.md`](docs/capabilities.md).
 
 ## Key Files
 
@@ -73,7 +73,7 @@ WorkOS user-management checks use plugin capabilities (`workos_view_users`, `wor
 | `src/WorkOS/App.php` | Static facade for the DI container |
 | `src/WorkOS/Config.php` | Centralized config with constant overrides |
 | `src/WorkOS/User.php` | Public read-only helper for WorkOS metadata on WP users (`is_sso`, `has_active_session`, `get_workos_id`, `get_access_token`, `snapshot`) |
-| `src/WorkOS/Capabilities.php` | Plugin capabilities (`workos_view_users`, `workos_send_password_reset`, `workos_change_email`, `workos_manage_lockouts`) resolved through `map_meta_cap`. Each maps to the core capability its check used before (`manage_options`, `edit_user`, `edit_user`, `edit_users`) unless the user holds the capability directly, in which case that grant decides (`false` denies). Registered first in the main `Controller`. See [`docs/capabilities.md`](docs/capabilities.md). |
+| `src/WorkOS/Capabilities.php` | Plugin capabilities (`workos_view_users`, `workos_send_password_reset`, `workos_change_email`, `workos_manage_lockouts`, `workos_verify_email`) resolved through `map_meta_cap`. Each maps to the core capability its check used before (`manage_options`, `edit_user`, `edit_user`, `edit_users`, `edit_users`) unless the user holds the capability directly, in which case that grant decides (`false` denies). Registered first in the main `Controller`. See [`docs/capabilities.md`](docs/capabilities.md). |
 | `src/WorkOS/Controller.php` | Main controller, registers all feature controllers |
 | `src/WorkOS/Contracts/Container.php` | DI container (di52-based) |
 | `src/WorkOS/Contracts/Controller.php` | Abstract base controller with `isActive()` |
@@ -82,7 +82,7 @@ WorkOS user-management checks use plugin capabilities (`workos_view_users`, `wor
 | `src/WorkOS/Admin/Controller.php` | Admin controller, registers settings/user list/onboarding/diagnostics |
 | `src/WorkOS/Admin/Settings.php` | Admin settings page (tabs: Settings, Organization, Users) |
 | `src/WorkOS/Admin/UserList.php` | Admin user list integration (WorkOS column). Exposes `workos_user_list_column_actions` filter so subsystems can add per-row WorkOS actions (slug-keyed; joined with pipe separators) — see PasswordResetAdmin `RowActions`. |
-| `src/WorkOS/Admin/UserProfile.php` | User profile page WorkOS metadata |
+| `src/WorkOS/Admin/UserProfile.php` | User profile page WorkOS metadata. The Email row shows a "Mark email verified" button (`.workos-verify-email-trigger`, handled by `src/js/admin-password-reset/index.ts`) when WorkOS has the email unverified and the viewer has `workos_verify_email`. |
 | `src/WorkOS/Admin/AdminBar.php` | Admin bar environment badge |
 | `src/WorkOS/Admin/DiagnosticsPage.php` | System diagnostics page |
 | `src/WorkOS/Admin/OnboardingPage.php` | Onboarding wizard UI |
@@ -90,8 +90,8 @@ WorkOS user-management checks use plugin capabilities (`workos_view_users`, `wor
 | **Admin — Users** | |
 | `src/WorkOS/Admin/Users/Controller.php` | Wires the WorkOS Users admin submenu + REST endpoint |
 | `src/WorkOS/Admin/Users/AdminPage.php` | Admin submenu (WorkOS → Users, `workos_view_users`) that mounts the React user list and enqueues the shared `workos-admin-password-reset` JS/CSS so the per-row trigger button works. Also localizes `changeEmailUrl` + `changeEmailEnabled` for the React-native "Change email" action (handled in-bundle, so it does *not* enqueue the shared change-email handler). |
-| `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters, a server-computed `dashboard_url` per row, and a `wp_user_id` resolved via `_workos_user_id` meta plus per-row `can_send_password_reset` / `can_change_email` flags (the caller's plugin capability on that WP user; false for unlinked rows) so the React side only shows actions the caller can use. Gated by `workos_view_users`. |
-| `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link + per-row Send-password-reset button when `can_send_password_reset` + native "Change email" button (when `can_change_email`) with its own modal, immediate POST, and in-place row refresh) |
+| `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters, a server-computed `dashboard_url` per row, and a `wp_user_id` resolved via `_workos_user_id` meta plus per-row `can_send_password_reset` / `can_change_email` flags (the caller's plugin capability on that WP user; false for unlinked rows) so the React side only shows actions the caller can use. Gated by `workos_view_users`. Also `POST /wp-json/workos/v1/admin/users/{id}/verify-email` ({id} is the WP user ID; `workos_verify_email`, maps to `edit_users`): fetches the WorkOS user, no-ops when already verified, else `update_user( [ email_verified => true ] )`, clears the user-edit panel cache, logs `email.admin_verified` with `initiator_id`; WorkOS failures return `502 workos_api_error`. Rows also carry `can_verify_email`. |
+| `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link + per-row Send-password-reset button when `can_send_password_reset` + native "Change email" button (when `can_change_email`) with its own modal, immediate POST, and in-place row refresh + "Mark email verified" button when the row is unverified and `can_verify_email`, with a confirm modal and in-place row update) |
 | **Admin — Login Profiles (Custom AuthKit)** | |
 | `src/WorkOS/Admin/LoginProfiles/Controller.php` | Wires Login Profile admin page + CRUD REST |
 | `src/WorkOS/Admin/LoginProfiles/AdminPage.php` | Admin submenu that mounts the React editor |
@@ -111,7 +111,7 @@ WorkOS user-management checks use plugin capabilities (`workos_view_users`, `wor
 | `src/WorkOS/Auth/PasswordResetAdmin/UserProfilePanel.php` | "Password Reset" panel + trigger button on the WP user-edit screen (`edit_user_profile` / `show_user_profile` at priority 20 so it renders after the existing read-only WorkOS panel). |
 | `src/WorkOS/Auth/PasswordResetAdmin/Shortcode.php` | `[workos:password-reset]` — toggles between admin-of-other (`user="id-or-email"`) and self-service (no `user`) modes based on its attributes. |
 | `src/WorkOS/Auth/PasswordResetAdmin/Assets.php` | Registers `workos-admin-password-reset` JS/CSS handles + localizes `workosPasswordReset` (REST URL, `wp_rest` nonce, masked-email-aware UI strings). Auto-enqueues on `users.php` / `user-edit.php` / `profile.php`. |
-| `src/js/admin-password-reset/index.ts` | Delegated `.workos-pwreset-trigger` click handler — POSTs to the admin endpoint and surfaces a transient admin notice. Same handler powers every trigger surface (WP Users row, user-edit panel, shortcode, WorkOS Users admin page row). |
+| `src/js/admin-password-reset/index.ts` | Delegated `.workos-pwreset-trigger` click handler — POSTs to the admin endpoint and surfaces a transient admin notice. Same handler powers every trigger surface (WP Users row, user-edit panel, shortcode, WorkOS Users admin page row). Also handles `.workos-verify-email-trigger` (the user-edit panel's "Mark email verified" button: confirm, POST `…/verify-email`, swap in a check mark). |
 | **Auth — Change Email** ([`docs/change-email.md`](docs/change-email.md)) | |
 | `src/WorkOS/Auth/ChangeEmail/Controller.php` | DI controller — wires REST endpoints, JS/CSS, row action, profile panel, shortcode, and the frontend confirm route. Honors the `change_email_enabled` setting + `workos_change_email_enabled` filter. |
 | `src/WorkOS/Auth/ChangeEmail/RestApi.php` | Three endpoints: `POST /workos/v1/users/{id}/email-change` (initiate, `workos_change_email` cap, maps to `edit_user`), `…/email-change/confirm` (token-gated, race re-check), `…/email-change/cancel` (cancel-token *or* `workos_change_email` cap). Initiate branches on `is_admin_action()` (`edit_users` + initiator ≠ target): self-service is rate-limited, enumeration-safe, and verified via emailed token; admin-of-other commits immediately (no rate limit, no notification, WP core email-change notice suppressed), gets a real `409` conflict, and logs `email_change.admin_changed`. Shared `commit_change()` (WorkOS `update_user` → `wp_update_user` → rollback → transient → sync-hash refresh) backs both the confirm and admin-direct paths. Logs `email_change.*` events. |
@@ -339,6 +339,7 @@ tests/
     ├── AuthKitRestPasswordTest.php                 # password/{authenticate,reset/start,reset/confirm}
     ├── AuthKitRestSignupInvitationOAuthTest.php    # signup/{create,verify}, invitation/{token,accept}, oauth/authorize-url
     ├── CapabilitiesTest.php                        # Plugin capabilities: role × self/other matrix matches the old core checks, direct grants, `false` denies, surfaces follow their capability
+    ├── AdminUsersVerifyEmailTest.php               # `POST /admin/users/{id}/verify-email` — capability (incl. no self-service), 404/409, already-verified no-op, success + activity log, WorkOS errors; panel button visibility
     ├── ConfigTest.php                              # Config class tests
     ├── DirectorySyncTest.php                       # Directory sync tests
     ├── EntitlementGateTest.php                     # Entitlement gate tests

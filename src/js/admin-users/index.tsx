@@ -16,7 +16,7 @@ import {
 	useState,
 } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
-import { promptModal } from '../shared/modal';
+import { confirmModal, promptModal } from '../shared/modal';
 import './styles.css';
 
 interface AdminConfig {
@@ -46,6 +46,8 @@ interface WorkosUser {
 	can_send_password_reset: boolean;
 	/** Whether the current admin may change this user's email. */
 	can_change_email: boolean;
+	/** Whether the current admin may mark this user's WorkOS email verified. */
+	can_verify_email: boolean;
 	email: string;
 	email_verified: boolean;
 	first_name: string;
@@ -165,6 +167,7 @@ function App(): JSX.Element {
 		text: string;
 	} | null >( null );
 	const [ busyUserId, setBusyUserId ] = useState< number >( 0 );
+	const [ verifyingUserId, setVerifyingUserId ] = useState< number >( 0 );
 	const [ searchInput, setSearchInput ] = useState< string >( '' );
 	const [ search, setSearch ] = useState< string >( '' );
 	const [ limit, setLimit ] = useState< number >( cfg.defaultLimit || 25 );
@@ -373,6 +376,75 @@ function App(): JSX.Element {
 		[ cfg.changeEmailUrl, cfg.nonce ]
 	);
 
+	const handleVerifyEmail = useCallback(
+		async ( user: WorkosUser ): Promise< void > => {
+			setActionNotice( null );
+
+			const confirmed = await confirmModal( {
+				title: __( 'Mark email verified?', 'integration-workos' ),
+				message: sprintf(
+					/* translators: %s: the user's email address. */
+					__(
+						'Only do this after confirming who the person is another way. WorkOS will treat %s as verified, so they can sign in with a password without a sign-in code.',
+						'integration-workos'
+					),
+					user.email || __( 'this email', 'integration-workos' )
+				),
+				confirmLabel: __( 'Mark verified', 'integration-workos' ),
+				cancelLabel: __( 'Cancel', 'integration-workos' ),
+			} );
+
+			if ( ! confirmed ) {
+				return;
+			}
+
+			setVerifyingUserId( user.wp_user_id );
+			try {
+				const res = await fetch( `${ cfg.restUrl }/${ user.wp_user_id }/verify-email`, {
+					method: 'POST',
+					credentials: 'same-origin',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-WP-Nonce': cfg.nonce,
+					},
+				} );
+				const data = await res.json().catch( () => ( {} ) );
+
+				if ( ! res.ok ) {
+					setActionNotice( {
+						kind: 'error',
+						text:
+							data?.message ||
+							__( 'Could not mark the email verified. Please try again.', 'integration-workos' ),
+					} );
+					return;
+				}
+
+				setUsers( ( prev ) =>
+					prev.map( ( u ) => ( u.id === user.id ? { ...u, email_verified: true } : u ) )
+				);
+				setActionNotice( {
+					kind: 'success',
+					text: data.already_verified
+						? __( 'This email was already verified in WorkOS.', 'integration-workos' )
+						: sprintf(
+								/* translators: %s: the user's email address. */
+								__( 'Marked %s verified in WorkOS.', 'integration-workos' ),
+								user.email
+						  ),
+				} );
+			} catch ( _err ) {
+				setActionNotice( {
+					kind: 'error',
+					text: __( 'Could not mark the email verified. Please try again.', 'integration-workos' ),
+				} );
+			} finally {
+				setVerifyingUserId( 0 );
+			}
+		},
+		[ cfg.restUrl, cfg.nonce ]
+	);
+
 	const hasPrev = cursorStack.current.length > 0;
 	const hasNext = Boolean( metadata.after );
 
@@ -561,6 +633,22 @@ function App(): JSX.Element {
 												{ busyUserId === user.wp_user_id
 													? __( 'Changing…', 'integration-workos' )
 													: __( 'Change email', 'integration-workos' ) }
+											</button>
+										) }
+										{ user.can_verify_email && ! user.email_verified && (
+											<button
+												type="button"
+												className="button button-small"
+												onClick={ () => handleVerifyEmail( user ) }
+												disabled={ verifyingUserId === user.wp_user_id }
+												title={ __(
+													'Mark this user’s email verified in WorkOS, so they can sign in with a password without a sign-in code.',
+													'integration-workos'
+												) }
+											>
+												{ verifyingUserId === user.wp_user_id
+													? __( 'Marking…', 'integration-workos' )
+													: __( 'Mark email verified', 'integration-workos' ) }
 											</button>
 										) }
 									</div>
