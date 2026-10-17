@@ -319,7 +319,12 @@ workos_is_sso_user( $user_id = 0 );       // bool   — is the user linked?
 workos_has_active_session( $user_id = 0 ); // bool  — is a session stored?
 workos_get_user_id( $user_id = 0 );       // string — WorkOS user id
 workos_get_access_token( $user_id = 0 );  // string — current access token
+workos_sync_user_metadata( $user_id );    // bool|WP_Error — write the user's WorkOS metadata now
 ```
+
+`workos_sync_user_metadata()` is the one helper that writes: it pushes the
+keys from the `workos_user_metadata` filter to WorkOS. See
+[`docs/user-metadata.md`](docs/user-metadata.md).
 
 ### Distinguishing "linked" vs "currently signed in"
 
@@ -512,6 +517,28 @@ add_filter( 'workos_logout_redirect_should_apply', function ( $should_apply, $us
         return false;
     }
     return $should_apply;
+}, 10, 2 );
+```
+
+#### `workos_user_metadata`
+
+Add your own keys to the user's WorkOS metadata (a billing customer number, a legacy account ID) so other apps on the same WorkOS environment can read them. Merged with the keys already on the user; the plugin's `puid:{site}` key can't be changed or removed. Entries over WorkOS's limits (10 keys, 40-character keys, 600-character values, ASCII) are skipped and logged. Unchanged keys cost no API call. See [`docs/user-metadata.md`](docs/user-metadata.md).
+
+**Parameters:**
+
+- `array $metadata` — Keys this site writes, starting with `puid:{site}`.
+- `int $wp_user_id` — WP user ID.
+- `string $workos_id` — WorkOS user ID.
+
+**Example:**
+
+```php
+add_filter( 'workos_user_metadata', function ( $metadata, $wp_user_id ) {
+    $customer_id = get_user_meta( $wp_user_id, 'billing_customer_id', true );
+    if ( $customer_id ) {
+        $metadata['billing_customer_id'] = (string) $customer_id;
+    }
+    return $metadata;
 }, 10, 2 );
 ```
 
