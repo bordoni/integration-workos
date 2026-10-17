@@ -33,6 +33,13 @@ class UserSync {
 	public const META_LINK_REFUSED = '_workos_link_refused';
 
 	/**
+	 * User meta holding the last failed profile push to WorkOS (error code,
+	 * message, fields, time), shown on the user's profile. Cleared by the
+	 * next successful push.
+	 */
+	public const META_SYNC_ERROR = '_workos_sync_error';
+
+	/**
 	 * Flag to prevent infinite sync loops.
 	 *
 	 * @var bool
@@ -309,6 +316,7 @@ class UserSync {
 		delete_user_meta( $wp_user_id, '_workos_refresh_token' );
 		delete_user_meta( $wp_user_id, '_workos_deactivated' );
 		delete_user_meta( $wp_user_id, self::META_LINK_REFUSED );
+		delete_user_meta( $wp_user_id, self::META_SYNC_ERROR );
 	}
 
 	/**
@@ -398,7 +406,7 @@ class UserSync {
 			return;
 		}
 
-		$workos_id = get_user_meta( $user_id, '_workos_user_id', true );
+		$workos_id = (string) get_user_meta( $user_id, '_workos_user_id', true );
 		if ( ! $workos_id ) {
 			return;
 		}
@@ -413,8 +421,72 @@ class UserSync {
 			return;
 		}
 
-		workos()->api()->update_user( $workos_id, $update );
+		$result = workos()->api()->update_user( $workos_id, $update );
+
+		if ( is_wp_error( $result ) ) {
+			self::record_push_error( $user_id, $workos_id, $update, $result );
+			return;
+		}
+
+		delete_user_meta( $user_id, self::META_SYNC_ERROR );
 		update_user_meta( $user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
+	}
+
+	/**
+	 * Record a failed profile push.
+	 *
+	 * Leaves `_workos_last_synced_at` alone, so the user stays marked as out
+	 * of sync until a push succeeds.
+	 *
+	 * @param int       $user_id   WP user ID.
+	 * @param string    $workos_id WorkOS user ID.
+	 * @param array     $update    Fields that were sent.
+	 * @param \WP_Error $error     Error from the API client.
+	 */
+	private static function record_push_error( int $user_id, string $workos_id, array $update, \WP_Error $error ): void {
+		// WorkOS puts its own code (e.g. `email_not_available`) in the body;
+		// transport errors only have the WP_Error code.
+		$data = $error->get_error_data();
+		$code = is_array( $data ) && ! empty( $data['body']['code'] ) ? (string) $data['body']['code'] : (string) $error->get_error_code();
+
+		update_user_meta(
+			$user_id,
+			self::META_SYNC_ERROR,
+			[
+				'code'    => $code,
+				'message' => $error->get_error_message(),
+				'fields'  => array_keys( $update ),
+				'time'    => time(),
+			]
+		);
+
+		workos_log( sprintf( 'Failed to push profile of WP user #%d to WorkOS user %s (%s): %s', $user_id, $workos_id, $code, $error->get_error_message() ), 'error' );
+
+		EventLogger::log(
+			'profile_push_failed',
+			[
+				'user_id'        => $user_id,
+				'workos_user_id' => $workos_id,
+				'metadata'       => [
+					'code'    => $code,
+					'message' => $error->get_error_message(),
+					'fields'  => array_keys( $update ),
+				],
+			]
+		);
+
+		/**
+		 * Fires when a profile push to WorkOS fails.
+		 *
+		 * WordPress keeps its change; WorkOS keeps the old value. The error is
+		 * stored in `_workos_sync_error` until the next successful push.
+		 *
+		 * @param int       $user_id   WP user ID.
+		 * @param string    $workos_id WorkOS user ID.
+		 * @param array     $update    Fields that were sent (`first_name`, `last_name`, `email`).
+		 * @param \WP_Error $error     Error from the API client.
+		 */
+		do_action( 'workos_profile_push_failed', $user_id, $workos_id, $update, $error );
 	}
 
 	/**

@@ -77,7 +77,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Admin/Controller.php` | Admin controller, registers settings/user list/onboarding/diagnostics |
 | `src/WorkOS/Admin/Settings.php` | Admin settings page (tabs: Settings, Organization, Users) |
 | `src/WorkOS/Admin/UserList.php` | Admin user list integration (WorkOS column). Exposes `workos_user_list_column_actions` filter so subsystems can add per-row WorkOS actions (slug-keyed; joined with pipe separators) — see PasswordResetAdmin `RowActions`. |
-| `src/WorkOS/Admin/UserProfile.php` | User profile page WorkOS metadata |
+| `src/WorkOS/Admin/UserProfile.php` | User profile page WorkOS metadata, plus notices for a refused re-link and a failed profile push (`_workos_sync_error`) |
 | `src/WorkOS/Admin/AdminBar.php` | Admin bar environment badge |
 | `src/WorkOS/Admin/DiagnosticsPage.php` | System diagnostics page |
 | `src/WorkOS/Admin/OnboardingPage.php` | Onboarding wizard UI |
@@ -163,7 +163,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Api/Client.php` | WorkOS API client wrapper |
 | **Sync** | |
 | `src/WorkOS/Sync/Controller.php` | Sync controller |
-| `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound). Profile edits on linked users push to WorkOS: email on `profile_update`, names recorded on `added_user_meta`/`updated_user_meta` and sent on `profile_update` or `shutdown` (see [`docs/profile-sync.md`](docs/profile-sync.md)) |
+| `src/WorkOS/Sync/UserSync.php` | User sync (inbound/outbound). Profile edits on linked users push to WorkOS: email on `profile_update`, names recorded on `added_user_meta`/`updated_user_meta` and sent on `profile_update` or `shutdown`. A rejected push is stored in `_workos_sync_error`, logged as `profile_push_failed` and fires `workos_profile_push_failed` (see [`docs/profile-sync.md`](docs/profile-sync.md)) |
 | `src/WorkOS/Sync/UserLinks.php` | WorkOS user ID → WP user lookups through `{base_prefix}workos_user_links` (indexed), mirrored from the `_workos_user_id` meta by the user meta hooks and filled by the v4 schema upgrade. `find()` / `find_many()` check every hit against the meta and use the meta until the table is filled (`workos_user_links_ready`). Writes to the meta that skip the meta API (raw SQL) aren't seen; `UserLinks::rebuild()` refills. |
 | `src/WorkOS/Sync/RoleMapper.php` | WorkOS role → WP role mapping |
 | `src/WorkOS/Sync/RoleSyncCheck.php` | Which members' WP role doesn't match the role map. Batched (one JOIN query per 1,000 members), run by "Check now" on WorkOS → Users or on an Action Scheduler schedule (`role_sync_schedule`: off/hourly/daily, only offered when AS is loaded). Stores the result in `workos_role_sync_check` (not autoloaded, stale when env/org/role map change) and rechecks single users on role and `workos_org_membership_changed`. Admin screens read `result()`; nothing is computed on page load. |
@@ -364,7 +364,7 @@ tests/
     ├── UserSyncLinkTest.php                        # User linking tests
     ├── UserSyncRelinkProtectionTest.php            # Re-link Protection: refuse/force/actions, sign-in, webhook, directory sync
     ├── UserSyncPushTest.php                        # Outbound user sync tests
-    ├── UserSyncProfilePushTest.php                 # Profile edits pushed to WorkOS (wp-admin, wp_update_user, update_user_meta, no echo)
+    ├── UserSyncProfilePushTest.php                 # Profile edits pushed to WorkOS (wp-admin, wp_update_user, update_user_meta, no echo) and push errors (stored, logged, action, cleared, profile notice)
     ├── UserSyncResyncTest.php                      # User re-sync tests
     ├── WebhookReceiverTest.php                     # Webhook receiver tests
     └── WebhookSignatureTest.php                    # Webhook signature verification tests

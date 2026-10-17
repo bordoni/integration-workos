@@ -51,6 +51,27 @@ class UserSyncProfilePushTest extends WPTestCase {
 	private int $user_id = 0;
 
 	/**
+	 * How the fake API answers PUTs: '' (success), 'email_not_available' or 'transport'.
+	 *
+	 * @var string
+	 */
+	private string $put_error = '';
+
+	/**
+	 * Calls to workos_profile_push_failed: [ user_id, workos_id, update, error ].
+	 *
+	 * @var array
+	 */
+	private array $failed = [];
+
+	/**
+	 * Activity log events: [ event_type, data ].
+	 *
+	 * @var array
+	 */
+	private array $logged = [];
+
+	/**
 	 * Set up each test.
 	 */
 	public function setUp(): void {
@@ -62,13 +83,34 @@ class UserSyncProfilePushTest extends WPTestCase {
 			[
 				'api_key'        => 'sk_test_fake',
 				'client_id'      => 'client_fake',
-				'environment_id' => 'environment_test',
+				'environment_id'      => 'environment_test',
+				'enable_activity_log' => true,
 			]
 		);
 		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
 
 		add_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10, 3 );
 		remove_all_actions( 'user_register' );
+
+		$this->put_error = '';
+		$this->failed    = [];
+		$this->logged    = [];
+		add_action(
+			'workos_profile_push_failed',
+			function ( ...$args ) {
+				$this->failed[] = $args;
+			},
+			10,
+			4
+		);
+		add_action(
+			'workos_activity_logged',
+			function ( ...$args ) {
+				$this->logged[] = $args;
+			},
+			10,
+			2
+		);
 
 		$suffix          = uniqid();
 		$this->workos_id = 'user_push_' . $suffix;
@@ -123,7 +165,7 @@ class UserSyncProfilePushTest extends WPTestCase {
 	 * @param array       $args     Request arguments.
 	 * @param string      $url      Request URL.
 	 *
-	 * @return false|array
+	 * @return false|array|\WP_Error
 	 */
 	public function intercept_http( $response, array $args, string $url ) {
 		if ( false === strpos( $url, 'api.workos.com' ) ) {
@@ -137,6 +179,25 @@ class UserSyncProfilePushTest extends WPTestCase {
 			'url'    => $url,
 			'body'   => is_array( $body ) ? $body : [],
 		];
+
+		if ( 'PUT' === ( $args['method'] ?? '' ) && 'transport' === $this->put_error ) {
+			return new \WP_Error( 'http_request_failed', 'cURL error 28: Operation timed out' );
+		}
+
+		if ( 'PUT' === ( $args['method'] ?? '' ) && 'email_not_available' === $this->put_error ) {
+			return [
+				'response' => [
+					'code'    => 422,
+					'message' => 'Unprocessable Entity',
+				],
+				'body'     => wp_json_encode(
+					[
+						'code'    => 'email_not_available',
+						'message' => 'This email is not available.',
+					]
+				),
+			];
+		}
 
 		if ( 'PUT' === ( $args['method'] ?? '' ) && is_array( $body ) ) {
 			$this->workos_user = array_merge( $this->workos_user, $body );
@@ -387,5 +448,164 @@ class UserSyncProfilePushTest extends WPTestCase {
 
 		$this->assertInstanceOf( \WP_User::class, $user );
 		$this->assertSame( 'Augusta', get_user_meta( $this->user_id, 'first_name', true ) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Push errors
+	// -------------------------------------------------------------------------
+
+	/**
+	 * A successful push stamps the sync time and stores no error.
+	 */
+	public function test_successful_push_stamps_sync_time(): void {
+		update_user_meta( $this->user_id, '_workos_last_synced_at', '2020-01-01 00:00:00' );
+
+		wp_update_user(
+			[
+				'ID'         => $this->user_id,
+				'first_name' => 'Augusta',
+			]
+		);
+
+		$this->assertNotSame( '2020-01-01 00:00:00', get_user_meta( $this->user_id, '_workos_last_synced_at', true ) );
+		$this->assertSame( '', get_user_meta( $this->user_id, UserSync::META_SYNC_ERROR, true ) );
+		$this->assertCount( 0, $this->failed );
+	}
+
+	/**
+	 * WorkOS refusing the email is stored, logged and announced.
+	 */
+	public function test_email_not_available_is_recorded(): void {
+		update_user_meta( $this->user_id, '_workos_last_synced_at', '2020-01-01 00:00:00' );
+		$this->put_error = 'email_not_available';
+		$taken           = 'taken.' . uniqid() . '@acme.dev';
+
+		wp_update_user(
+			[
+				'ID'         => $this->user_id,
+				'user_email' => $taken,
+			]
+		);
+
+		$this->assertCount( 1, $this->update_calls() );
+
+		// Still marked as out of sync.
+		$this->assertSame( '2020-01-01 00:00:00', get_user_meta( $this->user_id, '_workos_last_synced_at', true ) );
+
+		$error = get_user_meta( $this->user_id, UserSync::META_SYNC_ERROR, true );
+		$this->assertIsArray( $error );
+		$this->assertSame( 'email_not_available', $error['code'] );
+		$this->assertSame( 'This email is not available.', $error['message'] );
+		$this->assertSame( [ 'email' ], $error['fields'] );
+		$this->assertIsInt( $error['time'] );
+
+		$this->assertCount( 1, $this->failed );
+		[ $user_id, $workos_id, $update, $wp_error ] = $this->failed[0];
+		$this->assertSame( $this->user_id, $user_id );
+		$this->assertSame( $this->workos_id, $workos_id );
+		$this->assertSame( [ 'email' => $taken ], $update );
+		$this->assertInstanceOf( \WP_Error::class, $wp_error );
+
+		$events = array_values(
+			array_filter(
+				$this->logged,
+				static function ( $entry ) {
+					return 'profile_push_failed' === $entry[0];
+				}
+			)
+		);
+		$this->assertCount( 1, $events );
+		$this->assertSame( $this->user_id, $events[0][1]['user_id'] );
+		$this->assertSame( 'email_not_available', $events[0][1]['metadata']['code'] );
+	}
+
+	/**
+	 * A transport error is recorded with its WP_Error code.
+	 */
+	public function test_transport_error_is_recorded(): void {
+		$this->put_error = 'transport';
+
+		update_user_meta( $this->user_id, 'last_name', 'King' );
+		$this->flush();
+
+		$error = get_user_meta( $this->user_id, UserSync::META_SYNC_ERROR, true );
+		$this->assertIsArray( $error );
+		$this->assertSame( 'http_request_failed', $error['code'] );
+		$this->assertSame( [ 'last_name' ], $error['fields'] );
+		$this->assertCount( 1, $this->failed );
+	}
+
+	/**
+	 * The next successful push clears the stored error.
+	 */
+	public function test_successful_push_clears_error(): void {
+		$this->put_error = 'email_not_available';
+		wp_update_user(
+			[
+				'ID'         => $this->user_id,
+				'user_email' => 'taken.' . uniqid() . '@acme.dev',
+			]
+		);
+		$this->assertIsArray( get_user_meta( $this->user_id, UserSync::META_SYNC_ERROR, true ) );
+
+		$this->put_error = '';
+		wp_update_user(
+			[
+				'ID'         => $this->user_id,
+				'first_name' => 'Augusta',
+			]
+		);
+
+		$this->assertSame( '', get_user_meta( $this->user_id, UserSync::META_SYNC_ERROR, true ) );
+	}
+
+	/**
+	 * Unlinking clears the stored error.
+	 */
+	public function test_unlink_clears_error(): void {
+		update_user_meta( $this->user_id, UserSync::META_SYNC_ERROR, [ 'code' => 'email_not_available' ] );
+
+		UserSync::unlink_user( $this->user_id );
+
+		$this->assertSame( '', get_user_meta( $this->user_id, UserSync::META_SYNC_ERROR, true ) );
+	}
+
+	/**
+	 * The WorkOS panel on the user-edit screen shows the stored error.
+	 */
+	public function test_profile_panel_shows_error(): void {
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+
+		update_user_meta(
+			$this->user_id,
+			UserSync::META_SYNC_ERROR,
+			[
+				'code'    => 'email_not_available',
+				'message' => 'This email is not available.',
+				'fields'  => [ 'email' ],
+				'time'    => time(),
+			]
+		);
+
+		ob_start();
+		( new \WorkOS\Admin\UserProfile() )->render( get_user_by( 'id', $this->user_id ) );
+		$html = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'Out of sync', $html );
+		$this->assertStringContainsString( '<code>email_not_available</code>', $html );
+		$this->assertStringContainsString( 'This email is not available.', $html );
+	}
+
+	/**
+	 * No error, no notice.
+	 */
+	public function test_profile_panel_without_error_has_no_notice(): void {
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+
+		ob_start();
+		( new \WorkOS\Admin\UserProfile() )->render( get_user_by( 'id', $this->user_id ) );
+		$html = (string) ob_get_clean();
+
+		$this->assertStringNotContainsString( 'Out of sync', $html );
 	}
 }
