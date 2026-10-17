@@ -40,12 +40,33 @@ class UserSync {
 	private static bool $syncing = false;
 
 	/**
+	 * User meta keys mirrored to the WorkOS user's name fields.
+	 */
+	private const NAME_META_KEYS = [ 'first_name', 'last_name' ];
+
+	/**
+	 * Name fields changed on linked users and not yet pushed to WorkOS,
+	 * keyed by WP user ID, then by meta key.
+	 *
+	 * @var array<int, array<string, true>>
+	 */
+	private static array $pending_names = [];
+
+	/**
 	 * Constructor — registers WP->WorkOS sync hooks.
 	 */
 	public function __construct() {
 		// WP -> WorkOS: push profile updates and new user creation.
 		add_action( 'profile_update', [ $this, 'push_profile_to_workos' ], 10, 3 );
 		add_action( 'user_register', [ $this, 'push_user_to_workos' ], 10, 2 );
+
+		// Names live in user meta, which wp_insert_user() writes before
+		// `profile_update` fires, so `$old_data` already holds the new value.
+		// Record the change as the meta is written instead; `profile_update`
+		// sends it, and `shutdown` sends changes made with update_user_meta().
+		add_action( 'added_user_meta', [ $this, 'queue_name_change' ], 10, 3 );
+		add_action( 'updated_user_meta', [ $this, 'queue_name_change' ], 10, 3 );
+		add_action( 'shutdown', [ $this, 'flush_name_changes' ] );
 
 		// WorkOS -> WP: webhook handlers (dot notation matches WorkOS webhook event names).
 		add_action( 'workos_webhook_user.updated', [ $this, 'handle_user_updated' ] );
@@ -293,12 +314,87 @@ class UserSync {
 	/**
 	 * Push a WP profile update to WorkOS.
 	 *
+	 * Sends the email when it changed, plus any name change recorded while
+	 * wp_insert_user() wrote the user meta, in one `update_user` call.
+	 *
 	 * @param int      $user_id  WP user ID.
 	 * @param \WP_User $old_data Old user data.
 	 * @param array    $userdata New user data.
 	 */
 	public function push_profile_to_workos( int $user_id, \WP_User $old_data, array $userdata ): void {
-		if ( self::$syncing ) {
+		// Always take the queued names, so a skipped push doesn't leave them for later.
+		$update = self::take_name_changes( $user_id );
+
+		if ( isset( $userdata['user_email'] ) && $userdata['user_email'] !== $old_data->user_email ) {
+			$update['email'] = $userdata['user_email'];
+		}
+
+		self::send_profile_update( $user_id, $update );
+	}
+
+	/**
+	 * Record a first or last name change on a linked user.
+	 *
+	 * Hooked to `added_user_meta` and `updated_user_meta`, which only fire
+	 * when the value actually changed.
+	 *
+	 * @param int    $meta_id  Meta row ID.
+	 * @param int    $user_id  WP user ID.
+	 * @param string $meta_key Meta key.
+	 */
+	public function queue_name_change( $meta_id, $user_id, $meta_key ): void {
+		if ( self::$syncing || ! in_array( $meta_key, self::NAME_META_KEYS, true ) ) {
+			return;
+		}
+
+		$user_id = (int) $user_id;
+		if ( ! get_user_meta( $user_id, '_workos_user_id', true ) ) {
+			return;
+		}
+
+		self::$pending_names[ $user_id ][ $meta_key ] = true;
+	}
+
+	/**
+	 * Push name changes that no `profile_update` picked up, i.e. names
+	 * written straight to user meta with update_user_meta().
+	 *
+	 * Hooked to `shutdown`, so several meta writes in one request go out
+	 * as one `update_user` call.
+	 */
+	public function flush_name_changes(): void {
+		foreach ( array_keys( self::$pending_names ) as $user_id ) {
+			self::send_profile_update( $user_id, self::take_name_changes( $user_id ) );
+		}
+	}
+
+	/**
+	 * Take the queued name changes for a user, with their current values.
+	 *
+	 * @param int $user_id WP user ID.
+	 *
+	 * @return array<string, string> WorkOS field => value.
+	 */
+	private static function take_name_changes( int $user_id ): array {
+		$keys = self::$pending_names[ $user_id ] ?? [];
+		unset( self::$pending_names[ $user_id ] );
+
+		$update = [];
+		foreach ( array_keys( $keys ) as $key ) {
+			$update[ $key ] = (string) get_user_meta( $user_id, $key, true );
+		}
+
+		return $update;
+	}
+
+	/**
+	 * Send changed profile fields for a linked user to WorkOS.
+	 *
+	 * @param int   $user_id WP user ID.
+	 * @param array $update  WorkOS fields to update (`first_name`, `last_name`, `email`).
+	 */
+	private static function send_profile_update( int $user_id, array $update ): void {
+		if ( empty( $update ) || self::$syncing ) {
 			return;
 		}
 
@@ -314,22 +410,6 @@ class UserSync {
 		// latency-sensitive confirm path. Same transient the webhook handler
 		// checks; see ChangeEmail\RestApi::confirm().
 		if ( get_transient( ChangeEmailRestApi::TRANSIENT_PREFIX . $user_id ) ) {
-			return;
-		}
-
-		$update = [];
-
-		if ( isset( $userdata['first_name'] ) && $userdata['first_name'] !== $old_data->first_name ) {
-			$update['first_name'] = $userdata['first_name'];
-		}
-		if ( isset( $userdata['last_name'] ) && $userdata['last_name'] !== $old_data->last_name ) {
-			$update['last_name'] = $userdata['last_name'];
-		}
-		if ( isset( $userdata['user_email'] ) && $userdata['user_email'] !== $old_data->user_email ) {
-			$update['email'] = $userdata['user_email'];
-		}
-
-		if ( empty( $update ) ) {
 			return;
 		}
 
