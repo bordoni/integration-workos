@@ -84,6 +84,15 @@ final class User {
 	/** User meta key — flag indicating this WP user's first login via WorkOS. */
 	public const META_FIRST_LOGIN = '_workos_first_login';
 
+	/** User meta key — '1' once the user has a confirmed MFA factor in WorkOS (mirrored; WorkOS holds the factor). */
+	public const META_MFA_ENABLED = '_workos_mfa_enabled';
+
+	/** User meta key — '1' when an admin requires this user to use MFA. */
+	public const META_MFA_REQUIRED = '_workos_mfa_required';
+
+	/** User meta key — factor enrolled but not yet confirmed with a code: `{ factor_id, created }`. */
+	public const META_MFA_PENDING_FACTOR = '_workos_mfa_pending_factor';
+
 	/**
 	 * Whether the user is linked to a WorkOS identity.
 	 *
