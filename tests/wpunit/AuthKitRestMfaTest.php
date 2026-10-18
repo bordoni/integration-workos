@@ -465,12 +465,15 @@ class AuthKitRestMfaTest extends WPTestCase {
 				],
 			]
 		);
+		// A current code from the factor proves it's the owner.
+		$this->queue_response( '/auth/factors/factor_x/challenge', [ 'id' => 'challenge_del' ] );
+		$this->queue_response( '/auth/challenges/challenge_del/verify', [ 'valid' => true ] );
 		$this->queue_response( '/auth/factors/factor_x', [] );
 
 		$response = $this->dispatch_with_nonce(
 			'POST',
 			'/workos/v1/auth/mfa/factor/delete',
-			[ 'profile' => 'mfa-on', 'factor_id' => 'factor_x' ],
+			[ 'profile' => 'mfa-on', 'factor_id' => 'factor_x', 'code' => '123456' ],
 			'mfa-on'
 		);
 
@@ -482,6 +485,30 @@ class AuthKitRestMfaTest extends WPTestCase {
 			static fn( array $c ) => $c['method'] === 'DELETE' && str_contains( $c['url'], 'factor_x' )
 		);
 		$this->assertNotEmpty( $delete_calls );
+	}
+
+	public function test_delete_factor_requires_a_code(): void {
+		$user_id = self::factory()->user->create();
+		update_user_meta( $user_id, '_workos_user_id', 'user_del' );
+		wp_set_current_user( $user_id );
+
+		$this->queue_response(
+			'/user_management/users/user_del/auth_factors',
+			[ 'data' => [ [ 'id' => 'factor_x', 'type' => 'totp' ] ] ]
+		);
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/mfa/factor/delete',
+			[ 'profile' => 'mfa-on', 'factor_id' => 'factor_x' ],
+			'mfa-on'
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_mfa_invalid_code', $response->get_data()['code'] );
+		$this->assertEmpty(
+			array_filter( $this->captured, static fn( array $c ) => 'DELETE' === $c['method'] )
+		);
 	}
 
 	public function test_delete_factor_rejects_other_users_factor(): void {
@@ -528,7 +555,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 			'mfa-on'
 		);
 
-		$this->assertSame( 400, $response->get_status() );
-		$this->assertSame( 'workos_authkit_no_workos_user', $response->get_data()['code'] );
+		$this->assertSame( 409, $response->get_status() );
+		$this->assertSame( 'workos_mfa_user_not_linked', $response->get_data()['code'] );
 	}
 }

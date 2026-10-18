@@ -594,30 +594,10 @@ class Mfa extends BaseEndpoint {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function list_factors( WP_REST_Request $request ) {
-		$workos_user_id = (string) get_user_meta( get_current_user_id(), '_workos_user_id', true );
-		if ( '' === $workos_user_id ) {
-			return new WP_Error(
-				'workos_authkit_no_workos_user',
-				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
-				[ 'status' => 400 ]
-			);
+		$factors = App::container()->get( FactorService::class )->list_factors( get_current_user_id() );
+		if ( is_wp_error( $factors ) ) {
+			return $factors;
 		}
-
-		$result = workos()->api()->list_auth_factors( $workos_user_id );
-		if ( is_wp_error( $result ) ) {
-			return $result;
-		}
-
-		$factors = array_map(
-			static function ( array $factor ): array {
-				return [
-					'id'      => (string) ( $factor['id'] ?? '' ),
-					'type'    => (string) ( $factor['type'] ?? '' ),
-					'created' => (string) ( $factor['created_at'] ?? '' ),
-				];
-			},
-			(array) ( $result['data'] ?? $result )
-		);
 
 		return new WP_REST_Response( [ 'factors' => $factors ], 200 );
 	}
@@ -648,40 +628,20 @@ class Mfa extends BaseEndpoint {
 			);
 		}
 
-		$user           = wp_get_current_user();
-		$workos_user_id = (string) get_user_meta( $user->ID, '_workos_user_id', true );
-		if ( '' === $workos_user_id ) {
-			return new WP_Error(
-				'workos_authkit_no_workos_user',
-				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
-				[ 'status' => 400 ]
-			);
+		$user_id = get_current_user_id();
+		$rate_ok = $this->rate_limit( [ [ 'mfa_enroll_user', (string) $user_id, TieredRateLimiter::REQUEST_SUBJECT ] ] );
+		if ( is_wp_error( $rate_ok ) ) {
+			return $rate_ok;
 		}
 
-		$issuer = get_bloginfo( 'name' );
-		$label  = $user->user_email;
-
-		$result = workos()->api()->enroll_totp_factor( $workos_user_id, $issuer, $label );
+		// Same path as the account panel: the factor stays unconfirmed until
+		// `POST /users/{id}/mfa/confirm` checks its first code.
+		$result = App::container()->get( FactorService::class )->start_enrollment( $user_id );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
-		// WorkOS nests the new factor under `authentication_factor` and adds
-		// a ready challenge for it under `authentication_challenge`.
-		$factor    = isset( $result['authentication_factor'] ) && is_array( $result['authentication_factor'] ) ? $result['authentication_factor'] : $result;
-		$challenge = isset( $result['authentication_challenge'] ) && is_array( $result['authentication_challenge'] ) ? $result['authentication_challenge'] : [];
-		$totp      = $factor['totp'] ?? [];
-
-		return new WP_REST_Response(
-			[
-				'factor_id'    => (string) ( $factor['id'] ?? '' ),
-				'challenge_id' => (string) ( $challenge['id'] ?? '' ),
-				'qr_code'      => (string) ( $totp['qr_code'] ?? '' ),
-				'secret'       => (string) ( $totp['secret'] ?? '' ),
-				'otpauth_uri'  => (string) ( $totp['uri'] ?? '' ),
-			],
-			201
-		);
+		return new WP_REST_Response( $result, 201 );
 	}
 
 	/**
@@ -745,7 +705,8 @@ class Mfa extends BaseEndpoint {
 	/**
 	 * POST /auth/mfa/factor/delete
 	 *
-	 * Removes an MFA factor the *current* user owns. The ownership check
+	 * Removes an MFA factor the *current* user owns, given a current `code`
+	 * from it. The ownership check
 	 * is mandatory: because the plugin authenticates to WorkOS with a
 	 * tenant-wide API key, WorkOS cannot distinguish which user is
 	 * requesting the delete. Without this check, any authenticated WP
@@ -776,38 +737,32 @@ class Mfa extends BaseEndpoint {
 			);
 		}
 
-		$workos_user_id = (string) get_user_meta( get_current_user_id(), '_workos_user_id', true );
-		if ( '' === $workos_user_id ) {
-			return new WP_Error(
-				'workos_authkit_no_workos_user',
-				__( 'Your account is not linked to a WorkOS user.', 'integration-workos' ),
-				[ 'status' => 400 ]
-			);
+		$user_id = get_current_user_id();
+		$rate_ok = $this->rate_limit( [ [ 'mfa_delete_user', (string) $user_id, TieredRateLimiter::REQUEST_SUBJECT ] ] );
+		if ( is_wp_error( $rate_ok ) ) {
+			return $rate_ok;
 		}
 
-		$factors = workos()->api()->list_auth_factors( $workos_user_id );
+		$service = App::container()->get( FactorService::class );
+		$factors = $service->list_factors( $user_id );
 		if ( is_wp_error( $factors ) ) {
 			return $factors;
 		}
 
-		$owned_ids = array_map(
-			static function ( array $factor ): string {
-				return (string) ( $factor['id'] ?? '' );
-			},
-			(array) ( $factors['data'] ?? $factors )
-		);
-
-		if ( ! in_array( $factor_id, $owned_ids, true ) ) {
-			// Return 404 rather than 403 so we don't leak the existence of
-			// factor IDs that belong to other users.
-			return new WP_Error(
-				'workos_authkit_factor_not_found',
-				__( 'Factor not found.', 'integration-workos' ),
-				[ 'status' => 404 ]
-			);
+		// Return 404 rather than 403 so we don't leak the existence of
+		// factor IDs that belong to other users.
+		if ( ! in_array( $factor_id, array_column( $factors, 'id' ), true ) ) {
+			return $this->factor_not_found();
 		}
 
-		$result = workos()->api()->delete_auth_factor( $factor_id );
+		// A current code from the factor, so a borrowed session can't turn
+		// MFA off.
+		$valid = $service->verify_code( $factor_id, (string) $request->get_param( 'code' ) );
+		if ( is_wp_error( $valid ) ) {
+			return $valid;
+		}
+
+		$result = $service->delete_factor( $user_id, $factor_id );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
