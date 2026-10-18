@@ -60,6 +60,7 @@ class LoginCompleter {
 	 * @param Profile        $profile                 Active Login Profile.
 	 * @param string         $redirect_to             Client-requested redirect (validated).
 	 * @param bool           $honor_profile_redirect  Whether the profile's `post_login_redirect` should override `$redirect_to`. AuthKit-REST callers leave this `true`; the legacy hosted-AuthKit callback passes `false` so the state-supplied URL still wins for that flow.
+	 * @param bool           $mfa_satisfied           Whether this response came from a completed second factor. `POST /auth/mfa/verify` passes `true` so an `enforce = always` profile accepts the login it just challenged.
 	 *
 	 * @return array|WP_Error
 	 *   On success: {
@@ -77,13 +78,23 @@ class LoginCompleter {
 	 *     'email'                        => string,
 	 *   }
 	 */
-	public function complete( $workos_response, Profile $profile, string $redirect_to = '', bool $honor_profile_redirect = true ) {
+	public function complete( $workos_response, Profile $profile, string $redirect_to = '', bool $honor_profile_redirect = true, bool $mfa_satisfied = false ) {
 		// WorkOS returns `organization_selection_required` when the
 		// authenticate call resolves to a user that belongs to multiple
 		// orgs without an org context. If this profile (or the global
 		// setting) has an org pinned, complete transparently via the
 		// organization-selection grant. With no pinned org we bail with a
 		// clear error — there is no in-shell org picker by design.
+		if ( is_wp_error( $workos_response ) ) {
+			$mfa = $this->mfa_step( $workos_response );
+			if ( is_wp_error( $mfa ) ) {
+				return $mfa;
+			}
+			if ( null !== $mfa ) {
+				$workos_response = $mfa;
+			}
+		}
+
 		if ( is_wp_error( $workos_response ) ) {
 			$verification = $this->email_verification_step( $workos_response );
 			if ( null !== $verification ) {
@@ -133,8 +144,10 @@ class LoginCompleter {
 		// not return a pending factor (i.e., the user has nothing enrolled
 		// or WorkOS is not enforcing org-level MFA), we must refuse to
 		// complete the login. Silently letting the user through would
-		// quietly break the admin's "MFA required" guarantee.
-		if ( Profile::MFA_ENFORCE_ALWAYS === ( $profile->get_mfa()['enforce'] ?? '' ) ) {
+		// quietly break the admin's "MFA required" guarantee. A response
+		// from a verified second factor has no pending token by design,
+		// so it is the one single-step success that may pass.
+		if ( ! $mfa_satisfied && Profile::MFA_ENFORCE_ALWAYS === ( $profile->get_mfa()['enforce'] ?? '' ) ) {
 			return new WP_Error(
 				'workos_authkit_mfa_required',
 				__( 'This login requires multi-factor authentication, but no factor is enrolled on your account. Please enroll a factor and try again.', 'integration-workos' ),
@@ -240,6 +253,45 @@ class LoginCompleter {
 		}
 
 		return [];
+	}
+
+	/**
+	 * The MFA step, when WorkOS asks for one.
+	 *
+	 * `mfa_challenge` becomes the same pending-token shape a challenge has
+	 * always used here, so the factor allowlist below applies to it.
+	 * `mfa_enrollment` is refused for now: the shell has no enrollment
+	 * step yet, and handing back a token it can't use would strand the
+	 * user on a challenge with no factor.
+	 *
+	 * @param WP_Error $error Error from the WorkOS authenticate call.
+	 *
+	 * @return array|WP_Error|null Pending-token response, a refusal, or null for any other error.
+	 */
+	private function mfa_step( WP_Error $error ) {
+		$code = MfaStep::code( $error );
+		if ( '' === $code ) {
+			return null;
+		}
+
+		$body          = MfaStep::body( $error );
+		$pending_token = (string) ( $body['pending_authentication_token'] ?? '' );
+		if ( '' === $pending_token ) {
+			return null;
+		}
+
+		if ( MfaStep::ENROLLMENT === $code ) {
+			return new WP_Error(
+				'workos_authkit_mfa_enrollment_required',
+				__( 'This account must set up multi-factor authentication before it can sign in. Contact the site administrator for help.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
+		return [
+			'pending_authentication_token' => $pending_token,
+			'authentication_factors'       => isset( $body['authentication_factors'] ) && is_array( $body['authentication_factors'] ) ? $body['authentication_factors'] : [],
+		];
 	}
 
 	/**

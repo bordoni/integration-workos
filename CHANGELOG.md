@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- **WordPress password could skip WorkOS MFA** — on the headless `wp-login.php` path, a WorkOS `mfa_challenge` or `mfa_enrollment` answer was treated like a wrong password, and WordPress's own password check then signed the user in without a second factor. That path now refuses with `403 workos_mfa_step_unsupported`, past WordPress's password handlers too. The login button's form gives the same message instead of WorkOS's raw error, and the AuthKit password route no longer re-syncs the password to WorkOS when only the second factor is missing.
+
+### Fixed
+
+- **MFA challenges from WorkOS never reached the sign-in form** — WorkOS reports a required second factor as an `mfa_challenge` error, and the sign-in flows only looked for it in a successful response, so users saw WorkOS's error message instead of the code prompt. The challenge is now read from the error, and the profile's factor allowlist applies to it. `mfa_enrollment` returns `403 workos_authkit_mfa_enrollment_required` until the sign-in form can enroll a factor.
+- **`enforce = always` refused every MFA sign-in** — a login profile set to always require MFA rejected the response from a correct code, because that response carries no pending token. `POST /auth/mfa/verify` now marks its result as having passed MFA.
+
 ## [1.0.10] - 2026-10-14
 
 ### Security

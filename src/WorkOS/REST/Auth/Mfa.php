@@ -224,11 +224,14 @@ class Mfa extends BaseEndpoint {
 
 		// `complete()` handles the `organization_selection_required` error
 		// transparently when the profile has a pinned org. Pass the WP_Error
-		// through so it can decide.
+		// through so it can decide. A wrong code comes back as an error, so
+		// any success reaching the profile's `always` check has passed MFA.
 		$result = $this->login_completer->complete(
 			$workos_response,
 			$profile,
-			$this->sanitize_redirect( (string) $request->get_param( 'redirect_to' ) )
+			$this->sanitize_redirect( (string) $request->get_param( 'redirect_to' ) ),
+			true,
+			true
 		);
 
 		if ( is_wp_error( $result ) ) {

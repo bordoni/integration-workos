@@ -8,6 +8,7 @@
 namespace WorkOS\REST\Auth;
 
 use WorkOS\Auth\AuthKit\FrontendRoute;
+use WorkOS\Auth\AuthKit\MfaStep;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WorkOS\Auth\PasswordResetAdmin\RedirectValidator;
@@ -149,8 +150,10 @@ class Password extends BaseEndpoint {
 		);
 
 		// An unverified account already passed the password check; the
-		// fallback would only sync it again and mail a second code.
-		if ( is_wp_error( $workos_response ) && ! $this->triggered_verification_email( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
+		// fallback would only sync it again and mail a second code. The
+		// same goes for an MFA step: the password was right, and only the
+		// second factor is missing.
+		if ( is_wp_error( $workos_response ) && ! $this->triggered_verification_email( $workos_response ) && ! MfaStep::is_mfa_error( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
 			// WorkOS rejected the password — fall back to WordPress authentication.
 			// Handles migrated users whose passwords were never synced to WorkOS.
 			$wp_user = wp_authenticate( $email, $password );
