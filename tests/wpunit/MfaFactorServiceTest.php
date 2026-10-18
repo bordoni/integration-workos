@@ -263,7 +263,7 @@ class MfaFactorServiceTest extends WPTestCase {
 
 	// --------------------------------- Listing ---------------------------------
 
-	public function test_list_hides_pending_factor_and_keeps_enabled_flag(): void {
+	public function test_list_hides_pending_factor_and_follows_workos_off(): void {
 		$this->set_pending( 'auth_factor_pending' );
 		update_user_meta( $this->user_id, User::META_MFA_ENABLED, '1' );
 		$this->queue(
@@ -274,7 +274,7 @@ class MfaFactorServiceTest extends WPTestCase {
 		$factors = $this->service->list_factors( $this->user_id );
 
 		$this->assertSame( [], $factors );
-		$this->assertTrue( $this->service->is_enabled( $this->user_id ), 'Factors gone from WorkOS don\'t turn MFA off; the next sign-in enrolls.' );
+		$this->assertFalse( $this->service->is_enabled( $this->user_id ), 'Only an unconfirmed factor left in WorkOS turns MFA off.' );
 
 		$this->queue(
 			'GET /user_management/users/user_mfa/auth_factors',

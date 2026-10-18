@@ -307,8 +307,8 @@ class LoginCompleter {
 
 		// Ask WorkOS rather than trust the mirrored flag: a factor added
 		// outside WordPress (or before this version) must still be
-		// challenged. list_factors() sets the flag when it finds one, so the
-		// policy is asked again.
+		// challenged, and one removed there no longer is. list_factors()
+		// updates the flag to match, so the policy is asked again.
 		if ( Policy::BLOCK !== $decision ) {
 			$factors = App::container()->get( FactorService::class )->list_factors( $wp_user->ID );
 			if ( is_wp_error( $factors ) ) {
@@ -325,10 +325,9 @@ class LoginCompleter {
 				)
 			);
 
-			// The user turned MFA on, but WorkOS has no factor this profile
-			// can use (removed outside WordPress, or SMS only). The flag
-			// stays set, so a challenge with nothing to challenge becomes an
-			// enrollment, at this sign-in and every one after it.
+			// The user has factors, but none this profile can use (SMS
+			// only, say). A challenge with nothing to challenge becomes an
+			// enrollment.
 			if ( Policy::CHALLENGE === $decision && empty( $factors ) ) {
 				$decision = Policy::ENROLL;
 			}

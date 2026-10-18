@@ -370,17 +370,43 @@ class MfaSecurityTest extends WPTestCase {
 		$this->assertSame( '1', get_user_meta( $this->user_id, User::META_MFA_ENABLED, true ) );
 	}
 
-	public function test_factors_vanishing_from_workos_keep_asking_for_enrollment(): void {
+	public function test_factors_removed_in_workos_turn_mfa_off(): void {
+		$fired = 0;
+		add_action(
+			'workos_mfa_removed_in_workos',
+			static function () use ( &$fired ) {
+				++$fired;
+			}
+		);
 		update_user_meta( $this->user_id, User::META_MFA_ENABLED, '1' );
 		$this->factors( [] );
 
-		$first = $this->sign_in()->get_data();
-		$this->assertTrue( $first['enroll'] );
-		$this->assertSame( '1', get_user_meta( $this->user_id, User::META_MFA_ENABLED, true ) );
+		$data = $this->sign_in()->get_data();
 
-		$second = $this->sign_in()->get_data();
-		$this->assertTrue( $second['enroll'] );
+		$this->assertArrayNotHasKey( 'mfa_required', $data );
+		$this->assertSame( $this->user_id, get_current_user_id() );
+		$this->assertSame( '', get_user_meta( $this->user_id, User::META_MFA_ENABLED, true ) );
+		$this->assertSame( 1, $fired );
+	}
+
+	public function test_factors_removed_in_workos_still_enroll_a_required_user(): void {
+		update_user_meta( $this->user_id, User::META_MFA_ENABLED, '1' );
+		update_user_meta( $this->user_id, User::META_MFA_REQUIRED, '1' );
+		$this->factors( [] );
+
+		$data = $this->sign_in()->get_data();
+
+		$this->assertTrue( $data['enroll'] );
 		$this->assertSame( 0, get_current_user_id() );
+		$this->assertSame( '', get_user_meta( $this->user_id, User::META_MFA_ENABLED, true ) );
+	}
+
+	public function test_failed_factor_lookup_keeps_mfa_on(): void {
+		update_user_meta( $this->user_id, User::META_MFA_ENABLED, '1' );
+		$this->queue( 'GET /user_management/users/user_mfa/auth_factors', [ 'message' => 'down' ], 500 );
+
+		$this->assertWPError( ( new FactorService() )->list_factors( $this->user_id ) );
+		$this->assertSame( '1', get_user_meta( $this->user_id, User::META_MFA_ENABLED, true ) );
 	}
 
 	// ------------------------- PendingLogin -------------------------

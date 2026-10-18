@@ -20,6 +20,8 @@ defined( 'ABSPATH' ) || exit;
  *   outlive the change.
  * - Factors reset by an admin (or WP-CLI): an email, every session signs
  *   out, and the stored WorkOS session is revoked.
+ * - Factors removed in WorkOS (its dashboard, another app): an email. The
+ *   sessions stay; whoever removed them there can revoke WorkOS sessions.
  *
  * An authenticator added at sign-in also sends the email, so an owner
  * whose password was used to enroll someone else's app hears about it.
@@ -35,6 +37,7 @@ class AccountChanges {
 		add_action( 'workos_mfa_enrolled', [ $this, 'enrolled' ] );
 		add_action( 'workos_mfa_factor_removed', [ $this, 'removed' ] );
 		add_action( 'workos_mfa_reset', [ $this, 'reset' ] );
+		add_action( 'workos_mfa_removed_in_workos', [ $this, 'removed_in_workos' ] );
 	}
 
 	/**
@@ -105,6 +108,22 @@ class AccountChanges {
 	}
 
 	/**
+	 * Every factor was removed in WorkOS, and WordPress followed.
+	 *
+	 * @param int $user_id WP user ID.
+	 *
+	 * @return void
+	 */
+	public function removed_in_workos( $user_id ): void {
+		$this->notify(
+			(int) $user_id,
+			'removed_in_workos',
+			__( 'Two-step verification: authenticators removed', 'integration-workos' ),
+			__( 'Every authenticator app on your account was removed, so you’ll sign in without a code. If your account requires two-step verification, you’ll set up a new app the next time you sign in.', 'integration-workos' )
+		);
+	}
+
+	/**
 	 * End the user's other sessions, when the change came from the user.
 	 *
 	 * @param int $user_id WP user ID.
@@ -123,7 +142,7 @@ class AccountChanges {
 	 * Email the account about the change.
 	 *
 	 * @param int    $user_id WP user ID.
-	 * @param string $event   `enrolled`, `removed` or `reset`.
+	 * @param string $event   `enrolled`, `removed`, `reset` or `removed_in_workos`.
 	 * @param string $subject Subject, without the site name.
 	 * @param string $message What happened.
 	 *
@@ -140,7 +159,7 @@ class AccountChanges {
 		 *
 		 * @param bool   $send    Default true.
 		 * @param int    $user_id WP user ID.
-		 * @param string $event   `enrolled`, `removed` or `reset`.
+		 * @param string $event   `enrolled`, `removed`, `reset` or `removed_in_workos`.
 		 */
 		if ( ! apply_filters( 'workos_mfa_notify_user', true, $user_id, $event ) ) {
 			return;

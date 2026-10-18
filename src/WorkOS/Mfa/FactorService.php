@@ -23,11 +23,11 @@ defined( 'ABSPATH' ) || exit;
  *
  * WorkOS holds the factors and their secrets. WordPress mirrors only:
  *
- * - `_workos_mfa_enabled`: the user turned MFA on. Set when a factor is
- *   confirmed, or found in WorkOS; cleared only when the user removes their
- *   last factor or an admin resets them. Factors that vanish from WorkOS
- *   some other way leave it set, so the next sign-in asks the user to
- *   enroll again instead of quietly dropping their second factor.
+ * - `_workos_mfa_enabled`: the user has a confirmed factor. WorkOS is the
+ *   source of truth: the flag is set when a factor is confirmed or found in
+ *   WorkOS, and cleared when the user removes their last factor, an admin
+ *   resets them, or WorkOS answers with none (removed in the WorkOS
+ *   dashboard or another app). A failed WorkOS call never clears it.
  * - `_workos_mfa_required`: an admin requires MFA for the user.
  * - `_workos_mfa_pending_factor`: a factor enrolled but not yet confirmed
  *   with a code. It never counts as enabled, and is deleted from WorkOS
@@ -87,9 +87,10 @@ class FactorService {
 	/**
 	 * Confirmed factors, read from WorkOS.
 	 *
-	 * Sets `_workos_mfa_enabled` when WorkOS has a factor the flag didn't
-	 * know about (added outside WordPress, or before this version). Never
-	 * clears it; see the class docblock. Drops a stale unconfirmed factor.
+	 * Mirrors the answer into `_workos_mfa_enabled`: set when WorkOS has a
+	 * factor the flag didn't know about (added outside WordPress, or before
+	 * this version), cleared when WorkOS has none left. Drops a stale
+	 * unconfirmed factor.
 	 *
 	 * @param int $user_id WP user ID.
 	 *
@@ -128,9 +129,40 @@ class FactorService {
 
 		if ( ! empty( $factors ) ) {
 			$this->sync_enabled( $user_id, true );
+		} elseif ( $this->is_enabled( $user_id ) ) {
+			$this->removed_in_workos( $user_id );
 		}
 
 		return $factors;
+	}
+
+	/**
+	 * Follow factors removed outside WordPress: turn the user's MFA off.
+	 *
+	 * The require flag and required roles are untouched, so a user who must
+	 * use MFA enrolls again at their next sign-in.
+	 *
+	 * @param int $user_id WP user ID.
+	 *
+	 * @return void
+	 */
+	private function removed_in_workos( int $user_id ): void {
+		$this->sync_enabled( $user_id, false );
+
+		EventLogger::log(
+			'mfa.removed_in_workos',
+			[
+				'user_id' => $user_id,
+			]
+		);
+
+		/**
+		 * Fires when WorkOS has no factors left for a user WordPress had as
+		 * enrolled, and WordPress turns their MFA off to match.
+		 *
+		 * @param int $user_id WP user ID.
+		 */
+		do_action( 'workos_mfa_removed_in_workos', $user_id );
 	}
 
 	/**

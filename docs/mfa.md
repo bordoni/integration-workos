@@ -102,7 +102,7 @@ None of its methods check capabilities, so callers do.
 | Method | Does |
 |---|---|
 | `status( $user_id )` | `{ enabled, required, must_use, factors }`, read from WorkOS. `required` is the admin flag; `must_use` adds roles and filters |
-| `list_factors( $user_id )` | Confirmed factors from WorkOS. Sets the mirrored flag when WorkOS has a factor it didn't know about; never clears it (see below) |
+| `list_factors( $user_id )` | Confirmed factors from WorkOS. Updates the mirrored flag to match: set when WorkOS has one, cleared when it has none (see below) |
 | `start_enrollment( $user_id )` | Creates a TOTP factor and returns `{ factor_id, challenge_id, qr_code, secret, otpauth_uri }`. The factor stays unconfirmed, and doesn't count, until confirmed. One at a time per account |
 | `confirm_enrollment( $user_id, $factor_id, $code, $challenge_id = '' )` | Checks the first code and turns MFA on |
 | `check_code( $user_id, $factor_id, $code, $challenge_id = '' )` | Checks a code, counted against the account's wrong-code limit; no hooks |
@@ -115,13 +115,18 @@ None of its methods check capabilities, so callers do.
 An unconfirmed factor is deleted from WorkOS when the user starts over, or
 after a day. If WorkOS can't delete it, it stays tracked as unconfirmed.
 
-`_workos_mfa_enabled` means "this user turned MFA on". It's set when a factor
-is confirmed or found in WorkOS, and cleared only when the user removes their
-last factor or an admin resets them. If factors disappear from WorkOS some
-other way (the WorkOS dashboard, another app), the next sign-in asks the user
-to enroll again rather than letting them in with a password alone. To turn a
-user's MFA off, use the reset (admin screen, `wp workos mfa reset`,
-`workos_mfa_reset()`), not the WorkOS dashboard.
+`_workos_mfa_enabled` mirrors WorkOS, which is the source of truth. It's set
+when a factor is confirmed or found in WorkOS, and cleared when the user
+removes their last factor, an admin resets them, or WorkOS answers with no
+factors. So removing a user's factors in the WorkOS dashboard (or another app)
+turns their MFA off in WordPress at the next check: their next sign-in, or
+their account panel. WordPress logs `mfa.removed_in_workos`, fires
+`workos_mfa_removed_in_workos` and emails the user. A failed WorkOS call
+never clears the flag. The require flag and required roles don't change, so a
+user who must use MFA enrolls again at their next sign-in.
+
+The reset (admin screen, `wp workos mfa reset`, `workos_mfa_reset()`) does
+the same and also signs the user out everywhere.
 
 ### PHP helpers
 
@@ -171,7 +176,8 @@ from the token, which the server doesn't keep. No WordPress session exists
 until the code checks out.
 
 In `plugin` mode the policy asks WorkOS for the user's factors at every
-sign-in, so a factor added outside WordPress is challenged too. Only factors
+sign-in, so a factor added outside WordPress is challenged too, and one
+removed there no longer is. Only factors
 the profile allows can answer; a user who turned MFA on but has none the
 profile can use is asked to enroll.
 
@@ -336,7 +342,7 @@ const { enabled, required } = await res.json();
 | `workos_mfa_can_manage` | `bool $can, int $user_id` | `true` for the account owner |
 | `workos_mfa_can_manage_user` | `bool $can, int $user_id` | `edit_user` on the target, never yourself |
 | `workos_mfa_accept_bearer_token` | `bool $passed, int $user_id, array $payload` | Whether the token's session signed in on this site |
-| `workos_mfa_notify_user` | `bool $send, int $user_id, string $event` | `true` (`enrolled`, `removed`, `reset`) |
+| `workos_mfa_notify_user` | `bool $send, int $user_id, string $event` | `true` (`enrolled`, `removed`, `reset`, `removed_in_workos`) |
 | `workos_bearer_token_user` | `int $wp_user_id, array $payload` | The user the token's `sub` maps to; 0 refuses (not MFA-specific) |
 | `workos_relink_protected` | `bool $protected, int $wp_user_id` | The Re-link Protection setting; MFA turns it on for users with MFA (not MFA-specific) |
 
@@ -347,6 +353,7 @@ const { enabled, required } = await res.json();
 | `workos_mfa_enrolled` | `int $user_id, array $factor` | A new factor is confirmed |
 | `workos_mfa_factor_removed` | `int $user_id, string $factor_id` | One factor is removed |
 | `workos_mfa_reset` | `int $user_id, int $removed` | Every factor is removed |
+| `workos_mfa_removed_in_workos` | `int $user_id` | WorkOS has no factors left for a user WordPress had as enrolled, and WordPress turns MFA off to match |
 | `workos_mfa_required_changed` | `int $user_id, bool $required` | The require flag changes |
 | `workos_mfa_challenge_succeeded` | `int $user_id` | The plugin's sign-in challenge is answered |
 | `workos_mfa_challenge_failed` | `int $user_id, string $error_code` | A wrong code at the plugin's sign-in challenge |
@@ -359,6 +366,7 @@ const { enabled, required } = await res.json();
 | `mfa.enrolled` | `factor_id`, `factor_type`, `actor_id` |
 | `mfa.removed` | `factor_id`, `actor_id` |
 | `mfa.reset` | `removed`, `actor_id` |
+| `mfa.removed_in_workos` | — |
 | `mfa.required_set`, `mfa.required_cleared` | `actor_id` |
 | `mfa.challenge_succeeded`, `mfa.challenge_failed` | `factor_type` |
 | `mfa.blocked` | `profile` |
@@ -393,9 +401,9 @@ MFA:
 - **The account can't be moved to another identity.** A user with MFA is never
   re-linked to a different WorkOS user by email; an admin can still with
   `wp workos user link --force`.
-- **Factors don't vanish quietly.** A factor removed outside WordPress leaves
-  the user enrolling again at the next sign-in, not signing in with a
-  password.
+- **WorkOS stays the source of truth.** Factors added outside WordPress are
+  challenged; factors removed there turn MFA off in WordPress, with an email
+  to the user and an activity-log event. Users who must use MFA enroll again.
 
 Known limits:
 
@@ -411,8 +419,8 @@ Known limits:
 
 - Don't store TOTP secrets or QR codes in WordPress. WorkOS holds them; the
   plugin returns them once, at enrollment.
-- Don't write `_workos_mfa_enabled` yourself, and don't remove factors in the
-  WorkOS dashboard to turn MFA off. Use the reset.
+- Don't write `_workos_mfa_enabled` yourself. Change factors in WorkOS or
+  through the plugin, and the flag follows.
 - Don't let a profile with `enforce: never` stand in for "MFA off for this
   user". It blocks users who have MFA. Use `workos_mfa_decision` for
   exceptions.
