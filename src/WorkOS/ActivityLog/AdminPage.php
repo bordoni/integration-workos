@@ -91,7 +91,7 @@ class AdminPage {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$cleared = ! empty( SuperGlobals::get_get_var( 'cleared' ) );
 
-		$event_types = [ 'login', 'logout', 'login_failed', 'login_denied', 'user_suspended', 'onboarding_sync', 'bypass_activated', 'link_refused' ];
+		$event_types = [ 'login', 'logout', 'login_failed', 'login_denied', 'user_suspended', 'onboarding_sync', 'bypass_activated', 'link_refused', 'mfa.enrolled', 'mfa.removed', 'mfa.reset', 'mfa.required_set', 'mfa.required_cleared', 'mfa.challenge_succeeded', 'mfa.challenge_failed', 'mfa.blocked' ];
 
 		?>
 		<div class="wrap">

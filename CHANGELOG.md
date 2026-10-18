@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- **MFA core** — a site-level MFA mode (`mfa_mode` per environment: `plugin`, the default, decides who is challenged per user, role and Login Profile; `workos` defers to WorkOS's environment-wide MFA; `off`), an admin require flag per user, and required roles (`mfa_required_roles`). `WorkOS\Mfa\Policy` turns the profile's `mfa.enforce`, the user's factor and the requirement into `none`, `challenge`, `enroll` or `block`. `WorkOS\Mfa\FactorService` is the one path for listing, enrolling (confirmed with a first code before it counts), removing and resetting factors, and keeps the mirrored `_workos_mfa_enabled` flag in step with WorkOS. See [`docs/mfa.md`](docs/mfa.md).
+- **MFA helpers** — `workos_mfa_get_status()`, `workos_mfa_is_enabled()`, `workos_mfa_is_required()`, `workos_mfa_set_required()`, `workos_mfa_list_factors()`, `workos_mfa_reset()` and `workos_mfa_decision()`.
+- **MFA hooks and events** — filters `workos_mfa_mode`, `workos_mfa_required_for_user`, `workos_mfa_decision` and `workos_mfa_totp_issuer`; actions `workos_mfa_enrolled`, `workos_mfa_factor_removed`, `workos_mfa_reset` and `workos_mfa_required_changed`; Activity Log events `mfa.enrolled`, `mfa.removed`, `mfa.reset`, `mfa.required_set` and `mfa.required_cleared`.
+
 ### Security
 
 - **WordPress password could skip WorkOS MFA** — on the headless `wp-login.php` path, a WorkOS `mfa_challenge` or `mfa_enrollment` answer was treated like a wrong password, and WordPress's own password check then signed the user in without a second factor. That path now refuses with `403 workos_mfa_step_unsupported`, past WordPress's password handlers too. The login button's form gives the same message instead of WorkOS's raw error, and the AuthKit password route no longer re-syncs the password to WorkOS when only the second factor is missing.

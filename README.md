@@ -17,7 +17,7 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **Admin-triggered password reset** — send a WorkOS reset email on behalf of any linked user via `POST /wp-json/workos/v1/admin/users/{id}/password-reset` (gated by `edit_user($id)` so the same route covers self-service). Surfaced as a row action under the **WorkOS column** on `wp-admin/users.php`, a button on the user-edit screen, a per-row button on the WorkOS Users admin page, and a `[workos:password-reset]` shortcode. Successful sends are audited as `password_reset.admin_sent` in the activity log; emails point at the in-site React shell (`/workos/login/{slug}?token=…&redirect_to=…`) and the new password is mirrored to the linked WP user so `?fallback=1` / `wp_authenticate` / REST app passwords stay in sync. See [`docs/password-reset.md`](docs/password-reset.md).
 - **Change email** — WorkOS-verified, conflict-guarded email-change flow. Self-service via `[workos:change-email]` shortcode confirms a WP-side hashed token sent to the new address (with a cancel-link notice to the old address) before committing; an admin acting on *another* account commits immediately (gated by `edit_users`, no verification round-trip). Admin surfaces are a row action under the **WorkOS column** on `wp-admin/users.php`, a panel on the user-edit screen, and a "Change email" action on the **WorkOS → Users** admin page. A configurable conflict policy (`block`, `allow_orphan`, `merge_request`) keeps the new email from silently overwriting another local WP user. Commits to WorkOS first (via `update_user`) then mirrors into WP, with a 60-second in-progress transient that short-circuits the webhook fan-back. See [`docs/change-email.md`](docs/change-email.md).
 - **Skeleton placeholders** on every AuthKit surface (wp-login.php takeover, `/workos/login/{profile}`, shortcode) — pre-hydration markup from PHP plus a React `FlowSkeleton` during bootstrap, mirroring the real card heights so swap-in is a flicker not a jump.
-- **MFA** — TOTP, SMS, WebAuthn/passkey with full enrollment + challenge UI; profile-level `mfa.enforce` (`never` / `if_required` / `always`) and factor allowlist
+- **MFA** — TOTP factors held by WorkOS. The plugin decides who must use a second factor (per user, role and Login Profile `mfa.enforce`), or defers to WorkOS's environment-wide MFA. PHP helpers, hooks and activity-log events for every step. See [`docs/mfa.md`](docs/mfa.md)
 - **Profile routing rules** — ordered `redirect_to` glob / `referrer_host` / `user_role` matchers pick the right profile per request
 - **WorkOS Radar** anti-fraud integration — browser SDK supplies an action token the plugin forwards on every server-side auth call
 - **No WorkOS PHP SDK** — every WorkOS call is `wp_remote_request` from PHP, so the API key never leaves the server
@@ -234,16 +234,14 @@ fallback.
 
 ### MFA policy
 
-Profile-level MFA enforcement is applied by `Auth\AuthKit\LoginCompleter`:
+A profile's `mfa.enforce` (`never` / `if_required` / `always`) and
+`mfa.factors` feed the MFA policy, together with the user's own state (has a
+factor, must use MFA) and the site's MFA mode (`plugin`, `workos` or `off`).
+The full decision table, the helpers and the hooks are in
+[`docs/mfa.md`](docs/mfa.md).
 
-- `enforce: never` — single-step login is always accepted
-- `enforce: if_required` (default) — MFA step surfaces when WorkOS returns
-  a pending factor; otherwise single-step is accepted
-- `enforce: always` — single-step success is rejected with
-  `workos_authkit_mfa_required`; the user must enroll a factor first
-
-Factor types WorkOS returns in a pending-factor response are checked against
-the profile's `mfa.factors` allowlist; disallowed types are rejected.
+Factor types WorkOS returns with an MFA challenge are checked against the
+profile's `mfa.factors` allowlist; disallowed types are rejected.
 
 ### WorkOS Radar
 
@@ -321,6 +319,10 @@ workos_get_user_id( $user_id = 0 );       // string — WorkOS user id
 workos_get_access_token( $user_id = 0 );  // string — current access token
 ```
 
+MFA has its own set (`workos_mfa_get_status()`, `workos_mfa_is_enabled()`,
+`workos_mfa_is_required()`, `workos_mfa_set_required()`, `workos_mfa_list_factors()`,
+`workos_mfa_reset()`, `workos_mfa_decision()`); see [`docs/mfa.md`](docs/mfa.md#php-helpers).
+
 ### Distinguishing "linked" vs "currently signed in"
 
 - **`is_sso()`** remains true after the user logs out. Use it when you
@@ -370,6 +372,8 @@ before authorizing a sensitive action), verify via
 `workos()->api()->verify_access_token( $token )`.
 
 ## Hooks Reference
+
+MFA hooks (`workos_mfa_*`) are listed in [`docs/mfa.md`](docs/mfa.md#hooks).
 
 ### Filters
 

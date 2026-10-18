@@ -16,6 +16,7 @@ use WorkOS\Auth\AuthKit\Controller as AuthKitController;
 use WorkOS\Auth\Controller as AuthController;
 use WorkOS\Auth\PasswordResetAdmin\Controller as PasswordResetAdminController;
 use WorkOS\Auth\ChangeEmail\Controller as ChangeEmailController;
+use WorkOS\Mfa\Controller as MfaController;
 use WorkOS\REST\Controller as RESTController;
 use WorkOS\Webhook\Controller as WebhookController;
 use WorkOS\Sync\Controller as SyncController;
@@ -42,6 +43,7 @@ class Controller extends BaseController {
 		$this->container->register( HttpController::class );
 		$this->container->register( EmailController::class );
 		$this->container->register( RateLimitController::class );
+		$this->container->register( MfaController::class );
 
 		$this->container->register( AdminController::class );
 		$this->container->register( AuthKitController::class );
