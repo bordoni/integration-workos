@@ -11,6 +11,7 @@ use WorkOS\App;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Config;
+use WorkOS\Mfa\Settings as MfaSettings;
 use WorkOS\Options\Options;
 use WorkOS\Options\Production;
 use WorkOS\Options\Staging;
@@ -726,6 +727,30 @@ class Settings {
 			]
 		);
 
+		add_settings_field(
+			'workos_env_mfa_mode',
+			__( 'Two-Step Verification', 'integration-workos' ),
+			[ $this, 'render_select' ],
+			'workos',
+			'workos_auth',
+			[
+				'name'    => $this->env_option( MfaSettings::OPTION_MODE ),
+				'options' => [
+					MfaSettings::MODE_PLUGIN => __( 'WordPress decides — per user, role and Login Profile (Recommended)', 'integration-workos' ),
+					MfaSettings::MODE_WORKOS => __( 'WorkOS decides — MFA is set to Required in the WorkOS dashboard', 'integration-workos' ),
+					MfaSettings::MODE_OFF    => __( 'Off — WordPress asks nobody for a code', 'integration-workos' ),
+				],
+			]
+		);
+
+		add_settings_field(
+			'workos_env_mfa_required_roles',
+			__( 'Require Two-Step Verification', 'integration-workos' ),
+			[ $this, 'render_mfa_required_roles' ],
+			'workos',
+			'workos_auth'
+		);
+
 		// --- Audit Logging section ---
 		add_settings_section(
 			'workos_audit',
@@ -1363,6 +1388,33 @@ class Settings {
 			);
 		}
 		echo '</select>';
+	}
+
+	/**
+	 * Render the roles that must use two-step verification.
+	 *
+	 * A hidden empty value keeps an all-unchecked submit from leaving the
+	 * old list in place.
+	 *
+	 * @return void
+	 */
+	public function render_mfa_required_roles(): void {
+		$name     = $this->env_option( MfaSettings::OPTION_REQUIRED_ROLES );
+		$selected = (array) $this->get_field_value( $name, [] );
+
+		printf( '<input type="hidden" name="%s[]" value="" />', esc_attr( $name ) );
+		echo '<fieldset>';
+		foreach ( wp_roles()->get_names() as $role => $label ) {
+			printf(
+				'<label style="margin-right:1em"><input type="checkbox" name="%s[]" value="%s" %s /> %s</label> ',
+				esc_attr( $name ),
+				esc_attr( $role ),
+				checked( in_array( $role, $selected, true ), true, false ),
+				esc_html( translate_user_role( $label ) )
+			);
+		}
+		echo '</fieldset>';
+		echo '<p class="description">' . esc_html__( 'Members of these roles must use an authenticator app. Those without one set it up at their next sign-in. Applies when WordPress decides; you can also require it per user on their profile.', 'integration-workos' ) . '</p>';
 	}
 
 	/**
@@ -2328,6 +2380,7 @@ class Settings {
 			'login_mode'         => [ 'custom', 'redirect', 'headless' ],
 			'deprovision_action' => [ 'deactivate', 'demote', 'delete' ],
 			'role_sync_schedule' => array_keys( RoleSyncCheck::SCHEDULES ),
+			'mfa_mode'           => MfaSettings::modes(),
 		];
 		foreach ( $choices as $key => $allowed ) {
 			if ( isset( $input[ $key ] ) && in_array( $input[ $key ], $allowed, true ) ) {
@@ -2347,6 +2400,13 @@ class Settings {
 		if ( isset( $input['identity_gate_profile'] ) ) {
 			$slug                               = sanitize_title( $input['identity_gate_profile'] );
 			$sanitized['identity_gate_profile'] = '' !== $slug ? $slug : Profile::DEFAULT_SLUG;
+		}
+
+		// Roles that must use two-step verification.
+		if ( isset( $input[ MfaSettings::OPTION_REQUIRED_ROLES ] ) ) {
+			$sanitized[ MfaSettings::OPTION_REQUIRED_ROLES ] = array_values(
+				array_intersect( (array) $input[ MfaSettings::OPTION_REQUIRED_ROLES ], array_keys( wp_roles()->get_names() ) )
+			);
 		}
 
 		// Integer fields.

@@ -19,6 +19,8 @@ WorkOS users.
 | Sign-in step | `POST /auth/mfa/enroll`, `/auth/mfa/challenge`, `/auth/mfa/verify` and the React shell | Visitors |
 | Password-only sign-ins | Refused for users with MFA (`workos_mfa_allow_password_fallback`) | Site |
 | Account panel | Profile screen, `[workos:mfa]` shortcode, `/users/{id}/mfa…` routes | Users |
+| Admin tools | **WorkOS → Settings → Authentication**, the user-edit screen, `PUT …/mfa/required`, `POST …/mfa/reset`, `wp workos mfa` | Admins, Support |
+| Diagnostics | "Two-Step Verification" check on **WorkOS → Diagnostics** | Admins |
 | Factors | `WorkOS\Mfa\FactorService`, helpers `workos_mfa_*` | Code |
 | Activity log | `mfa.*` events | Admin |
 
@@ -245,6 +247,36 @@ const res = await fetch( `/wp-json/workos/v1/users/${ userId }/mfa`, {
 } );
 const { enabled, required } = await res.json();
 ```
+
+## Admin tools
+
+- **Settings:** **WorkOS → Settings → Authentication** has the mode
+  (**Two-Step Verification**) and the roles that must use it, per environment.
+- **User-edit screen:** for another linked user, shows whether MFA is on, a
+  **Require** checkbox, and **Lost authenticator** (removes every factor on
+  save). Shown to anyone with `edit_user` on the target, or whom
+  `workos_mfa_can_manage_user` allows, e.g. a Support role.
+- **Routes** (same permission):
+
+  | Route | Body | Returns |
+  |---|---|---|
+  | `PUT /users/{id}/mfa/required` | `required` (bool) | `{ required, enabled }` |
+  | `POST /users/{id}/mfa/reset` | — | `{ removed }` |
+
+- **WP-CLI:**
+
+  ```
+  wp workos mfa status <user> [--format=json]
+  wp workos mfa require <user>
+  wp workos mfa unrequire <user>
+  wp workos mfa reset <user> [--yes]
+  ```
+
+  `<user>` is an ID, email or login.
+
+- **Diagnostics:** the "Two-Step Verification" check lists factors for a user
+  that can't exist; a "not found" answer means the factor API is reachable with
+  these keys. It also says which mode is active.
 
 ## Hooks
 
