@@ -26,6 +26,7 @@ import {
 	MagicVerify,
 	MethodPicker,
 	MfaChallenge,
+	MfaEnroll,
 	Password,
 	ResetConfirm,
 	ResetRequest,
@@ -40,11 +41,21 @@ export interface AppProps {
 	initialStep?: Step;
 	invitationToken?: string;
 	resetToken?: string;
+	mfaResume?: MfaRequired;
 }
 
 interface MfaState {
 	pending: string;
+	mfaToken: string;
 	factors: MfaRequired[ 'factors' ];
+}
+
+function mfaStateFrom( data: MfaRequired ): MfaState {
+	return {
+		pending: data.pending_authentication_token || '',
+		mfaToken: data.mfa_token || '',
+		factors: data.factors || [],
+	};
 }
 
 interface SignupContext {
@@ -53,9 +64,19 @@ interface SignupContext {
 }
 
 export function App( props: AppProps ) {
-	const { profile, initialStep = 'pick', invitationToken, resetToken } = props;
+	const {
+		profile,
+		initialStep = 'pick',
+		invitationToken,
+		resetToken,
+		mfaResume,
+	} = props;
 
-	const initial: Step = invitationToken
+	const initial: Step = mfaResume
+		? mfaResume.enroll
+			? 'mfa_enroll'
+			: 'mfa'
+		: invitationToken
 		? 'invitation'
 		: resetToken
 		? 'reset_confirm'
@@ -63,7 +84,9 @@ export function App( props: AppProps ) {
 
 	const [ step, setStep ] = useState< Step >( initial );
 	const [ redirectTo, setRedirectTo ] = useState( '' );
-	const [ mfaState, setMfaState ] = useState< MfaState | null >( null );
+	const [ mfaState, setMfaState ] = useState< MfaState | null >(
+		mfaResume ? mfaStateFrom( mfaResume ) : null
+	);
 	const [ magicEmail, setMagicEmail ] = useState( '' );
 	const [ magicVerifyBack, setMagicVerifyBack ] = useState< Step >( 'magic_send' );
 	const [ emailVerification, setEmailVerification ] =
@@ -137,11 +160,8 @@ export function App( props: AppProps ) {
 	};
 
 	const handleMfa = ( data: MfaRequired ): void => {
-		setMfaState( {
-			pending: data.pending_authentication_token,
-			factors: data.factors || [],
-		} );
-		setStep( 'mfa' );
+		setMfaState( mfaStateFrom( data ) );
+		setStep( data.enroll ? 'mfa_enroll' : 'mfa' );
 	};
 
 	const flowEl = renderFlow();
@@ -239,7 +259,18 @@ export function App( props: AppProps ) {
 					client={ client }
 					profile={ profile }
 					pendingAuthToken={ mfaState?.pending ?? '' }
+					mfaToken={ mfaState?.mfaToken ?? '' }
 					factors={ mfaState?.factors ?? [] }
+					onSuccess={ handleSuccess }
+				/>
+			);
+
+		case 'mfa_enroll':
+			return (
+				<MfaEnroll
+					client={ client }
+					profile={ profile }
+					mfaToken={ mfaState?.mfaToken ?? '' }
 					onSuccess={ handleSuccess }
 				/>
 			);

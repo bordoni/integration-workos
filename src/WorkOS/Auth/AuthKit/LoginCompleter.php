@@ -7,10 +7,16 @@
 
 namespace WorkOS\Auth\AuthKit;
 
+use WorkOS\ActivityLog\EventLogger;
+use WorkOS\App;
 use WorkOS\Auth\Deactivation;
 use WorkOS\Auth\Login;
 use WorkOS\Auth\Redirect;
 use WorkOS\Config;
+use WorkOS\Mfa\FactorService;
+use WorkOS\Mfa\PendingLogin;
+use WorkOS\Mfa\Policy;
+use WorkOS\Mfa\Settings as MfaSettings;
 use WorkOS\Organization\EntitlementGate;
 use WorkOS\Sync\UserSync;
 use WP_Error;
@@ -67,10 +73,17 @@ class LoginCompleter {
 	 *     'user'        => { id, email, display_name },
 	 *     'redirect_to' => string,
 	 *   }
-	 *   When MFA is required: {
+	 *   When WorkOS asks for a code: {
 	 *     'mfa_required'                 => true,
 	 *     'pending_authentication_token' => string,
 	 *     'factors'                      => array,
+	 *   }
+	 *   When the plugin's MFA policy asks for a code, or the user must
+	 *   enroll first (either mode): {
+	 *     'mfa_required' => true,
+	 *     'mfa_token'    => string,
+	 *     'enroll'       => bool,
+	 *     'factors'      => array,
 	 *   }
 	 *   When the email must be verified first: {
 	 *     'email_verification_required'  => true,
@@ -86,8 +99,11 @@ class LoginCompleter {
 		// organization-selection grant. With no pinned org we bail with a
 		// clear error — there is no in-shell org picker by design.
 		if ( is_wp_error( $workos_response ) ) {
-			$mfa = $this->mfa_step( $workos_response );
+			$mfa = $this->mfa_step( $workos_response, $profile, $redirect_to, $honor_profile_redirect );
 			if ( is_wp_error( $mfa ) ) {
+				return $mfa;
+			}
+			if ( isset( $mfa['mfa_token'] ) ) {
 				return $mfa;
 			}
 			if ( null !== $mfa ) {
@@ -146,8 +162,10 @@ class LoginCompleter {
 		// complete the login. Silently letting the user through would
 		// quietly break the admin's "MFA required" guarantee. A response
 		// from a verified second factor has no pending token by design,
-		// so it is the one single-step success that may pass.
-		if ( ! $mfa_satisfied && Profile::MFA_ENFORCE_ALWAYS === ( $profile->get_mfa()['enforce'] ?? '' ) ) {
+		// so it is the one single-step success that may pass. In plugin
+		// mode the policy below handles `always` by asking for a code or an
+		// enrollment instead.
+		if ( ! $mfa_satisfied && ! $this->plugin_decides() && Profile::MFA_ENFORCE_ALWAYS === ( $profile->get_mfa()['enforce'] ?? '' ) ) {
 			return new WP_Error(
 				'workos_authkit_mfa_required',
 				__( 'This login requires multi-factor authentication, but no factor is enrolled on your account. Please enroll a factor and try again.', 'integration-workos' ),
@@ -178,6 +196,32 @@ class LoginCompleter {
 			return $entitlement;
 		}
 
+		if ( ! $mfa_satisfied && $this->plugin_decides() ) {
+			$step = $this->plugin_mfa_step( $wp_user, $workos_response, $profile, $redirect_to, $honor_profile_redirect );
+			if ( null !== $step ) {
+				return $step;
+			}
+		}
+
+		return $this->finish( $workos_response, $wp_user, $profile, $redirect_to, $honor_profile_redirect );
+	}
+
+	/**
+	 * Sign the user in: store tokens, set the cookie, fire the login hooks.
+	 *
+	 * The last step of `complete()`, and the way a sign-in parked at the
+	 * plugin's MFA step finishes once its code checks out. Callers must
+	 * have run every gate first.
+	 *
+	 * @param array   $workos_response        WorkOS authenticate response.
+	 * @param WP_User $wp_user                Matching WP user.
+	 * @param Profile $profile                Active Login Profile.
+	 * @param string  $redirect_to            Client-requested redirect.
+	 * @param bool    $honor_profile_redirect Whether the profile's `post_login_redirect` wins.
+	 *
+	 * @return array { user, redirect_to }
+	 */
+	public function finish( array $workos_response, WP_User $wp_user, Profile $profile, string $redirect_to = '', bool $honor_profile_redirect = true ): array {
 		Login::store_tokens( $wp_user->ID, $workos_response );
 
 		wp_set_auth_cookie( $wp_user->ID, true );
@@ -256,19 +300,151 @@ class LoginCompleter {
 	}
 
 	/**
+	 * Whether the plugin's MFA policy decides who is challenged.
+	 *
+	 * @return bool
+	 */
+	private function plugin_decides(): bool {
+		return MfaSettings::MODE_PLUGIN === App::container()->get( MfaSettings::class )->mode();
+	}
+
+	/**
+	 * The plugin's MFA step, after WorkOS signed the user in.
+	 *
+	 * Asks the policy what this sign-in needs. For a code or an enrollment,
+	 * the WorkOS response is parked server-side and the browser gets an
+	 * `mfa_token` instead, so no session exists until the code checks out.
+	 *
+	 * @param WP_User $wp_user                Matching WP user.
+	 * @param array   $workos_response        WorkOS authenticate response.
+	 * @param Profile $profile                Active Login Profile.
+	 * @param string  $redirect_to            Client-requested redirect.
+	 * @param bool    $honor_profile_redirect Whether the profile's `post_login_redirect` wins.
+	 *
+	 * @return array|WP_Error|null MFA step, a refusal, or null to sign in.
+	 */
+	private function plugin_mfa_step( WP_User $wp_user, array $workos_response, Profile $profile, string $redirect_to, bool $honor_profile_redirect ) {
+		$policy   = App::container()->get( Policy::class );
+		$decision = $policy->decide( $wp_user->ID, $profile );
+		$factors  = [];
+
+		if ( Policy::CHALLENGE === $decision ) {
+			$factors = App::container()->get( FactorService::class )->list_factors( $wp_user->ID );
+			if ( is_wp_error( $factors ) ) {
+				return $factors;
+			}
+
+			// The mirrored flag said "enrolled", but WorkOS has no factor
+			// (removed outside WordPress). list_factors() just cleared the
+			// flag, so ask again; a challenge with nothing to challenge
+			// becomes an enrollment.
+			if ( empty( $factors ) ) {
+				$decision = $policy->decide( $wp_user->ID, $profile );
+				if ( Policy::CHALLENGE === $decision ) {
+					$decision = Policy::ENROLL;
+				}
+			}
+		}
+
+		if ( Policy::NONE === $decision ) {
+			return null;
+		}
+
+		if ( Policy::BLOCK === $decision ) {
+			EventLogger::log(
+				'mfa.blocked',
+				[
+					'user_id'  => $wp_user->ID,
+					'metadata' => [ 'profile' => $profile->get_slug() ],
+				]
+			);
+
+			/**
+			 * Fires when a sign-in is refused because its Login Profile can't
+			 * satisfy the user's MFA (the profile turns MFA off, or doesn't
+			 * allow TOTP, and the user has or needs a factor).
+			 *
+			 * @param int     $user_id WP user ID.
+			 * @param Profile $profile Login Profile.
+			 */
+			do_action( 'workos_mfa_blocked', $wp_user->ID, $profile );
+
+			/**
+			 * Filters the message shown when a sign-in is blocked by MFA policy.
+			 *
+			 * @param string  $message Message.
+			 * @param int     $user_id WP user ID.
+			 * @param Profile $profile Login Profile.
+			 */
+			$message = (string) apply_filters(
+				'workos_mfa_block_message',
+				__( 'Your account uses multi-factor authentication, which this sign-in page doesn’t support. Sign in from another page, or contact the site administrator.', 'integration-workos' ),
+				$wp_user->ID,
+				$profile
+			);
+
+			return new WP_Error( 'workos_mfa_blocked', $message, [ 'status' => 403 ] );
+		}
+
+		$enroll = Policy::ENROLL === $decision;
+		$token  = PendingLogin::park(
+			[
+				'kind'                   => PendingLogin::KIND_PLUGIN,
+				'profile'                => $profile->get_slug(),
+				'enroll'                 => $enroll,
+				'redirect_to'            => $redirect_to,
+				'honor_profile_redirect' => $honor_profile_redirect,
+				'user_id'                => (int) $wp_user->ID,
+				'response'               => $workos_response,
+				'factor_ids'             => $enroll ? [] : array_column( $factors, 'id' ),
+				'factors'                => $enroll ? [] : $this->public_factors( $factors ),
+			]
+		);
+
+		return [
+			'mfa_required' => true,
+			'mfa_token'    => $token,
+			'enroll'       => $enroll,
+			'factors'      => $enroll ? [] : $this->public_factors( $factors ),
+		];
+	}
+
+	/**
+	 * Factor fields the browser needs.
+	 *
+	 * @param array $factors Factors from FactorService::list_factors().
+	 *
+	 * @return array List of `{ id, type }`.
+	 */
+	private function public_factors( array $factors ): array {
+		return array_map(
+			static function ( array $factor ): array {
+				return [
+					'id'   => (string) $factor['id'],
+					'type' => (string) $factor['type'],
+				];
+			},
+			$factors
+		);
+	}
+
+	/**
 	 * The MFA step, when WorkOS asks for one.
 	 *
 	 * `mfa_challenge` becomes the same pending-token shape a challenge has
 	 * always used here, so the factor allowlist below applies to it.
-	 * `mfa_enrollment` is refused for now: the shell has no enrollment
-	 * step yet, and handing back a token it can't use would strand the
-	 * user on a challenge with no factor.
+	 * `mfa_enrollment` parks WorkOS's pending token and user, and hands the
+	 * browser an `mfa_token` for the enrollment step. Without a WorkOS user
+	 * in the error there's nothing to enroll, so it's refused.
 	 *
-	 * @param WP_Error $error Error from the WorkOS authenticate call.
+	 * @param WP_Error $error                  Error from the WorkOS authenticate call.
+	 * @param Profile  $profile                Active Login Profile.
+	 * @param string   $redirect_to            Client-requested redirect.
+	 * @param bool     $honor_profile_redirect Whether the profile's `post_login_redirect` wins.
 	 *
-	 * @return array|WP_Error|null Pending-token response, a refusal, or null for any other error.
+	 * @return array|WP_Error|null Pending-token response, an enrollment step, a refusal, or null for any other error.
 	 */
-	private function mfa_step( WP_Error $error ) {
+	private function mfa_step( WP_Error $error, Profile $profile, string $redirect_to, bool $honor_profile_redirect ) {
 		$code = MfaStep::code( $error );
 		if ( '' === $code ) {
 			return null;
@@ -278,6 +454,29 @@ class LoginCompleter {
 		$pending_token = (string) ( $body['pending_authentication_token'] ?? '' );
 		if ( '' === $pending_token ) {
 			return null;
+		}
+
+		$workos_user = isset( $body['user'] ) && is_array( $body['user'] ) ? $body['user'] : [];
+		if ( MfaStep::ENROLLMENT === $code && ! empty( $workos_user['id'] ) && $profile->allows_factor( Profile::FACTOR_TOTP ) ) {
+			$token = PendingLogin::park(
+				[
+					'kind'                         => PendingLogin::KIND_WORKOS,
+					'profile'                      => $profile->get_slug(),
+					'enroll'                       => true,
+					'redirect_to'                  => $redirect_to,
+					'honor_profile_redirect'       => $honor_profile_redirect,
+					'pending_authentication_token' => $pending_token,
+					'workos_user_id'               => (string) $workos_user['id'],
+					'email'                        => (string) ( $workos_user['email'] ?? '' ),
+				]
+			);
+
+			return [
+				'mfa_required' => true,
+				'mfa_token'    => $token,
+				'enroll'       => true,
+				'factors'      => [],
+			];
 		}
 
 		if ( MfaStep::ENROLLMENT === $code ) {

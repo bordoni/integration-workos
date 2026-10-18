@@ -18,6 +18,7 @@ import type {
 	EmailVerificationRequired,
 	InvitationLookup,
 	LoginSuccess,
+	MfaEnrollment,
 	MfaRequired,
 	Profile,
 	Step,
@@ -633,14 +634,31 @@ export function EmailVerify( {
 interface MfaChallengeProps {
 	client: AuthKitClient;
 	profile: Profile;
+	/** WorkOS's token, when WorkOS asked for the code. */
 	pendingAuthToken: string;
+	/** The plugin's token, when its MFA policy asked for the code. */
+	mfaToken?: string;
 	factors: AuthFactor[];
 	onSuccess: ( data: LoginSuccess ) => void;
+}
+
+/**
+ * Body fields that tie an MFA request to the paused sign-in: the plugin's
+ * `mfa_token` when there is one, else WorkOS's pending token.
+ */
+function mfaSignIn(
+	pendingAuthToken: string,
+	mfaToken?: string
+): Record< string, string > {
+	return mfaToken
+		? { mfa_token: mfaToken }
+		: { pending_authentication_token: pendingAuthToken };
 }
 
 export function MfaChallenge( {
 	client,
 	pendingAuthToken,
+	mfaToken,
 	factors,
 	onSuccess,
 	profile,
@@ -658,7 +676,7 @@ export function MfaChallenge( {
 		( async () => {
 			const { ok, data } = await client.json< { challenge_id: string } >(
 				'/mfa/challenge',
-				{ factor_id: firstFactor.id }
+				{ factor_id: firstFactor.id, ...( mfaToken ? { mfa_token: mfaToken } : {} ) }
 			);
 			if ( ! ok ) {
 				setError( errorMessage( data ) );
@@ -666,14 +684,14 @@ export function MfaChallenge( {
 			}
 			setChallengeId( ( data as { challenge_id: string } ).challenge_id );
 		} )();
-	}, [ firstFactor, client ] );
+	}, [ firstFactor, client, mfaToken ] );
 
 	const submit = async ( event: FormEvent ) => {
 		event.preventDefault();
 		setLoading( true );
 		setError( '' );
 		const { ok, data } = await client.json< LoginSuccess >( '/mfa/verify', {
-			pending_authentication_token: pendingAuthToken,
+			...mfaSignIn( pendingAuthToken, mfaToken ),
 			authentication_challenge_id: challengeId,
 			code,
 			redirect_to: profile.redirectTo,
@@ -738,6 +756,167 @@ export function MfaChallenge( {
 					fillProps={ fillProps }
 				/>
 			</form>
+		</FlowCard>
+	);
+}
+
+// ----------------------------------------------------------------- MfaEnroll
+
+interface MfaEnrollProps {
+	client: AuthKitClient;
+	profile: Profile;
+	mfaToken: string;
+	onSuccess: ( data: LoginSuccess ) => void;
+}
+
+/**
+ * Enroll an authenticator app during sign-in, then sign in with its first
+ * code. Shown when the account must use MFA and has no factor yet.
+ */
+export function MfaEnroll( {
+	client,
+	profile,
+	mfaToken,
+	onSuccess,
+}: MfaEnrollProps ) {
+	const [ enrollment, setEnrollment ] = useState< MfaEnrollment | null >(
+		null
+	);
+	const [ code, setCode ] = useState( '' );
+	const [ loading, setLoading ] = useState( false );
+	const [ error, setError ] = useState( '' );
+	const [ showSecret, setShowSecret ] = useState( false );
+
+	useEffect( () => {
+		( async () => {
+			const { ok, data } = await client.json< MfaEnrollment >(
+				'/mfa/enroll',
+				{ mfa_token: mfaToken }
+			);
+			if ( ! ok ) {
+				setError( errorMessage( data ) );
+				return;
+			}
+			setEnrollment( data as MfaEnrollment );
+		} )();
+	}, [ client, mfaToken ] );
+
+	const submit = async ( event: FormEvent ) => {
+		event.preventDefault();
+		if ( ! enrollment ) {
+			return;
+		}
+		setLoading( true );
+		setError( '' );
+
+		let challengeId = enrollment.challenge_id;
+		if ( ! challengeId ) {
+			const challenge = await client.json< { challenge_id: string } >(
+				'/mfa/challenge',
+				{ factor_id: enrollment.factor_id, mfa_token: mfaToken }
+			);
+			if ( ! challenge.ok ) {
+				setLoading( false );
+				setError( errorMessage( challenge.data ) );
+				return;
+			}
+			challengeId = ( challenge.data as { challenge_id: string } )
+				.challenge_id;
+		}
+
+		const { ok, data } = await client.json< LoginSuccess >( '/mfa/verify', {
+			mfa_token: mfaToken,
+			authentication_challenge_id: challengeId,
+			code,
+			redirect_to: profile.redirectTo,
+		} );
+		setLoading( false );
+		if ( ! ok ) {
+			setError( errorMessage( data ) );
+			return;
+		}
+		onSuccess( data as LoginSuccess );
+	};
+
+	const fillProps = fillPropsFor( profile, 'mfa_enroll', 'mfa' );
+
+	return (
+		<FlowCard
+			logoUrl={ profile.branding.logo_url }
+			logoAlt={
+				profile.branding.heading || __( 'Sign in', 'integration-workos' )
+			}
+			fillProps={ fillProps }
+			header={
+				<>
+					<Heading>
+						{ __( 'Set up two-step verification', 'integration-workos' ) }
+					</Heading>
+					<Subheading>
+						{ __(
+							'Your account needs a code from an authenticator app to sign in. Scan this QR code with the app, then enter the 6-digit code it shows.',
+							'integration-workos'
+						) }
+					</Subheading>
+				</>
+			}
+		>
+			{ error && <Alert variant="error">{ error }</Alert> }
+			{ ! enrollment && ! error && <Spinner /> }
+			{ enrollment && (
+				<form onSubmit={ submit }>
+					<AuthKitSlot name={ SLOT_BEFORE_FORM } fillProps={ fillProps } />
+					{ enrollment.qr_code && (
+						<img
+							className="wa-mfa-qr"
+							src={ enrollment.qr_code }
+							alt={ __(
+								'QR code for your authenticator app',
+								'integration-workos'
+							) }
+							width={ 180 }
+							height={ 180 }
+						/>
+					) }
+					{ showSecret ? (
+						<p className="wa-mfa-secret">
+							{ __( 'Setup key:', 'integration-workos' ) }{ ' ' }
+							<code>{ enrollment.secret }</code>
+						</p>
+					) : (
+						<LinkButton onClick={ () => setShowSecret( true ) }>
+							{ __( 'Can’t scan? Enter a setup key', 'integration-workos' ) }
+						</LinkButton>
+					) }
+					<Field
+						label={ __( 'Code', 'integration-workos' ) }
+						htmlFor="wa-mfa-enroll-code"
+					>
+						<Input
+							id="wa-mfa-enroll-code"
+							type="text"
+							value={ code }
+							onChange={ setCode }
+							autoComplete="one-time-code"
+							autoFocus={ true }
+							required={ true }
+							placeholder="123456"
+						/>
+					</Field>
+					<AuthKitSlot name={ SLOT_AFTER_FORM } fillProps={ fillProps } />
+					<Button type="submit" disabled={ loading }>
+						{ loading ? (
+							<Spinner />
+						) : (
+							__( 'Verify and sign in', 'integration-workos' )
+						) }
+					</Button>
+					<AuthKitSlot
+						name={ SLOT_AFTER_PRIMARY_ACTION }
+						fillProps={ fillProps }
+					/>
+				</form>
+			) }
 		</FlowCard>
 	);
 }

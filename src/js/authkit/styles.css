@@ -240,6 +240,26 @@ body.workos-authkit-body #workos-authkit-root {
 	border: 1px solid rgba( 22, 101, 52, 0.2 );
 }
 
+#workos-authkit-root .wa-mfa-qr {
+	display: block;
+	margin: 0 auto 12px;
+	border-radius: var(--wa-radius);
+	background: #fff;
+	padding: 8px;
+}
+
+#workos-authkit-root .wa-mfa-secret {
+	font-size: 0.875rem;
+	color: var(--wa-muted);
+	overflow-wrap: anywhere;
+}
+
+#workos-authkit-root .wa-mfa-secret code {
+	font-size: 0.875rem;
+	letter-spacing: 0.04em;
+	user-select: all;
+}
+
 #workos-authkit-root .wa-divider {
 	display: flex;
 	align-items: center;

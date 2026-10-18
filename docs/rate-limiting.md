@@ -82,8 +82,9 @@ Every public auth route is throttled by requester. A subset also counts as a sen
 | `POST /auth/email-verification/resend` | — | shared (IP only) | yes (`password_otp`) |
 | `POST /auth/signup/create` | mailbox | `Signup` constants | no — see below |
 | `POST /auth/signup/verify` | — | `Signup` constants (IP only) | no |
+| `POST /auth/mfa/enroll` | `mfa_token` (hashed) | shared | no |
 | `POST /auth/mfa/challenge` | factor ID | shared | no |
-| `POST /auth/mfa/verify` | — | shared (IP only) | no |
+| `POST /auth/mfa/verify` | `mfa_token` (hashed) when given, else IP only | shared | no |
 | `GET /auth/invitation/{token}` | — | shared (IP only) | no |
 | `POST /auth/invitation/accept` | — | shared (IP only) | no |
 | `GET /auth/oauth/authorize-url` | — | `OAuth` constant | no |

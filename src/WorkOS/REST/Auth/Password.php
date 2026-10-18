@@ -156,7 +156,11 @@ class Password extends BaseEndpoint {
 		if ( is_wp_error( $workos_response ) && ! $this->triggered_verification_email( $workos_response ) && ! MfaStep::is_mfa_error( $workos_response ) && workos()->option( 'allow_password_fallback', true ) ) {
 			// WorkOS rejected the password — fall back to WordPress authentication.
 			// Handles migrated users whose passwords were never synced to WorkOS.
+			// This sign-in finishes through LoginCompleter, which runs the
+			// MFA policy, so the password-only guard can stand aside.
+			add_filter( 'workos_mfa_allow_password_fallback', '__return_true' );
 			$wp_user = wp_authenticate( $email, $password );
+			remove_filter( 'workos_mfa_allow_password_fallback', '__return_true' );
 
 			if ( ! is_wp_error( $wp_user ) ) {
 				$workos_user_id = $this->resolve_workos_user_id( $wp_user, $email );

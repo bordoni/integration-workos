@@ -31,18 +31,22 @@ class AuthKitLoginCompleterMfaTest extends WPTestCase {
 	}
 
 	public function tearDown(): void {
+		remove_all_filters( 'workos_mfa_mode' );
 		wp_set_current_user( 0 );
 		parent::tearDown();
 	}
 
 	/**
-	 * `mfa.enforce = always` + no pending factor = rejected.
+	 * `mfa.enforce = always` + no pending factor = rejected, when WorkOS
+	 * (not the plugin) decides who uses MFA.
 	 *
 	 * Closes the gap where a user with zero enrolled factors would
 	 * otherwise complete login on a profile the admin flagged as
 	 * "MFA always required."
 	 */
 	public function test_enforce_always_rejects_single_step_success(): void {
+		add_filter( 'workos_mfa_mode', static fn() => 'workos' );
+
 		$profile = Profile::from_array(
 			[
 				'slug'    => 'staff',

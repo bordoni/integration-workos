@@ -11,7 +11,7 @@ import { createRoot } from '@wordpress/element';
 import { PluginArea } from '@wordpress/plugins';
 import { App } from './App';
 import type { AppProps } from './App';
-import type { Profile, Step } from './types';
+import type { MfaRequired, Profile, Step } from './types';
 import './styles.css';
 
 function parseConfig( root: HTMLElement ): AppProps {
@@ -52,11 +52,19 @@ function parseConfig( root: HTMLElement ): AppProps {
 	const initialStep = ( root.getAttribute( 'data-initial-step' ) ||
 		'pick' ) as Step;
 
+	// A sign-in parked at the MFA step (e.g. after the hosted-AuthKit
+	// callback) resumes straight at the code or enrollment step.
+	const mfaJson = root.getAttribute( 'data-mfa' );
+	const mfaResume: MfaRequired | undefined = mfaJson
+		? JSON.parse( mfaJson )
+		: undefined;
+
 	return {
 		profile,
 		invitationToken: root.getAttribute( 'data-invitation-token' ) || '',
 		resetToken: root.getAttribute( 'data-reset-token' ) || '',
 		initialStep,
+		mfaResume,
 	};
 }
 

@@ -7,7 +7,12 @@
 
 namespace WorkOS\REST\Auth;
 
+use WorkOS\ActivityLog\EventLogger;
+use WorkOS\App;
 use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Auth\Deactivation;
+use WorkOS\Mfa\FactorService;
+use WorkOS\Mfa\PendingLogin;
 use WorkOS\RateLimit\TieredRateLimiter;
 use WP_Error;
 use WP_REST_Request;
@@ -18,9 +23,12 @@ defined( 'ABSPATH' ) || exit;
 /**
  * MFA (TOTP + SMS) endpoints used during login *and* account settings.
  *
- * During login (user has a pending_authentication_token from a prior
- * password/magic/OAuth attempt):
+ * During login, the browser carries either WorkOS's
+ * `pending_authentication_token` (WorkOS asked for a code) or the plugin's
+ * `mfa_token` (the plugin's MFA policy asked for a code, or the user must
+ * enroll first; see `Mfa\PendingLogin`):
  *
+ *  - POST /auth/mfa/enroll     — create the factor to enroll (`mfa_token` only).
  *  - POST /auth/mfa/challenge  — start a challenge on the chosen factor.
  *  - POST /auth/mfa/verify     — verify the challenge and complete login.
  *
@@ -45,6 +53,16 @@ class Mfa extends BaseEndpoint {
 			[
 				'methods'             => 'POST',
 				'callback'            => [ $this, 'challenge' ],
+				'permission_callback' => [ $this, 'public_permission' ],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			self::BASE . '/mfa/enroll',
+			[
+				'methods'             => 'POST',
+				'callback'            => [ $this, 'enroll_pending' ],
 				'permission_callback' => [ $this, 'public_permission' ],
 			]
 		);
@@ -160,9 +178,28 @@ class Mfa extends BaseEndpoint {
 			return $rate_ok;
 		}
 
+		// A parked sign-in may only challenge its own factors, and the
+		// challenge is remembered so /verify can refuse any other.
+		$mfa_token = (string) $request->get_param( 'mfa_token' );
+		$pending   = null;
+		if ( '' !== $mfa_token ) {
+			$pending = PendingLogin::get( $mfa_token, $profile->get_slug() );
+			if ( null === $pending ) {
+				return $this->expired();
+			}
+			if ( ! in_array( $factor_id, (array) $pending['factor_ids'], true ) ) {
+				return $this->factor_not_found();
+			}
+		}
+
 		$result = workos()->api()->challenge_auth_factor( $factor_id );
 		if ( is_wp_error( $result ) ) {
 			return $result;
+		}
+
+		if ( null !== $pending ) {
+			$pending['challenges'][] = (string) ( $result['id'] ?? '' );
+			PendingLogin::update( $mfa_token, $pending );
 		}
 
 		return new WP_REST_Response(
@@ -192,6 +229,11 @@ class Mfa extends BaseEndpoint {
 		$nonce_ok = $this->verify_nonce( $request, $profile );
 		if ( is_wp_error( $nonce_ok ) ) {
 			return $nonce_ok;
+		}
+
+		$mfa_token = (string) $request->get_param( 'mfa_token' );
+		if ( '' !== $mfa_token ) {
+			return $this->verify_pending( $request, $profile, $mfa_token );
 		}
 
 		$pending_auth_token = (string) $request->get_param( 'pending_authentication_token' );
@@ -239,6 +281,309 @@ class Mfa extends BaseEndpoint {
 		}
 
 		return new WP_REST_Response( $result, 200 );
+	}
+
+	/**
+	 * POST /auth/mfa/enroll
+	 *
+	 * Creates the TOTP factor a parked sign-in must enroll, and returns the
+	 * QR code and secret once. Calling it again replaces the unfinished
+	 * factor. The first code from the app goes to /verify.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function enroll_pending( WP_REST_Request $request ) {
+		$profile = $this->resolve_profile( $request );
+		if ( is_wp_error( $profile ) ) {
+			return $profile;
+		}
+
+		$nonce_ok = $this->verify_nonce( $request, $profile );
+		if ( is_wp_error( $nonce_ok ) ) {
+			return $nonce_ok;
+		}
+
+		$mfa_token = (string) $request->get_param( 'mfa_token' );
+		$pending   = PendingLogin::get( $mfa_token, $profile->get_slug() );
+		if ( null === $pending ) {
+			return $this->expired();
+		}
+
+		if ( empty( $pending['enroll'] ) ) {
+			return new WP_Error(
+				'workos_authkit_invalid_input',
+				__( 'This sign-in already has a factor to verify.', 'integration-workos' ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		if ( ! $profile->allows_factor( Profile::FACTOR_TOTP ) ) {
+			return new WP_Error(
+				'workos_authkit_factor_disabled',
+				__( 'TOTP is not enabled for this login.', 'integration-workos' ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		$rate_ok = $this->rate_limit(
+			[
+				[ 'mfa_enroll_ip', $this->client_ip->get(), TieredRateLimiter::REQUEST_IP ],
+				[ 'mfa_enroll_token', hash( 'sha256', $mfa_token ), TieredRateLimiter::REQUEST_SUBJECT ],
+			]
+		);
+		if ( is_wp_error( $rate_ok ) ) {
+			return $rate_ok;
+		}
+
+		$service = App::container()->get( FactorService::class );
+
+		if ( PendingLogin::KIND_WORKOS === $pending['kind'] ) {
+			foreach ( (array) $pending['factor_ids'] as $unfinished ) {
+				workos()->api()->delete_auth_factor( (string) $unfinished );
+			}
+			$result = $service->enroll_totp( (string) $pending['workos_user_id'], (string) ( $pending['email'] ?? '' ) );
+		} else {
+			$result = $service->start_enrollment( (int) $pending['user_id'] );
+		}
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$pending['factor_ids'] = [ $result['factor_id'] ];
+		$pending['challenges'] = '' !== $result['challenge_id'] ? [ $result['challenge_id'] ] : [];
+		PendingLogin::update( $mfa_token, $pending );
+
+		return new WP_REST_Response( $result, 201 );
+	}
+
+	/**
+	 * Finish a parked sign-in with a code.
+	 *
+	 * Plugin kind: checks the code against the user's factor (confirming it
+	 * first when enrolling), then signs in from the parked WorkOS response.
+	 * WorkOS kind: completes WorkOS's pending authentication with the code.
+	 *
+	 * @param WP_REST_Request $request   REST request.
+	 * @param Profile         $profile   Active profile.
+	 * @param string          $mfa_token Token from the browser.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function verify_pending( WP_REST_Request $request, Profile $profile, string $mfa_token ) {
+		$pending = PendingLogin::get( $mfa_token, $profile->get_slug() );
+		if ( null === $pending ) {
+			return $this->expired();
+		}
+
+		$challenge_id = (string) $request->get_param( 'authentication_challenge_id' );
+		$code         = (string) $request->get_param( 'code' );
+		if ( '' === $challenge_id || '' === $code ) {
+			return new WP_Error(
+				'workos_authkit_invalid_input',
+				__( 'A challenge id and code are required.', 'integration-workos' ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		if ( ! in_array( $challenge_id, (array) $pending['challenges'], true ) ) {
+			return new WP_Error(
+				'workos_authkit_challenge_not_found',
+				__( 'That code request has expired. Ask for a new code and try again.', 'integration-workos' ),
+				[ 'status' => 404 ]
+			);
+		}
+
+		$rate_ok = $this->rate_limit(
+			[
+				[ 'mfa_verify_ip', $this->client_ip->get(), TieredRateLimiter::REQUEST_IP ],
+				[ 'mfa_verify_token', hash( 'sha256', $mfa_token ), TieredRateLimiter::REQUEST_SUBJECT ],
+			]
+		);
+		if ( is_wp_error( $rate_ok ) ) {
+			return $rate_ok;
+		}
+
+		$service   = App::container()->get( FactorService::class );
+		$factor_id = (string) ( ( (array) $pending['factor_ids'] )[0] ?? '' );
+
+		if ( PendingLogin::KIND_WORKOS === $pending['kind'] ) {
+			$workos_response = workos()->api()->authenticate_with_totp(
+				(string) $pending['pending_authentication_token'],
+				$challenge_id,
+				$code,
+				$this->get_radar_token( $request )
+			);
+
+			if ( $this->is_wrong_code( $workos_response ) ) {
+				return $this->wrong_code( $mfa_token, $pending, 0 );
+			}
+
+			PendingLogin::forget( $mfa_token );
+
+			$result = $this->login_completer->complete(
+				$workos_response,
+				$profile,
+				(string) $pending['redirect_to'],
+				(bool) $pending['honor_profile_redirect'],
+				true
+			);
+
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+
+			if ( ! empty( $result['user']['id'] ) && '' !== $factor_id ) {
+				$service->note_enrolled( (int) $result['user']['id'], $factor_id );
+			}
+
+			return new WP_REST_Response( $result, 200 );
+		}
+
+		$user_id = (int) $pending['user_id'];
+		$checked = ! empty( $pending['enroll'] )
+			? $service->confirm_enrollment( $user_id, $factor_id, $code, $challenge_id )
+			: $service->verify_code( $factor_id, $code, $challenge_id );
+
+		if ( is_wp_error( $checked ) ) {
+			return 'workos_mfa_invalid_code' === $checked->get_error_code()
+				? $this->wrong_code( $mfa_token, $pending, $user_id )
+				: $checked;
+		}
+
+		PendingLogin::forget( $mfa_token );
+
+		if ( empty( $pending['enroll'] ) ) {
+			EventLogger::log(
+				'mfa.challenge_succeeded',
+				[
+					'user_id'  => $user_id,
+					'metadata' => [ 'factor_type' => 'totp' ],
+				]
+			);
+
+			/**
+			 * Fires after a user answers the plugin's MFA challenge at sign-in.
+			 *
+			 * @param int $user_id WP user ID.
+			 */
+			do_action( 'workos_mfa_challenge_succeeded', $user_id );
+		}
+
+		$wp_user = get_userdata( $user_id );
+		if ( ! $wp_user ) {
+			return $this->expired();
+		}
+
+		// Ten minutes may have passed since the first factor.
+		if ( Deactivation::is_deactivated( $user_id ) ) {
+			return Deactivation::error();
+		}
+
+		return new WP_REST_Response(
+			$this->login_completer->finish(
+				(array) $pending['response'],
+				$wp_user,
+				$profile,
+				(string) $pending['redirect_to'],
+				(bool) $pending['honor_profile_redirect']
+			),
+			200
+		);
+	}
+
+	/**
+	 * Whether WorkOS refused the TOTP grant because of the code.
+	 *
+	 * Any 4xx except the steps `LoginCompleter` carries on from (an org
+	 * to pick, an email to verify).
+	 *
+	 * @param array|WP_Error $response WorkOS authenticate response.
+	 *
+	 * @return bool
+	 */
+	private function is_wrong_code( $response ): bool {
+		if ( ! is_wp_error( $response ) ) {
+			return false;
+		}
+
+		$data   = $response->get_error_data();
+		$status = is_array( $data ) ? (int) ( $data['status'] ?? 0 ) : 0;
+		$code   = is_array( $data ) ? (string) ( $data['body']['code'] ?? '' ) : '';
+
+		return $status >= 400 && $status < 500
+			&& ! in_array( $code, [ 'organization_selection_required', 'email_verification_required' ], true );
+	}
+
+	/**
+	 * Count a wrong code on a parked sign-in.
+	 *
+	 * @param string $mfa_token Token from the browser.
+	 * @param array  $pending   Parked sign-in.
+	 * @param int    $user_id   WP user, or 0 when not matched yet (WorkOS kind).
+	 *
+	 * @return WP_Error
+	 */
+	private function wrong_code( string $mfa_token, array $pending, int $user_id ): WP_Error {
+		if ( $user_id > 0 && empty( $pending['enroll'] ) ) {
+			EventLogger::log(
+				'mfa.challenge_failed',
+				[
+					'user_id'  => $user_id,
+					'metadata' => [ 'factor_type' => 'totp' ],
+				]
+			);
+
+			/**
+			 * Fires after a wrong code at the plugin's MFA challenge.
+			 *
+			 * @param int    $user_id    WP user ID.
+			 * @param string $error_code Error code.
+			 */
+			do_action( 'workos_mfa_challenge_failed', $user_id, 'workos_mfa_invalid_code' );
+		}
+
+		if ( ! PendingLogin::fail( $mfa_token, $pending ) ) {
+			return new WP_Error(
+				'workos_authkit_mfa_attempts_exceeded',
+				__( 'Too many wrong codes. Start signing in again.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
+		return new WP_Error(
+			'workos_mfa_invalid_code',
+			__( 'That code didn’t work. Check your authenticator app and try again.', 'integration-workos' ),
+			[ 'status' => 400 ]
+		);
+	}
+
+	/**
+	 * Error for an unknown, used or expired `mfa_token`.
+	 *
+	 * @return WP_Error
+	 */
+	private function expired(): WP_Error {
+		return new WP_Error(
+			'workos_authkit_mfa_expired',
+			__( 'This sign-in has expired. Start signing in again.', 'integration-workos' ),
+			[ 'status' => 403 ]
+		);
+	}
+
+	/**
+	 * Error for a factor the sign-in may not use.
+	 *
+	 * @return WP_Error
+	 */
+	private function factor_not_found(): WP_Error {
+		return new WP_Error(
+			'workos_authkit_factor_not_found',
+			__( 'Factor not found.', 'integration-workos' ),
+			[ 'status' => 404 ]
+		);
 	}
 
 	/**

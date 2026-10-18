@@ -126,6 +126,7 @@ class Renderer {
 	 *     @type string $invitation_token If present, shell boots into invite flow.
 	 *     @type string $reset_token      If present, shell boots into reset-confirm flow.
 	 *     @type string $initial_step     Initial step slug (defaults to 'pick').
+	 *     @type array  $mfa              Parked MFA step to resume (`{ mfa_required, mfa_token, enroll, factors }`).
 	 * }
 	 *
 	 * @return string Safe HTML for direct output.
@@ -163,6 +164,7 @@ class Renderer {
 			'data-invitation-token' => sanitize_text_field( $context['invitation_token'] ?? '' ),
 			'data-reset-token'      => sanitize_text_field( $context['reset_token'] ?? '' ),
 			'data-initial-step'     => sanitize_key( $context['initial_step'] ?? 'pick' ),
+			'data-mfa'              => ! empty( $context['mfa'] ) ? (string) wp_json_encode( $context['mfa'] ) : '',
 			// Site-level chrome the below-card area uses to render a "back to
 			// site" link. Always emit the values (they're cheap and extender
 			// fills might want them), but the default "Go to {site}" link

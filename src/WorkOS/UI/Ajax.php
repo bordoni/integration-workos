@@ -9,6 +9,7 @@ namespace WorkOS\UI;
 
 use WorkOS\Auth\AuthKit\MfaStep;
 use WorkOS\Auth\Deactivation;
+use WorkOS\Mfa\PasswordGuard;
 use WorkOS\Auth\Login;
 use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
@@ -66,6 +67,10 @@ class Ajax {
 
 		if ( Deactivation::is_deactivated( $wp_user->ID ) ) {
 			wp_send_json_error( [ 'message' => Deactivation::error()->get_error_message() ], 403 );
+		}
+
+		if ( \WorkOS\App::container()->get( PasswordGuard::class )->must_use_mfa( $wp_user->ID ) ) {
+			wp_send_json_error( [ 'message' => MfaStep::unsupported_error()->get_error_message() ], 403 );
 		}
 
 		Login::store_tokens( $wp_user->ID, $result );

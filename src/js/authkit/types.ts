@@ -87,10 +87,25 @@ export interface AuthFactor {
 	[key: string]: unknown;
 }
 
+/**
+ * The MFA step. WorkOS's own challenge carries
+ * `pending_authentication_token`; a step the plugin's MFA policy asked for,
+ * or any enrollment, carries `mfa_token` instead.
+ */
 export interface MfaRequired {
 	mfa_required: true;
-	pending_authentication_token: string;
+	pending_authentication_token?: string;
+	mfa_token?: string;
+	enroll?: boolean;
 	factors: AuthFactor[];
+}
+
+export interface MfaEnrollment {
+	factor_id: string;
+	challenge_id: string;
+	qr_code: string;
+	secret: string;
+	otpauth_uri: string;
 }
 
 export type AuthResult = LoginSuccess | MfaRequired;
@@ -170,6 +185,7 @@ export type Step =
 	| 'magic_verify'
 	| 'email_verify'
 	| 'mfa'
+	| 'mfa_enroll'
 	| 'signup'
 	| 'signup_verify'
 	| 'reset'
