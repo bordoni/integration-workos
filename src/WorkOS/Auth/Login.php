@@ -8,9 +8,11 @@
 namespace WorkOS\Auth;
 
 use WorkOS\Auth\AuthKit\LoginCompleter;
+use WorkOS\Auth\AuthKit\MfaStep;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
+use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -18,6 +20,13 @@ defined( 'ABSPATH' ) || exit;
  * Handles both AuthKit redirect and headless API authentication flows.
  */
 class Login {
+
+	/**
+	 * Refusal the headless filter raised for the current `authenticate` run.
+	 *
+	 * @var WP_Error|null
+	 */
+	private ?WP_Error $refusal = null;
 
 	/**
 	 * Constructor — registers hooks.
@@ -28,6 +37,9 @@ class Login {
 
 		// Headless mode: authenticate filter.
 		add_filter( 'authenticate', [ $this, 'authenticate_headless' ], 10, 3 );
+
+		// Re-assert a headless refusal after WP's own password handlers.
+		add_filter( 'authenticate', [ $this, 'enforce_refusal' ], 99 );
 
 		// Register callback rewrite.
 		add_action( 'init', [ self::class, 'register_rewrite' ] );
@@ -145,6 +157,15 @@ class Login {
 
 		$result = workos()->api()->authenticate_with_password( $email, $password );
 
+		// WorkOS accepted the password but wants a second factor this form
+		// can't collect. Refuse, and keep refusing past WP's own password
+		// check at priority 20: it ignores an earlier WP_Error, so letting
+		// it run would sign the user in without MFA.
+		if ( MfaStep::is_mfa_error( $result ) ) {
+			$this->refusal = MfaStep::unsupported_error();
+			return $this->refusal;
+		}
+
 		if ( is_wp_error( $result ) ) {
 			// Don't block fallback — just return $user to let WP try next.
 			return $user;
@@ -172,6 +193,31 @@ class Login {
 		do_action( 'workos_user_authenticated', $wp_user->ID, $result );
 
 		return $wp_user;
+	}
+
+	/**
+	 * Re-apply a refusal raised by `authenticate_headless()`.
+	 *
+	 * Core's `wp_authenticate_username_password()` and
+	 * `wp_authenticate_email_password()` only short-circuit on a WP_User,
+	 * so a WP_Error returned at priority 10 doesn't stop them from
+	 * checking the WordPress password. Running last puts the refusal back.
+	 * The refusal is cleared once used, so it never leaks into a later
+	 * `authenticate` run in the same request.
+	 *
+	 * @param \WP_User|\WP_Error|null $user Result so far.
+	 *
+	 * @return \WP_User|\WP_Error|null
+	 */
+	public function enforce_refusal( $user ) {
+		if ( null === $this->refusal ) {
+			return $user;
+		}
+
+		$refusal       = $this->refusal;
+		$this->refusal = null;
+
+		return $refusal;
 	}
 
 	/**

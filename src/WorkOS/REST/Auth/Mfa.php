@@ -224,11 +224,14 @@ class Mfa extends BaseEndpoint {
 
 		// `complete()` handles the `organization_selection_required` error
 		// transparently when the profile has a pinned org. Pass the WP_Error
-		// through so it can decide.
+		// through so it can decide. A wrong code comes back as an error, so
+		// any success reaching the profile's `always` check has passed MFA.
 		$result = $this->login_completer->complete(
 			$workos_response,
 			$profile,
-			$this->sanitize_redirect( (string) $request->get_param( 'redirect_to' ) )
+			$this->sanitize_redirect( (string) $request->get_param( 'redirect_to' ) ),
+			true,
+			true
 		);
 
 		if ( is_wp_error( $result ) ) {
@@ -318,14 +321,19 @@ class Mfa extends BaseEndpoint {
 			return $result;
 		}
 
-		$totp = $result['totp'] ?? [];
+		// WorkOS nests the new factor under `authentication_factor` and adds
+		// a ready challenge for it under `authentication_challenge`.
+		$factor    = isset( $result['authentication_factor'] ) && is_array( $result['authentication_factor'] ) ? $result['authentication_factor'] : $result;
+		$challenge = isset( $result['authentication_challenge'] ) && is_array( $result['authentication_challenge'] ) ? $result['authentication_challenge'] : [];
+		$totp      = $factor['totp'] ?? [];
 
 		return new WP_REST_Response(
 			[
-				'factor_id'   => (string) ( $result['id'] ?? '' ),
-				'qr_code'     => (string) ( $totp['qr_code'] ?? '' ),
-				'secret'      => (string) ( $totp['secret'] ?? '' ),
-				'otpauth_uri' => (string) ( $totp['uri'] ?? '' ),
+				'factor_id'    => (string) ( $factor['id'] ?? '' ),
+				'challenge_id' => (string) ( $challenge['id'] ?? '' ),
+				'qr_code'      => (string) ( $totp['qr_code'] ?? '' ),
+				'secret'       => (string) ( $totp['secret'] ?? '' ),
+				'otpauth_uri'  => (string) ( $totp['uri'] ?? '' ),
 			],
 			201
 		);

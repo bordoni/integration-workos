@@ -406,6 +406,79 @@ class AuthKitRestPasswordTest extends WPTestCase {
 	}
 
 	/**
+	 * WorkOS's real `mfa_challenge` rejection becomes the MFA step.
+	 *
+	 * When the environment requires MFA, WorkOS answers the password grant
+	 * with an error, not a success, so the step has to be read off the
+	 * error body.
+	 */
+	public function test_authenticate_mfa_challenge_error_is_surfaced(): void {
+		$this->response_queue = [ $this->mfa_challenge() ];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'alice@example.com',
+				'password' => 'hunter2',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$data = $response->get_data();
+		$this->assertTrue( $data['mfa_required'] );
+		$this->assertSame( 'pat_mfa', $data['pending_authentication_token'] );
+		$this->assertSame( 'auth_factor_1', $data['factors'][0]['id'] );
+	}
+
+	/**
+	 * The password was accepted and only the second factor is missing, so
+	 * the WP fallback must not sync the password and try again.
+	 */
+	public function test_authenticate_mfa_challenge_skips_wp_fallback(): void {
+		update_user_meta( $this->wp_fallback_user_id, '_workos_user_id', 'user_wos_fallback' );
+		$this->response_queue = [ $this->mfa_challenge() ];
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/password/authenticate',
+			[
+				'profile'  => 'members',
+				'email'    => 'fallback@example.com',
+				'password' => 'wp_password_123',
+			]
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['mfa_required'] );
+		$this->assertCount( 1, $this->captured, 'Only the first authenticate call may reach WorkOS.' );
+		$this->assertSame( 0, get_current_user_id() );
+	}
+
+	/**
+	 * WorkOS's `mfa_challenge` rejection for an account with a TOTP factor.
+	 *
+	 * @return array HTTP response for the interceptor.
+	 */
+	private function mfa_challenge(): array {
+		return [
+			'response' => [ 'code' => 403, 'message' => 'Forbidden' ],
+			'body'     => wp_json_encode(
+				[
+					'code'                         => 'mfa_challenge',
+					'message'                      => 'The user must complete an MFA challenge to finish authenticating.',
+					'pending_authentication_token' => 'pat_mfa',
+					'authentication_factors'       => [
+						[ 'id' => 'auth_factor_1', 'type' => 'totp' ],
+					],
+					'user'                         => [ 'id' => 'user_wos_fallback', 'email' => 'fallback@example.com' ],
+				]
+			),
+		];
+	}
+
+	/**
 	 * WorkOS's `email_verification_required` rejection for an account.
 	 *
 	 * @param string $email Account email.

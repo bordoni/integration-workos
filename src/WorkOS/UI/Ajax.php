@@ -7,6 +7,7 @@
 
 namespace WorkOS\UI;
 
+use WorkOS\Auth\AuthKit\MfaStep;
 use WorkOS\Auth\Deactivation;
 use WorkOS\Auth\Login;
 use WorkOS\Sync\UserSync;
@@ -45,6 +46,12 @@ class Ajax {
 		}
 
 		$result = workos()->api()->authenticate_with_password( $email, $password );
+
+		// The login button only takes an email and password, so it can't
+		// collect a second factor. Say so instead of echoing WorkOS's error.
+		if ( MfaStep::is_mfa_error( $result ) ) {
+			wp_send_json_error( [ 'message' => MfaStep::unsupported_error()->get_error_message() ], 403 );
+		}
 
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( [ 'message' => $result->get_error_message() ] );

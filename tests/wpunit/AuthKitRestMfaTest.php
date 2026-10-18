@@ -176,7 +176,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 
 	public function test_challenge_returns_challenge_id_on_success(): void {
 		$this->queue_response(
-			'/user_management/auth_factors/',
+			'/auth/factors/factor_123/challenge',
 			[ 'id' => 'challenge_abc', 'expires_at' => '2030-01-01T00:00:00Z' ]
 		);
 
@@ -239,6 +239,88 @@ class AuthKitRestMfaTest extends WPTestCase {
 		$this->assertSame( 'urn:workos:oauth:grant-type:mfa-totp', $body['grant_type'] );
 	}
 
+	/**
+	 * A verified second factor completes on an `enforce = always` profile.
+	 *
+	 * The TOTP grant answers without a pending token, which the `always`
+	 * check used to read as "no factor enrolled" and refuse.
+	 */
+	public function test_verify_completes_login_on_enforce_always_profile(): void {
+		$this->save_always_profile();
+
+		$this->queue_response(
+			'/user_management/authenticate',
+			[
+				'access_token'  => 'eyJhbGciOi.eyJzdWIiOiJ1c2VyX2Fsd2F5cyIsImV4cCI6OTk5OTk5OTk5OX0.sig',
+				'refresh_token' => 'rt_always',
+				'user'          => [ 'id' => 'user_always', 'email' => 'always@example.com' ],
+			]
+		);
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/mfa/verify',
+			[
+				'profile'                      => 'mfa-always',
+				'pending_authentication_token' => 'pat_always',
+				'authentication_challenge_id'  => 'chal_always',
+				'code'                         => '123456',
+			],
+			'mfa-always'
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( 'always@example.com', $response->get_data()['user']['email'] );
+	}
+
+	/**
+	 * A wrong code on an `always` profile still fails: the satisfied flag
+	 * only matters once WorkOS has accepted the code.
+	 */
+	public function test_verify_wrong_code_on_enforce_always_profile_fails(): void {
+		$this->save_always_profile();
+
+		$this->queue_response(
+			'/user_management/authenticate',
+			[
+				'code'    => 'authentication_challenge_failed',
+				'message' => 'The code is incorrect.',
+			],
+			400
+		);
+
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/mfa/verify',
+			[
+				'profile'                      => 'mfa-always',
+				'pending_authentication_token' => 'pat_always',
+				'authentication_challenge_id'  => 'chal_always',
+				'code'                         => '000000',
+			],
+			'mfa-always'
+		);
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 0, get_current_user_id() );
+	}
+
+	private function save_always_profile(): void {
+		$this->repository->save(
+			Profile::from_array(
+				[
+					'slug'    => 'mfa-always',
+					'title'   => 'MFA Always',
+					'methods' => [ Profile::METHOD_PASSWORD ],
+					'mfa'     => [
+						'enforce' => Profile::MFA_ENFORCE_ALWAYS,
+						'factors' => [ Profile::FACTOR_TOTP ],
+					],
+				]
+			)
+		);
+	}
+
 	// --------------------------- /auth/mfa/factors ---------------------------
 
 	public function test_list_factors_rejects_unauthenticated(): void {
@@ -293,11 +375,20 @@ class AuthKitRestMfaTest extends WPTestCase {
 		$this->queue_response(
 			'/user_management/users/user_mfa_2/auth_factors',
 			[
-				'id'   => 'factor_totp',
-				'totp' => [
-					'qr_code' => 'data:image/png;base64,AAA',
-					'secret'  => 'SECRETBASE32',
-					'uri'     => 'otpauth://totp/Acme:alice@example.com?secret=SECRETBASE32',
+				'authentication_factor'    => [
+					'object' => 'authentication_factor',
+					'id'     => 'factor_totp',
+					'type'   => 'totp',
+					'totp'   => [
+						'qr_code' => 'data:image/png;base64,AAA',
+						'secret'  => 'SECRETBASE32',
+						'uri'     => 'otpauth://totp/Acme:alice@example.com?secret=SECRETBASE32',
+					],
+				],
+				'authentication_challenge' => [
+					'object'                   => 'authentication_challenge',
+					'id'                       => 'auth_challenge_enroll',
+					'authentication_factor_id' => 'factor_totp',
 				],
 			],
 			201
@@ -313,6 +404,8 @@ class AuthKitRestMfaTest extends WPTestCase {
 		$this->assertSame( 201, $response->get_status() );
 		$data = $response->get_data();
 		$this->assertSame( 'factor_totp', $data['factor_id'] );
+		$this->assertSame( 'auth_challenge_enroll', $data['challenge_id'] );
+		$this->assertSame( 'data:image/png;base64,AAA', $data['qr_code'] );
 		$this->assertSame( 'SECRETBASE32', $data['secret'] );
 		$this->assertStringStartsWith( 'otpauth://', $data['otpauth_uri'] );
 	}
@@ -372,7 +465,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 				],
 			]
 		);
-		$this->queue_response( '/user_management/auth_factors/factor_x', [] );
+		$this->queue_response( '/auth/factors/factor_x', [] );
 
 		$response = $this->dispatch_with_nonce(
 			'POST',

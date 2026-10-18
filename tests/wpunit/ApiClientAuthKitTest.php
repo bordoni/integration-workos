@@ -315,7 +315,8 @@ class ApiClientAuthKitTest extends WPTestCase {
 
 		$request = $this->last_request();
 		$this->assertSame( 'DELETE', $request['method'] );
-		$this->assertStringContainsString( '/user_management/auth_factors/factor_abc', $request['url'] );
+		$this->assertStringContainsString( '/auth/factors/factor_abc', $request['url'] );
+		$this->assertStringNotContainsString( '/user_management/', $request['url'] );
 	}
 
 	public function test_challenge_auth_factor_posts_empty_when_no_template(): void {
@@ -323,8 +324,10 @@ class ApiClientAuthKitTest extends WPTestCase {
 
 		$request = $this->last_request();
 		$this->assertSame( 'POST', $request['method'] );
-		$this->assertStringContainsString( '/user_management/auth_factors/factor_abc/challenge', $request['url'] );
-		$this->assertSame( [], $this->last_body_json() );
+		$this->assertStringContainsString( '/auth/factors/factor_abc/challenge', $request['url'] );
+		$this->assertStringNotContainsString( '/user_management/', $request['url'] );
+		// A JSON object: WorkOS answers 422 to an empty array.
+		$this->assertSame( '{}', $request['body'] );
 	}
 
 	public function test_challenge_auth_factor_includes_sms_template(): void {
@@ -337,7 +340,8 @@ class ApiClientAuthKitTest extends WPTestCase {
 		$this->client->verify_auth_challenge( 'challenge_abc', '111222', 'radar_vc' );
 
 		$request = $this->last_request();
-		$this->assertStringContainsString( '/user_management/auth_challenges/challenge_abc/verify', $request['url'] );
+		$this->assertStringContainsString( '/auth/challenges/challenge_abc/verify', $request['url'] );
+		$this->assertStringNotContainsString( '/user_management/', $request['url'] );
 		$this->assertSame( '111222', $this->last_body_json()['code'] );
 		$this->assertSame( 'radar_vc', $request['headers']['x-workos-radar-action-token'] );
 	}
