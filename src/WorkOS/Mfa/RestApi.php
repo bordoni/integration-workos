@@ -25,9 +25,12 @@ defined( 'ABSPATH' ) || exit;
  *  - POST   /users/{id}/mfa/enroll                — create a TOTP factor (QR + secret).
  *  - POST   /users/{id}/mfa/confirm               — confirm it with the first code.
  *  - DELETE /users/{id}/mfa/factors/{factor_id}   — remove a factor, with a code from it.
+ *  - PUT    /users/{id}/mfa/required              — set or clear the require flag (admin).
+ *  - POST   /users/{id}/mfa/reset                 — remove every factor (admin).
  *
- * Enrolling and removing are the account owner's alone. Admins can read
- * the status; their tools (reset, require) are in the admin routes.
+ * Enrolling and removing are the account owner's alone. Admins (`edit_user`,
+ * filter `workos_mfa_can_manage_user`) read the status, require MFA and
+ * reset a lost authenticator.
  */
 class RestApi {
 
@@ -127,6 +130,85 @@ class RestApi {
 				],
 			]
 		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/users/(?P<id>\d+)/mfa/required',
+			[
+				'methods'             => 'PUT',
+				'callback'            => [ $this, 'set_required' ],
+				'permission_callback' => [ $this, 'can_administer' ],
+				'args'                => $id + [
+					'required' => [
+						'required'          => true,
+						'sanitize_callback' => 'rest_sanitize_boolean',
+					],
+				],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/users/(?P<id>\d+)/mfa/reset',
+			[
+				'methods'             => 'POST',
+				'callback'            => [ $this, 'reset' ],
+				'permission_callback' => [ $this, 'can_administer' ],
+				'args'                => $id,
+			]
+		);
+	}
+
+	/**
+	 * Permission callback for the admin routes.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 *
+	 * @return true|WP_Error
+	 */
+	public function can_administer( WP_REST_Request $request ) {
+		return self::can_manage_user( (int) $request->get_param( 'id' ) );
+	}
+
+	/**
+	 * PUT /users/{id}/mfa/required
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function set_required( WP_REST_Request $request ) {
+		$user_id = (int) $request->get_param( 'id' );
+		if ( ! get_userdata( $user_id ) ) {
+			return $this->error( 'workos_mfa_invalid_user', __( 'User not found.', 'integration-workos' ), 404 );
+		}
+
+		$required = (bool) $request->get_param( 'required' );
+		$this->factors->set_required( $user_id, $required );
+
+		return new WP_REST_Response(
+			[
+				'required' => $required,
+				'enabled'  => $this->factors->is_enabled( $user_id ),
+			],
+			200
+		);
+	}
+
+	/**
+	 * POST /users/{id}/mfa/reset
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function reset( WP_REST_Request $request ) {
+		$removed = $this->factors->reset( (int) $request->get_param( 'id' ) );
+		if ( is_wp_error( $removed ) ) {
+			return $removed;
+		}
+
+		return new WP_REST_Response( [ 'removed' => $removed ], 200 );
 	}
 
 	/**

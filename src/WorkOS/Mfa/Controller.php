@@ -33,12 +33,14 @@ class Controller extends BaseController {
 		$this->container->singleton( Assets::class );
 		$this->container->singleton( Shortcode::class );
 		$this->container->singleton( UserProfilePanel::class );
+		$this->container->singleton( Admin\UserEditPanel::class );
 
 		$this->container->get( PasswordGuard::class )->register();
 		$this->container->get( RestApi::class )->register();
 		$this->container->get( Assets::class )->register();
 		$this->container->get( Shortcode::class )->register();
 		$this->container->get( UserProfilePanel::class )->register();
+		$this->container->get( Admin\UserEditPanel::class )->register();
 	}
 
 	/**

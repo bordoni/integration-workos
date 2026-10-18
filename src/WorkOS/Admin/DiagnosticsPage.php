@@ -10,6 +10,7 @@ namespace WorkOS\Admin;
 use WorkOS\App;
 use WorkOS\Config;
 use WorkOS\Auth\Login;
+use WorkOS\Mfa\Settings as MfaSettings;
 use WorkOS\Options\Global_Options;
 
 defined( 'ABSPATH' ) || exit;
@@ -167,6 +168,7 @@ class DiagnosticsPage {
 
 		// 2. API Connectivity.
 		$checks[] = $this->check_api_connectivity();
+		$checks[] = $this->check_mfa();
 
 		// 3. Database Tables.
 		$checks[] = $this->check_database_tables();
@@ -253,6 +255,54 @@ class DiagnosticsPage {
 			'label'  => __( 'API Connectivity', 'integration-workos' ),
 			'pass'   => true,
 			'detail' => esc_html__( 'Successfully connected to WorkOS API.', 'integration-workos' ),
+		];
+	}
+
+	/**
+	 * Check that the WorkOS MFA factor API answers, and show the MFA mode.
+	 *
+	 * Lists factors for a user that can't exist: a "not found" answer
+	 * means the API is reachable with these keys.
+	 *
+	 * @return array
+	 */
+	private function check_mfa(): array {
+		$label = __( 'Two-Step Verification', 'integration-workos' );
+		$mode  = App::container()->get( MfaSettings::class )->mode();
+		$modes = [
+			MfaSettings::MODE_PLUGIN => __( 'WordPress decides who is challenged.', 'integration-workos' ),
+			MfaSettings::MODE_WORKOS => __( 'WorkOS requires MFA for every user in the environment.', 'integration-workos' ),
+			MfaSettings::MODE_OFF    => __( 'WordPress asks nobody for a code.', 'integration-workos' ),
+		];
+
+		if ( ! workos()->is_enabled() ) {
+			return [
+				'label'  => $label,
+				'pass'   => false,
+				'detail' => esc_html__( 'Plugin not configured (missing API key, Client ID, or Environment ID).', 'integration-workos' ),
+			];
+		}
+
+		$result = workos()->api()->list_auth_factors( 'user_workos_diagnostics_check' );
+		$status = is_wp_error( $result ) ? (int) ( $result->get_error_data()['status'] ?? 0 ) : 200;
+		$pass   = ! is_wp_error( $result ) || in_array( $status, [ 400, 404, 422 ], true );
+
+		return [
+			'label'  => $label,
+			'pass'   => $pass,
+			'detail' => esc_html(
+				$pass
+					? sprintf(
+						/* translators: %s: sentence describing the MFA mode. */
+						__( 'The WorkOS factor API is reachable. %s', 'integration-workos' ),
+						$modes[ $mode ]
+					)
+					: sprintf(
+						/* translators: %s: error message from WorkOS. */
+						__( 'Could not reach the WorkOS factor API: %s', 'integration-workos' ),
+						$result->get_error_message()
+					)
+			),
 		];
 	}
 
