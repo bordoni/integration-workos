@@ -133,17 +133,47 @@ class FactorService {
 			delete_user_meta( $user_id, User::META_MFA_PENDING_FACTOR );
 		}
 
-		$user = get_userdata( $user_id );
+		$user   = get_userdata( $user_id );
+		$enroll = $this->enroll_totp( $workos_id, $user ? (string) $user->user_email : '', $user_id );
+		if ( is_wp_error( $enroll ) ) {
+			return $enroll;
+		}
 
+		update_user_meta(
+			$user_id,
+			User::META_MFA_PENDING_FACTOR,
+			[
+				'factor_id' => $enroll['factor_id'],
+				'created'   => time(),
+			]
+		);
+
+		return $enroll;
+	}
+
+	/**
+	 * Create a TOTP factor on a WorkOS user, with nothing stored in WordPress.
+	 *
+	 * `start_enrollment()` builds on it. The sign-in flow uses it directly
+	 * when WorkOS answers `mfa_enrollment`, where the WP user may not
+	 * exist yet.
+	 *
+	 * @param string $workos_id WorkOS user ID.
+	 * @param string $label     Account label the authenticator app shows (usually the email).
+	 * @param int    $user_id   WP user ID, when known (passed to the issuer filter).
+	 *
+	 * @return array|WP_Error `{ factor_id, challenge_id, qr_code, secret, otpauth_uri }`.
+	 */
+	public function enroll_totp( string $workos_id, string $label, int $user_id = 0 ) {
 		/**
 		 * Filters the issuer an authenticator app shows for the factor.
 		 *
 		 * @param string $issuer  Issuer. Default: the site name.
-		 * @param int    $user_id WP user ID.
+		 * @param int    $user_id WP user ID, or 0 when the sign-in hasn't matched one yet.
 		 */
 		$issuer = (string) apply_filters( 'workos_mfa_totp_issuer', (string) get_bloginfo( 'name' ), $user_id );
 
-		$result = workos()->api()->enroll_totp_factor( $workos_id, $issuer, $user ? (string) $user->user_email : '' );
+		$result = workos()->api()->enroll_totp_factor( $workos_id, $issuer, $label );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -160,15 +190,6 @@ class FactorService {
 				[ 'status' => 502 ]
 			);
 		}
-
-		update_user_meta(
-			$user_id,
-			User::META_MFA_PENDING_FACTOR,
-			[
-				'factor_id' => $factor_id,
-				'created'   => time(),
-			]
-		);
 
 		return [
 			'factor_id'    => $factor_id,
@@ -201,6 +222,23 @@ class FactorService {
 		}
 
 		delete_user_meta( $user_id, User::META_MFA_PENDING_FACTOR );
+		$this->note_enrolled( $user_id, $factor_id );
+
+		return $this->status( $user_id );
+	}
+
+	/**
+	 * Record a newly confirmed factor: flag, activity log, hook.
+	 *
+	 * `confirm_enrollment()` calls it, and so does the sign-in flow when
+	 * WorkOS itself confirmed the factor (the `mfa_enrollment` step).
+	 *
+	 * @param int    $user_id   WP user ID.
+	 * @param string $factor_id Confirmed factor.
+	 *
+	 * @return void
+	 */
+	public function note_enrolled( int $user_id, string $factor_id ): void {
 		$this->sync_enabled( $user_id, true );
 
 		EventLogger::log(
@@ -228,8 +266,6 @@ class FactorService {
 				'type' => 'totp',
 			]
 		);
-
-		return $this->status( $user_id );
 	}
 
 	/**

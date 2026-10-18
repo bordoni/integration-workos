@@ -7,6 +7,7 @@
 
 namespace WorkOS\Auth;
 
+use WorkOS\Auth\AuthKit\FrontendRoute;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\MfaStep;
 use WorkOS\Auth\AuthKit\Profile;
@@ -315,7 +316,16 @@ class Login {
 			);
 		}
 
-		// Step-up auth shouldn't normally surface here — the hosted UI runs
+		// The plugin's MFA policy wants a code (or an enrollment) the hosted
+		// page didn't ask for. The sign-in is parked; finish it on the
+		// profile's AuthKit page, which renders just the MFA step.
+		if ( ! empty( $outcome['mfa_token'] ) ) {
+			nocache_headers();
+			wp_safe_redirect( FrontendRoute::url_for_profile( $profile, [ 'workos_mfa' => (string) $outcome['mfa_token'] ] ) );
+			exit;
+		}
+
+		// WorkOS's own step-up shouldn't surface here — the hosted UI runs
 		// MFA before issuing the code — but if WorkOS does return it,
 		// refuse rather than silently completing the login.
 		if ( ! empty( $outcome['mfa_required'] ) ) {

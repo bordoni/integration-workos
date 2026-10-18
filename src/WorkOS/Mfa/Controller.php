@@ -10,7 +10,8 @@ namespace WorkOS\Mfa;
 use WorkOS\Contracts\Controller as BaseController;
 
 /**
- * Binds the MFA settings, policy and factor service.
+ * Binds the MFA settings, policy and factor service, and the guard that
+ * keeps password-only sign-ins from skipping MFA.
  *
  * Sign-in enforcement lives in `Auth\AuthKit\LoginCompleter`, and the
  * routes in `REST\Auth\Mfa`; both resolve these from the container.
@@ -26,6 +27,9 @@ class Controller extends BaseController {
 		$this->container->singleton( Settings::class );
 		$this->container->singleton( Policy::class );
 		$this->container->singleton( FactorService::class );
+		$this->container->singleton( PasswordGuard::class );
+
+		$this->container->get( PasswordGuard::class )->register();
 	}
 
 	/**

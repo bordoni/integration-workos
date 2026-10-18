@@ -56,6 +56,7 @@ class MfaLoginErrorsTest extends WPTestCase {
 	}
 
 	public function tearDown(): void {
+		remove_all_filters( 'workos_mfa_mode' );
 		remove_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10 );
 		$this->next_workos = null;
 
@@ -114,17 +115,36 @@ class MfaLoginErrorsTest extends WPTestCase {
 		$this->assertSame( 'workos_authkit_factor_not_allowed', $result->get_error_code() );
 	}
 
-	public function test_completer_refuses_enrollment_error_without_leaking_token(): void {
+	public function test_completer_parks_enrollment_error_without_leaking_token(): void {
 		$result = ( new LoginCompleter() )->complete( $this->api_error( $this->enrollment_body() ), $this->profile() );
+
+		$this->assertIsArray( $result );
+		$this->assertTrue( $result['mfa_required'] );
+		$this->assertTrue( $result['enroll'] );
+		$this->assertNotEmpty( $result['mfa_token'] );
+		$this->assertArrayNotHasKey( 'pending_authentication_token', $result );
+		$this->assertStringNotContainsString( 'pat_enroll', wp_json_encode( $result ) );
+		$this->assertSame( 0, get_current_user_id() );
+
+		$parked = \WorkOS\Mfa\PendingLogin::get( $result['mfa_token'], 'members' );
+		$this->assertSame( 'pat_enroll', $parked['pending_authentication_token'] );
+		$this->assertSame( 'user_mfa', $parked['workos_user_id'] );
+		$this->assertNull( \WorkOS\Mfa\PendingLogin::get( $result['mfa_token'], 'another-profile' ) );
+	}
+
+	public function test_completer_refuses_enrollment_error_without_user(): void {
+		$body = $this->enrollment_body();
+		unset( $body['user'] );
+
+		$result = ( new LoginCompleter() )->complete( $this->api_error( $body ), $this->profile() );
 
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'workos_authkit_mfa_enrollment_required', $result->get_error_code() );
-		$this->assertSame( 403, $result->get_error_data()['status'] );
 		$this->assertStringNotContainsString( 'pat_enroll', wp_json_encode( $result->get_error_data() ) );
-		$this->assertSame( 0, get_current_user_id() );
 	}
 
 	public function test_completer_accepts_satisfied_success_on_always_profile(): void {
+		add_filter( 'workos_mfa_mode', static fn() => 'workos' );
 		$profile = $this->profile( Profile::MFA_ENFORCE_ALWAYS );
 		$success = [
 			'access_token'  => 'eyJ.eyJzdWIiOiJ1c2VyX3NhdCJ9.sig',

@@ -16,6 +16,8 @@ WorkOS users.
 | Mode | `mfa_mode` option per environment, filter `workos_mfa_mode` | Site |
 | Who must use MFA | Require flag per user, `mfa_required_roles` option, filter `workos_mfa_required_for_user` | Admin, code |
 | What a sign-in needs | `WorkOS\Mfa\Policy::decide()`, filter `workos_mfa_decision`, helper `workos_mfa_decision()` | Code |
+| Sign-in step | `POST /auth/mfa/enroll`, `/auth/mfa/challenge`, `/auth/mfa/verify` and the React shell | Visitors |
+| Password-only sign-ins | Refused for users with MFA (`workos_mfa_allow_password_fallback`) | Site |
 | Factors | `WorkOS\Mfa\FactorService`, helpers `workos_mfa_*` | Code |
 | Activity log | `mfa.*` events | Admin |
 
@@ -133,21 +135,73 @@ check capabilities.
 | `workos_mfa_invalid_user` | 404 | `workos_mfa_set_required()` got an unknown user |
 | `workos_mfa_invalid_response` | 502 | WorkOS answered an enrollment without a factor |
 
-## Sign-in errors from WorkOS
+## Sign-in
 
-When WorkOS requires MFA, `authenticate` answers with an error, not a
-success:
+Every AuthKit sign-in (password, magic code, OAuth, the hosted-AuthKit
+callback) ends in `LoginCompleter::complete()`, which hands the browser one of
+three MFA steps:
 
-- `mfa_challenge`: the sign-in form shows the code step
-  (`{ mfa_required, pending_authentication_token, factors }`). The profile's
-  factor allowlist applies.
-- `mfa_enrollment`: refused with `403 workos_authkit_mfa_enrollment_required`
-  for now.
+| Who asked | Response | The browser then |
+|---|---|---|
+| WorkOS (`mfa_challenge`) | `{ mfa_required, pending_authentication_token, factors }` | Challenges a factor and verifies with `pending_authentication_token` |
+| The plugin's policy (`challenge`) | `{ mfa_required, mfa_token, enroll: false, factors }` | Challenges a factor and verifies with `mfa_token` |
+| The plugin's policy (`enroll`), or WorkOS (`mfa_enrollment`) | `{ mfa_required, mfa_token, enroll: true, factors: [] }` | Enrolls, then verifies the first code with `mfa_token` |
 
-Sign-in paths that can't collect a code (headless `wp-login.php`, the login
-button's form) refuse with `403 workos_mfa_step_unsupported`. They never fall
-back to the WordPress password, since WorkOS already accepted the password and
-only the second factor is missing.
+With an `mfa_token`, nothing reaches the browser but that token. WorkOS's
+response (tokens included) or its pending token waits server-side in
+`WorkOS\Mfa\PendingLogin`: bound to the Login Profile, used once, capped at 5
+wrong codes, and gone after 10 minutes (filter `workos_mfa_pending_ttl`). No
+WordPress session exists until the code checks out.
+
+A profile the policy blocks answers `403 workos_mfa_blocked` (message filter
+`workos_mfa_block_message`, action `workos_mfa_blocked`).
+
+### Routes
+
+All three take the profile and its nonce (`X-WorkOS-Nonce`), like every
+`/auth` route.
+
+| Route | Body | Returns |
+|---|---|---|
+| `POST /auth/mfa/enroll` | `mfa_token` | `201 { factor_id, challenge_id, qr_code, secret, otpauth_uri }`. Calling it again replaces the unfinished factor |
+| `POST /auth/mfa/challenge` | `factor_id`, plus `mfa_token` when there is one | `{ challenge_id, expires_at }`. With `mfa_token`, only the sign-in's own factors |
+| `POST /auth/mfa/verify` | `authentication_challenge_id`, `code`, and `mfa_token` or `pending_authentication_token` | `{ user, redirect_to }` with the session set. With `mfa_token`, only challenges this sign-in asked for |
+
+| Code | Status | Cause |
+|---|---|---|
+| `workos_authkit_mfa_expired` | 403 | Unknown, used or expired `mfa_token`, or another profile's |
+| `workos_authkit_factor_not_found` | 404 | The factor isn't one this sign-in may challenge |
+| `workos_authkit_challenge_not_found` | 404 | The challenge wasn't issued for this sign-in |
+| `workos_mfa_invalid_code` | 400 | Wrong code |
+| `workos_authkit_mfa_attempts_exceeded` | 403 | Fifth wrong code; start over |
+| `workos_mfa_blocked` | 403 | The profile can't satisfy the user's MFA |
+| `workos_authkit_mfa_enrollment_required` | 403 | WorkOS asked for an enrollment without saying which user |
+
+Rate limits: `mfa_enroll_ip` / `mfa_enroll_token`, `mfa_challenge_ip` /
+`mfa_challenge_factor`, `mfa_verify_ip` / `mfa_verify_token` (see
+[`rate-limiting.md`](rate-limiting.md)).
+
+### Hosted AuthKit
+
+The hosted page runs WorkOS's own MFA, but not the plugin's policy. When the
+policy wants a code after the callback, the sign-in is parked and the visitor
+lands on `/workos/login/{profile}/?workos_mfa=<token>`, which renders only the
+MFA step, even for a profile in redirect mode.
+
+### Password-only sign-ins
+
+`wp-login.php` with `?fallback=1`, `wp_signon()`, headless mode and the login
+button take a username and password only, so they can't ask for a code. In
+`plugin` mode they refuse (`403 workos_mfa_step_unsupported`) a user who has a
+factor or must use MFA, and an MFA error from WorkOS never falls back to the
+WordPress password. Application passwords are exempt. To allow it anyway:
+
+```php
+add_filter( 'workos_mfa_allow_password_fallback', fn( $allow, $user_id ) => user_can( $user_id, 'manage_options' ), 10, 2 );
+```
+
+In `workos` mode a WordPress password never reaches WorkOS, so turn the
+password fallback off.
 
 ## Hooks
 
@@ -159,6 +213,9 @@ only the second factor is missing.
 | `workos_mfa_required_for_user` | `bool $required, int $user_id, ?Profile $profile` | Flag or role |
 | `workos_mfa_decision` | `string $decision, int $user_id, Profile $profile, array $context` | Policy table |
 | `workos_mfa_totp_issuer` | `string $issuer, int $user_id` | Site name |
+| `workos_mfa_block_message` | `string $message, int $user_id, Profile $profile` | Generic message |
+| `workos_mfa_pending_ttl` | `int $ttl` | 600 seconds |
+| `workos_mfa_allow_password_fallback` | `bool $allow, int $user_id` | `false` |
 
 **Actions**
 
@@ -168,6 +225,9 @@ only the second factor is missing.
 | `workos_mfa_factor_removed` | `int $user_id, string $factor_id` | One factor is removed |
 | `workos_mfa_reset` | `int $user_id, int $removed` | Every factor is removed |
 | `workos_mfa_required_changed` | `int $user_id, bool $required` | The require flag changes |
+| `workos_mfa_challenge_succeeded` | `int $user_id` | The plugin's sign-in challenge is answered |
+| `workos_mfa_challenge_failed` | `int $user_id, string $error_code` | A wrong code at the plugin's sign-in challenge |
+| `workos_mfa_blocked` | `int $user_id, Profile $profile` | A sign-in is refused by MFA policy |
 
 ## Activity log
 
@@ -177,6 +237,8 @@ only the second factor is missing.
 | `mfa.removed` | `factor_id` |
 | `mfa.reset` | `removed`, `actor_id` |
 | `mfa.required_set`, `mfa.required_cleared` | `actor_id` |
+| `mfa.challenge_succeeded`, `mfa.challenge_failed` | `factor_type` |
+| `mfa.blocked` | `profile` |
 
 ## Don't do this
 
@@ -198,4 +260,8 @@ only the second factor is missing.
 | Helpers | `src/includes/functions-helpers.php` |
 | WorkOS MFA errors | `src/WorkOS/Auth/AuthKit/MfaStep.php` |
 | Sign-in completion | `src/WorkOS/Auth/AuthKit/LoginCompleter.php` |
+| Parked sign-ins | `src/WorkOS/Mfa/PendingLogin.php` |
+| Sign-in routes | `src/WorkOS/REST/Auth/Mfa.php` |
+| Password-only guard | `src/WorkOS/Mfa/PasswordGuard.php` |
+| Enroll and challenge steps | `src/js/authkit/flows.tsx` (`MfaEnroll`, `MfaChallenge`) |
 | WorkOS calls | `src/WorkOS/Api/Client.php` (`list_auth_factors`, `enroll_totp_factor`, `challenge_auth_factor`, `verify_auth_challenge`, `delete_auth_factor`) |

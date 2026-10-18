@@ -7,6 +7,7 @@
 
 namespace WorkOS\Auth\AuthKit;
 
+use WorkOS\Mfa\PendingLogin;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 
 defined( 'ABSPATH' ) || exit;
@@ -153,7 +154,12 @@ class FrontendRoute {
 			);
 		}
 
-		if ( ! $profile->is_custom_mode() ) {
+		// A sign-in parked at the MFA step (sent here by the hosted-AuthKit
+		// callback) renders on any profile, redirect mode included: the
+		// shell shows only the code step.
+		$mfa = $this->parked_mfa( $profile );
+
+		if ( ! $profile->is_custom_mode() && null === $mfa ) {
 			// Redirect-mode profiles hand off to the legacy callback flow.
 			status_header( 301 );
 			wp_safe_redirect( wp_login_url( (string) ( SuperGlobals::get_get_var( 'redirect_to' ) ?? '' ) ) );
@@ -174,7 +180,33 @@ class FrontendRoute {
 			'reset_token'      => (string) ( SuperGlobals::get_get_var( 'token' ) ?? '' ),
 		];
 
+		if ( null !== $mfa ) {
+			$context['mfa'] = $mfa;
+		}
+
 		$this->renderer->render_full_page( $profile, $context );
+	}
+
+	/**
+	 * The MFA step to resume, when `?workos_mfa=` names a live parked sign-in.
+	 *
+	 * @param Profile $profile Profile being rendered.
+	 *
+	 * @return array|null `{ mfa_required, mfa_token, enroll, factors }`, or null.
+	 */
+	private function parked_mfa( Profile $profile ): ?array {
+		$token   = sanitize_text_field( (string) ( SuperGlobals::get_get_var( 'workos_mfa' ) ?? '' ) );
+		$pending = '' !== $token ? PendingLogin::get( $token, $profile->get_slug() ) : null;
+		if ( null === $pending ) {
+			return null;
+		}
+
+		return [
+			'mfa_required' => true,
+			'mfa_token'    => $token,
+			'enroll'       => ! empty( $pending['enroll'] ),
+			'factors'      => (array) ( $pending['factors'] ?? [] ),
+		];
 	}
 
 	/**
