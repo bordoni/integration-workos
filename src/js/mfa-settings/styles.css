@@ -1,0 +1,50 @@
+/*
+ * Two-step verification account panel. Uses core admin classes (button,
+ * notice, description) so it fits profile.php; these rules only lay out
+ * the pieces those classes don't cover, and stay readable in themes.
+ */
+.workos-mfa {
+	max-width: 36rem;
+}
+
+.workos-mfa-factors {
+	margin: 0 0 1em;
+	padding: 0;
+	list-style: none;
+}
+
+.workos-mfa-factors li {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1em;
+	padding: 0.5em 0;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.workos-mfa-step {
+	margin: 0 0 1em;
+	padding: 1em 1.25em;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #fff;
+}
+
+.workos-mfa-qr {
+	display: block;
+	margin: 0 0 0.75em;
+	padding: 8px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+}
+
+.workos-mfa-secret {
+	overflow-wrap: anywhere;
+	user-select: all;
+}
+
+.workos-mfa-code {
+	max-width: 12em;
+	letter-spacing: 0.1em;
+}

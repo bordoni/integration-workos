@@ -18,5 +18,6 @@ module.exports = {
 		'admin-password-reset': path.resolve( __dirname, 'src/js/admin-password-reset/index.ts' ),
 		'admin-change-email': path.resolve( __dirname, 'src/js/admin-change-email/index.ts' ),
 		'change-email-confirm': path.resolve( __dirname, 'src/js/change-email-confirm/index.ts' ),
+		'mfa-settings': path.resolve( __dirname, 'src/js/mfa-settings/index.tsx' ),
 	},
 };

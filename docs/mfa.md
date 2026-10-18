@@ -18,6 +18,7 @@ WorkOS users.
 | What a sign-in needs | `WorkOS\Mfa\Policy::decide()`, filter `workos_mfa_decision`, helper `workos_mfa_decision()` | Code |
 | Sign-in step | `POST /auth/mfa/enroll`, `/auth/mfa/challenge`, `/auth/mfa/verify` and the React shell | Visitors |
 | Password-only sign-ins | Refused for users with MFA (`workos_mfa_allow_password_fallback`) | Site |
+| Account panel | Profile screen, `[workos:mfa]` shortcode, `/users/{id}/mfa…` routes | Users |
 | Factors | `WorkOS\Mfa\FactorService`, helpers `workos_mfa_*` | Code |
 | Activity log | `mfa.*` events | Admin |
 
@@ -203,6 +204,48 @@ add_filter( 'workos_mfa_allow_password_fallback', fn( $allow, $user_id ) => user
 In `workos` mode a WordPress password never reaches WorkOS, so turn the
 password fallback off.
 
+## Account panel
+
+Users turn two-step verification on and off themselves:
+
+- **Profile screen:** a "Two-step verification" section on `profile.php` for
+  linked users.
+- **`[workos:mfa]`:** the same panel on any page, e.g. a front-end account
+  screen. It renders nothing for visitors, unlinked accounts, or when
+  `workos_mfa_can_manage` says no.
+
+Turning it on shows a QR code and setup key, and the factor only counts once
+the first code checks out. Removing a factor needs a current code from it, so
+a session someone else got hold of can't quietly turn MFA off.
+
+### Routes
+
+Cookie-authenticated with the core `wp_rest` nonce (`X-WP-Nonce`), so any UI
+can use them.
+
+| Route | Who | Body | Returns |
+|---|---|---|---|
+| `GET /users/{id}/mfa` | The owner, or `edit_user` (`workos_mfa_can_manage_user`) | — | `{ enabled, required, factors }` |
+| `POST /users/{id}/mfa/enroll` | The owner (`workos_mfa_can_manage`) | — | `201 { factor_id, challenge_id, qr_code, secret, otpauth_uri }` |
+| `POST /users/{id}/mfa/confirm` | The owner | `factor_id`, `code`, `challenge_id` | Status |
+| `DELETE /users/{id}/mfa/factors/{factor_id}` | The owner | `code` | Status |
+
+Rate limits per user: `mfa_enroll_user`, `mfa_confirm_user`, `mfa_delete_user`.
+Errors add `workos_mfa_not_logged_in` (401) and `workos_mfa_forbidden` (403).
+
+The older profile-scoped routes (`GET /auth/mfa/factors`,
+`POST /auth/mfa/totp/enroll`, `POST /auth/mfa/factor/delete`) go through the
+same service: enrollment needs the confirm step, and delete needs `code`.
+
+```js
+// Third-party UI: is MFA on for the current user?
+const res = await fetch( `/wp-json/workos/v1/users/${ userId }/mfa`, {
+	headers: { 'X-WP-Nonce': wpApiSettings.nonce },
+	credentials: 'same-origin',
+} );
+const { enabled, required } = await res.json();
+```
+
 ## Hooks
 
 **Filters**
@@ -216,6 +259,8 @@ password fallback off.
 | `workos_mfa_block_message` | `string $message, int $user_id, Profile $profile` | Generic message |
 | `workos_mfa_pending_ttl` | `int $ttl` | 600 seconds |
 | `workos_mfa_allow_password_fallback` | `bool $allow, int $user_id` | `false` |
+| `workos_mfa_can_manage` | `bool $can, int $user_id` | `true` for the account owner |
+| `workos_mfa_can_manage_user` | `bool $can, int $user_id` | `edit_user` on the target |
 
 **Actions**
 
@@ -264,4 +309,6 @@ password fallback off.
 | Sign-in routes | `src/WorkOS/REST/Auth/Mfa.php` |
 | Password-only guard | `src/WorkOS/Mfa/PasswordGuard.php` |
 | Enroll and challenge steps | `src/js/authkit/flows.tsx` (`MfaEnroll`, `MfaChallenge`) |
+| Account routes | `src/WorkOS/Mfa/RestApi.php` |
+| Account panel | `src/js/mfa-settings/index.tsx`, `src/WorkOS/Mfa/{Assets,Shortcode,UserProfilePanel}.php` |
 | WorkOS calls | `src/WorkOS/Api/Client.php` (`list_auth_factors`, `enroll_totp_factor`, `challenge_auth_factor`, `verify_auth_challenge`, `delete_auth_factor`) |
