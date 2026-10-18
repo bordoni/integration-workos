@@ -540,7 +540,7 @@ class Client {
 	 * @param string $totp_issuer Human-readable issuer displayed by the authenticator (e.g. site name).
 	 * @param string $totp_user  Human-readable account label (usually the user's email).
 	 *
-	 * @return array|\WP_Error Factor data including `totp.qr_code` and `totp.secret`.
+	 * @return array|\WP_Error `authentication_factor` (with `totp.qr_code`, `totp.secret`, `totp.uri`) and `authentication_challenge`.
 	 */
 	public function enroll_totp_factor( string $user_id, string $totp_issuer, string $totp_user ) {
 		return $this->post(
@@ -574,12 +574,15 @@ class Client {
 	/**
 	 * Delete (un-enroll) an authentication factor.
 	 *
+	 * Factors enrolled through User Management are MFA API factors, so
+	 * delete, challenge and verify go to `/auth/...`, not `/user_management/...`.
+	 *
 	 * @param string $factor_id Factor ID.
 	 *
 	 * @return array|\WP_Error
 	 */
 	public function delete_auth_factor( string $factor_id ) {
-		return $this->delete( "/user_management/auth_factors/{$factor_id}" );
+		return $this->delete( "/auth/factors/{$factor_id}" );
 	}
 
 	/**
@@ -599,11 +602,14 @@ class Client {
 			$body['sms_template'] = $sms_template;
 		}
 
-		return $this->post( "/user_management/auth_factors/{$factor_id}/challenge", $body );
+		return $this->post( "/auth/factors/{$factor_id}/challenge", $body );
 	}
 
 	/**
 	 * Verify an authentication challenge with a user-provided code.
+	 *
+	 * Answers `{ challenge, valid }`: check `valid`, since a wrong code
+	 * is not guaranteed to come back as an error.
 	 *
 	 * @param string      $challenge_id       Challenge ID.
 	 * @param string      $code               Code entered by the user.
@@ -617,7 +623,7 @@ class Client {
 		?string $radar_action_token = null
 	) {
 		return $this->post(
-			"/user_management/auth_challenges/{$challenge_id}/verify",
+			"/auth/challenges/{$challenge_id}/verify",
 			[ 'code' => $code ],
 			$this->radar_headers( $radar_action_token )
 		);

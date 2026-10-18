@@ -176,7 +176,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 
 	public function test_challenge_returns_challenge_id_on_success(): void {
 		$this->queue_response(
-			'/user_management/auth_factors/',
+			'/auth/factors/factor_123/challenge',
 			[ 'id' => 'challenge_abc', 'expires_at' => '2030-01-01T00:00:00Z' ]
 		);
 
@@ -375,11 +375,20 @@ class AuthKitRestMfaTest extends WPTestCase {
 		$this->queue_response(
 			'/user_management/users/user_mfa_2/auth_factors',
 			[
-				'id'   => 'factor_totp',
-				'totp' => [
-					'qr_code' => 'data:image/png;base64,AAA',
-					'secret'  => 'SECRETBASE32',
-					'uri'     => 'otpauth://totp/Acme:alice@example.com?secret=SECRETBASE32',
+				'authentication_factor'    => [
+					'object' => 'authentication_factor',
+					'id'     => 'factor_totp',
+					'type'   => 'totp',
+					'totp'   => [
+						'qr_code' => 'data:image/png;base64,AAA',
+						'secret'  => 'SECRETBASE32',
+						'uri'     => 'otpauth://totp/Acme:alice@example.com?secret=SECRETBASE32',
+					],
+				],
+				'authentication_challenge' => [
+					'object'                   => 'authentication_challenge',
+					'id'                       => 'auth_challenge_enroll',
+					'authentication_factor_id' => 'factor_totp',
 				],
 			],
 			201
@@ -395,6 +404,8 @@ class AuthKitRestMfaTest extends WPTestCase {
 		$this->assertSame( 201, $response->get_status() );
 		$data = $response->get_data();
 		$this->assertSame( 'factor_totp', $data['factor_id'] );
+		$this->assertSame( 'auth_challenge_enroll', $data['challenge_id'] );
+		$this->assertSame( 'data:image/png;base64,AAA', $data['qr_code'] );
 		$this->assertSame( 'SECRETBASE32', $data['secret'] );
 		$this->assertStringStartsWith( 'otpauth://', $data['otpauth_uri'] );
 	}
@@ -454,7 +465,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 				],
 			]
 		);
-		$this->queue_response( '/user_management/auth_factors/factor_x', [] );
+		$this->queue_response( '/auth/factors/factor_x', [] );
 
 		$response = $this->dispatch_with_nonce(
 			'POST',
