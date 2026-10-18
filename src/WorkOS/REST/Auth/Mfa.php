@@ -11,9 +11,11 @@ use WorkOS\ActivityLog\EventLogger;
 use WorkOS\App;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\Deactivation;
+use WorkOS\Mfa\CodeGuard;
 use WorkOS\Mfa\FactorService;
 use WorkOS\Mfa\PendingLogin;
 use WorkOS\RateLimit\TieredRateLimiter;
+use WorkOS\User;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -23,13 +25,12 @@ defined( 'ABSPATH' ) || exit;
 /**
  * MFA (TOTP + SMS) endpoints used during login *and* account settings.
  *
- * During login, the browser carries either WorkOS's
- * `pending_authentication_token` (WorkOS asked for a code) or the plugin's
- * `mfa_token` (the plugin's MFA policy asked for a code, or the user must
- * enroll first; see `Mfa\PendingLogin`):
+ * During login, the browser carries the plugin's `mfa_token` (WorkOS or
+ * the plugin's MFA policy asked for a code, or the user must enroll first;
+ * see `Mfa\PendingLogin`). WorkOS's pending token never leaves the server:
  *
- *  - POST /auth/mfa/enroll     — create the factor to enroll (`mfa_token` only).
- *  - POST /auth/mfa/challenge  — start a challenge on the chosen factor.
+ *  - POST /auth/mfa/enroll     — create the factor to enroll.
+ *  - POST /auth/mfa/challenge  — start a challenge on one of the sign-in's factors.
  *  - POST /auth/mfa/verify     — verify the challenge and complete login.
  *
  * From account settings (user is already logged in):
@@ -124,13 +125,24 @@ class Mfa extends BaseEndpoint {
 	 * @return true|WP_Error
 	 */
 	public function authenticated_permission() {
-		if ( get_current_user_id() <= 0 ) {
+		$user_id = get_current_user_id();
+		if ( $user_id <= 0 ) {
 			return new WP_Error(
 				'workos_authkit_not_logged_in',
 				__( 'You must be signed in to manage MFA factors.', 'integration-workos' ),
 				[ 'status' => 401 ]
 			);
 		}
+
+		/** This filter is documented in src/WorkOS/Mfa/RestApi.php */
+		if ( ! apply_filters( 'workos_mfa_can_manage', true, $user_id ) ) {
+			return new WP_Error(
+				'workos_mfa_forbidden',
+				__( 'You can’t manage two-step verification for this account.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
 		return true;
 	}
 
@@ -178,29 +190,27 @@ class Mfa extends BaseEndpoint {
 			return $rate_ok;
 		}
 
-		// A parked sign-in may only challenge its own factors, and the
-		// challenge is remembered so /verify can refuse any other.
+		// Only a parked sign-in may challenge, and only its own factors.
+		// The challenge is remembered so /verify can refuse any other.
 		$mfa_token = (string) $request->get_param( 'mfa_token' );
-		$pending   = null;
-		if ( '' !== $mfa_token ) {
-			$pending = PendingLogin::get( $mfa_token, $profile->get_slug() );
-			if ( null === $pending ) {
-				return $this->expired();
-			}
-			if ( ! in_array( $factor_id, (array) $pending['factor_ids'], true ) ) {
-				return $this->factor_not_found();
-			}
+		$pending   = PendingLogin::get( $mfa_token, $profile->get_slug() );
+		if ( null === $pending ) {
+			return $this->expired();
+		}
+		if ( ! in_array( $factor_id, (array) $pending['factor_ids'], true ) ) {
+			return $this->factor_not_found();
 		}
 
 		$result = workos()->api()->challenge_auth_factor( $factor_id );
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			return FactorService::without_body( $result );
 		}
 
-		if ( null !== $pending ) {
-			$pending['challenges'][] = (string) ( $result['id'] ?? '' );
-			PendingLogin::update( $mfa_token, $pending );
-		}
+		$challenge_id = (string) ( $result['id'] ?? '' );
+
+		$pending['challenges'][]                       = $challenge_id;
+		$pending['challenge_factors'][ $challenge_id ] = $factor_id;
+		PendingLogin::update( $mfa_token, $pending );
 
 		return new WP_REST_Response(
 			[
@@ -231,56 +241,7 @@ class Mfa extends BaseEndpoint {
 			return $nonce_ok;
 		}
 
-		$mfa_token = (string) $request->get_param( 'mfa_token' );
-		if ( '' !== $mfa_token ) {
-			return $this->verify_pending( $request, $profile, $mfa_token );
-		}
-
-		$pending_auth_token = (string) $request->get_param( 'pending_authentication_token' );
-		$challenge_id       = (string) $request->get_param( 'authentication_challenge_id' );
-		$code               = (string) $request->get_param( 'code' );
-
-		if ( '' === $pending_auth_token || '' === $challenge_id || '' === $code ) {
-			return new WP_Error(
-				'workos_authkit_invalid_input',
-				__( 'A pending authentication token, challenge id, and code are required.', 'integration-workos' ),
-				[ 'status' => 400 ]
-			);
-		}
-
-		$rate_ok = $this->rate_limit(
-			[
-				[ 'mfa_verify_ip', $this->client_ip->get(), TieredRateLimiter::REQUEST_IP ],
-			]
-		);
-		if ( is_wp_error( $rate_ok ) ) {
-			return $rate_ok;
-		}
-
-		$workos_response = workos()->api()->authenticate_with_totp(
-			$pending_auth_token,
-			$challenge_id,
-			$code,
-			$this->get_radar_token( $request )
-		);
-
-		// `complete()` handles the `organization_selection_required` error
-		// transparently when the profile has a pinned org. Pass the WP_Error
-		// through so it can decide. A wrong code comes back as an error, so
-		// any success reaching the profile's `always` check has passed MFA.
-		$result = $this->login_completer->complete(
-			$workos_response,
-			$profile,
-			$this->sanitize_redirect( (string) $request->get_param( 'redirect_to' ) ),
-			true,
-			true
-		);
-
-		if ( is_wp_error( $result ) ) {
-			return $result;
-		}
-
-		return new WP_REST_Response( $result, 200 );
+		return $this->verify_pending( $request, $profile, (string) $request->get_param( 'mfa_token' ) );
 	}
 
 	/**
@@ -345,11 +306,23 @@ class Mfa extends BaseEndpoint {
 			}
 			$result = $service->enroll_totp( (string) $pending['workos_user_id'], (string) ( $pending['email'] ?? '' ) );
 		} else {
+			// The policy said enroll, but a factor may have appeared since
+			// (another tab, the WorkOS dashboard). Enrolling now would add a
+			// second authenticator without a code from the first.
+			$existing = $service->list_factors( (int) $pending['user_id'] );
+			if ( is_wp_error( $existing ) ) {
+				return FactorService::without_body( $existing );
+			}
+			if ( ! empty( $existing ) ) {
+				PendingLogin::forget( $mfa_token );
+				return $this->expired();
+			}
+
 			$result = $service->start_enrollment( (int) $pending['user_id'] );
 		}
 
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			return FactorService::without_body( $result );
 		}
 
 		$pending['factor_ids'] = [ $result['factor_id'] ];
@@ -410,6 +383,16 @@ class Mfa extends BaseEndpoint {
 		$factor_id = (string) ( ( (array) $pending['factor_ids'] )[0] ?? '' );
 
 		if ( PendingLogin::KIND_WORKOS === $pending['kind'] ) {
+			$guard   = App::container()->get( CodeGuard::class );
+			$subject = '' !== (string) ( $pending['workos_user_id'] ?? '' )
+				? CodeGuard::for_workos_user( (string) $pending['workos_user_id'] )
+				: 'pending:' . hash( 'sha256', (string) $pending['pending_authentication_token'] );
+
+			$begun = $guard->begin( $subject );
+			if ( is_wp_error( $begun ) ) {
+				return $begun;
+			}
+
 			$workos_response = workos()->api()->authenticate_with_totp(
 				(string) $pending['pending_authentication_token'],
 				$challenge_id,
@@ -418,9 +401,11 @@ class Mfa extends BaseEndpoint {
 			);
 
 			if ( $this->is_wrong_code( $workos_response ) ) {
+				$guard->failed( $subject );
 				return $this->wrong_code( $mfa_token, $pending, 0 );
 			}
 
+			$guard->passed( $subject );
 			PendingLogin::forget( $mfa_token );
 
 			$result = $this->login_completer->complete(
@@ -435,7 +420,7 @@ class Mfa extends BaseEndpoint {
 				return $result;
 			}
 
-			if ( ! empty( $result['user']['id'] ) && '' !== $factor_id ) {
+			if ( ! empty( $pending['enroll'] ) && ! empty( $result['user']['id'] ) && '' !== $factor_id ) {
 				$service->note_enrolled( (int) $result['user']['id'], $factor_id );
 			}
 
@@ -445,7 +430,7 @@ class Mfa extends BaseEndpoint {
 		$user_id = (int) $pending['user_id'];
 		$checked = ! empty( $pending['enroll'] )
 			? $service->confirm_enrollment( $user_id, $factor_id, $code, $challenge_id )
-			: $service->verify_code( $factor_id, $code, $challenge_id );
+			: $service->check_code( $user_id, $this->challenged_factor( $pending, $challenge_id, $factor_id ), $code, $challenge_id );
 
 		if ( is_wp_error( $checked ) ) {
 			return 'workos_mfa_invalid_code' === $checked->get_error_code()
@@ -492,6 +477,21 @@ class Mfa extends BaseEndpoint {
 			),
 			200
 		);
+	}
+
+	/**
+	 * The factor a remembered challenge was made for.
+	 *
+	 * @param array  $pending      Parked sign-in.
+	 * @param string $challenge_id Challenge ID.
+	 * @param string $fallback     Factor to use for records without the map.
+	 *
+	 * @return string
+	 */
+	private function challenged_factor( array $pending, string $challenge_id, string $fallback ): string {
+		$map = (array) ( $pending['challenge_factors'] ?? [] );
+
+		return (string) ( $map[ $challenge_id ] ?? $fallback );
 	}
 
 	/**
@@ -596,7 +596,7 @@ class Mfa extends BaseEndpoint {
 	public function list_factors( WP_REST_Request $request ) {
 		$factors = App::container()->get( FactorService::class )->list_factors( get_current_user_id() );
 		if ( is_wp_error( $factors ) ) {
-			return $factors;
+			return FactorService::without_body( $factors );
 		}
 
 		return new WP_REST_Response( [ 'factors' => $factors ], 200 );
@@ -634,11 +634,18 @@ class Mfa extends BaseEndpoint {
 			return $rate_ok;
 		}
 
-		// Same path as the account panel: the factor stays unconfirmed until
-		// `POST /users/{id}/mfa/confirm` checks its first code.
-		$result = App::container()->get( FactorService::class )->start_enrollment( $user_id );
+		// Same path as the account panel: a current code first when the
+		// account already has a factor, and the new one stays unconfirmed
+		// until `POST /users/{id}/mfa/confirm` checks its first code.
+		$service = App::container()->get( FactorService::class );
+		$holder  = $service->require_current_factor( $user_id, (string) $request->get_param( 'factor_id' ), (string) $request->get_param( 'code' ) );
+		if ( is_wp_error( $holder ) ) {
+			return FactorService::without_body( $holder );
+		}
+
+		$result = $service->start_enrollment( $user_id );
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			return FactorService::without_body( $result );
 		}
 
 		return new WP_REST_Response( $result, 201 );
@@ -679,7 +686,8 @@ class Mfa extends BaseEndpoint {
 			);
 		}
 
-		$workos_user_id = (string) get_user_meta( get_current_user_id(), '_workos_user_id', true );
+		$user_id        = get_current_user_id();
+		$workos_user_id = User::get_workos_id( $user_id );
 		if ( '' === $workos_user_id ) {
 			return new WP_Error(
 				'workos_authkit_no_workos_user',
@@ -688,10 +696,25 @@ class Mfa extends BaseEndpoint {
 			);
 		}
 
+		$rate_ok = $this->rate_limit( [ [ 'mfa_enroll_user', (string) $user_id, TieredRateLimiter::REQUEST_SUBJECT ] ] );
+		if ( is_wp_error( $rate_ok ) ) {
+			return $rate_ok;
+		}
+
+		// A borrowed session mustn't add the attacker's phone as a second
+		// factor: with a factor already on the account, a current code first.
+		$service = App::container()->get( FactorService::class );
+		$holder  = $service->require_current_factor( $user_id, (string) $request->get_param( 'factor_id' ), (string) $request->get_param( 'code' ) );
+		if ( is_wp_error( $holder ) ) {
+			return FactorService::without_body( $holder );
+		}
+
 		$result = workos()->api()->enroll_sms_factor( $workos_user_id, $phone_number );
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			return FactorService::without_body( $result );
 		}
+
+		$service->note_enrolled( $user_id, (string) ( $result['id'] ?? '' ), 'sms' );
 
 		return new WP_REST_Response(
 			[
@@ -746,7 +769,7 @@ class Mfa extends BaseEndpoint {
 		$service = App::container()->get( FactorService::class );
 		$factors = $service->list_factors( $user_id );
 		if ( is_wp_error( $factors ) ) {
-			return $factors;
+			return FactorService::without_body( $factors );
 		}
 
 		// Return 404 rather than 403 so we don't leak the existence of
@@ -757,14 +780,14 @@ class Mfa extends BaseEndpoint {
 
 		// A current code from the factor, so a borrowed session can't turn
 		// MFA off.
-		$valid = $service->verify_code( $factor_id, (string) $request->get_param( 'code' ) );
+		$valid = $service->check_code( $user_id, $factor_id, (string) $request->get_param( 'code' ) );
 		if ( is_wp_error( $valid ) ) {
-			return $valid;
+			return FactorService::without_body( $valid );
 		}
 
 		$result = $service->delete_factor( $user_id, $factor_id );
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			return FactorService::without_body( $result );
 		}
 
 		return new WP_REST_Response( [ 'deleted' => true ], 200 );

@@ -88,6 +88,12 @@ class AuthKitLoginCompleterMfaTest extends WPTestCase {
 			]
 		);
 
+		// The policy asks WorkOS for the user's factors: none.
+		$no_factors = static fn( $pre, $args, $url ) => str_contains( $url, '/auth_factors' )
+			? [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode( [ 'data' => [] ] ), 'headers' => [] ]
+			: $pre;
+		add_filter( 'pre_http_request', $no_factors, 10, 3 );
+
 		$result = $this->completer->complete(
 			[
 				'access_token'  => 'eyJ.eyJzdWIiOiJ1c2VyXzIifQ.sig',
@@ -101,6 +107,8 @@ class AuthKitLoginCompleterMfaTest extends WPTestCase {
 		$this->assertIsArray( $result );
 		$this->assertArrayHasKey( 'user', $result );
 		$this->assertSame( 'ok@example.com', $result['user']['email'] );
+
+		remove_filter( 'pre_http_request', $no_factors, 10 );
 	}
 
 	/**
@@ -156,6 +164,8 @@ class AuthKitLoginCompleterMfaTest extends WPTestCase {
 
 		$this->assertIsArray( $result );
 		$this->assertTrue( $result['mfa_required'] );
-		$this->assertSame( 'pat_2', $result['pending_authentication_token'] );
+		// WorkOS's pending token stays on the server; the browser gets an mfa_token.
+		$this->assertArrayNotHasKey( 'pending_authentication_token', $result );
+		$this->assertNotEmpty( $result['mfa_token'] );
 	}
 }

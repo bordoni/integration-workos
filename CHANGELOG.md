@@ -18,6 +18,20 @@
 ### Security
 
 - **Password-only sign-ins can't skip MFA** — in `plugin` mode, `wp-login.php` with `?fallback=1`, `wp_signon()`, headless mode and the login button refuse (`403 workos_mfa_step_unsupported`) a user who has a factor or must use MFA, since they can't ask for a code. Application passwords are exempt. Filter `workos_mfa_allow_password_fallback`.
+- **MFA hardening** — from a security review of the MFA work before release. In `plugin` mode:
+  - **Bearer tokens** from other apps on the same WorkOS environment no longer act for users who have or need MFA. REST accepts only tokens whose session signed in on this site (filters `workos_mfa_accept_bearer_token`, `workos_bearer_token_user`).
+  - **Your own account**: the admin routes (`PUT /users/{id}/mfa/required`, `POST …/mfa/reset`) and the user-edit tools no longer work on yourself. WordPress grants every user `edit_user` on themselves, so a hijacked session could reset its factors and clear the require flag without a code.
+  - **Adding a second authenticator** to an account that has one needs a current code from an existing one (`factor_id`, `code`; `403 workos_mfa_code_required`). This covers the account panel and the legacy `/auth/mfa/totp/enroll` and `/auth/mfa/sms/enroll` routes, which also follow `workos_mfa_can_manage` now.
+  - **Wrong codes are capped per account**, 5 per 15 minutes and 30 a day, across sign-ins and the account panel (`429 workos_mfa_too_many_codes`), under a per-account lock so parallel requests can't overspend it.
+  - **Sign-in codes**: `/auth/mfa/challenge` and `/auth/mfa/verify` need an `mfa_token`. WorkOS's own `mfa_challenge` is parked like the plugin's, so the browser never holds WorkOS's pending token and can't pair it with a challenge from another account. A code must come from the factor its challenge was made for.
+  - **Factors added outside WordPress** (the WorkOS dashboard, another app, before this version) are challenged: the policy reads the user's factors from WorkOS at every sign-in. Factors removed in WorkOS turn the user's MFA off in WordPress to match (activity-log event `mfa.removed_in_workos`, action `workos_mfa_removed_in_workos`, an email to the user); users who must use MFA enroll again.
+  - **Re-linking**: a user with MFA is never re-linked to a different WorkOS user by email, whatever the Re-link Protection setting (filter `workos_relink_protected`).
+  - **Application passwords** exempt only their own user from the password-only guard, so an XML-RPC `system.multicall` can't borrow one to sign in another user. The guard also follows a default Login Profile set to `always`, for users linked to WorkOS.
+  - **A parked sign-in** expires 10 minutes after the first factor however often it's touched, and its stored WorkOS response is encrypted with a key derived from the token. The hosted-AuthKit return URL carries a one-time resume code instead of the token.
+  - **Account changes**: adding or removing an authenticator emails the account and signs out its other sessions. An admin reset signs the user out everywhere and revokes their WorkOS session (filter `workos_mfa_notify_user`).
+  - **Headless mode** refuses an MFA user before storing their tokens or firing `workos_user_authenticated`.
+  - **The admin panel** applies its changes only after the profile saves, and shows a reset WorkOS refused.
+  - **Errors** from MFA routes no longer include WorkOS's response body.
 - **WordPress password could skip WorkOS MFA** — on the headless `wp-login.php` path, a WorkOS `mfa_challenge` or `mfa_enrollment` answer was treated like a wrong password, and WordPress's own password check then signed the user in without a second factor. That path now refuses with `403 workos_mfa_step_unsupported`, past WordPress's password handlers too. The login button's form gives the same message instead of WorkOS's raw error, and the AuthKit password route no longer re-syncs the password to WorkOS when only the second factor is missing.
 
 ### Fixed

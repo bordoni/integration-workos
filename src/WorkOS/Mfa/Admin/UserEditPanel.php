@@ -21,6 +21,9 @@ defined( 'ABSPATH' ) || exit;
  * the profile form is saved.
  *
  * The user's own screen (`profile.php`) shows the account panel instead.
+ *
+ * Changes apply only once core has saved the profile, so a form that fails
+ * validation changes nothing. A reset WorkOS refused shows as a notice.
  */
 class UserEditPanel {
 
@@ -37,6 +40,13 @@ class UserEditPanel {
 	 * @var Policy
 	 */
 	private Policy $policy;
+
+	/**
+	 * Changes from the submitted form, applied once the profile saves.
+	 *
+	 * @var array<int, array{required: bool, reset: bool}>
+	 */
+	private array $queued = [];
 
 	/**
 	 * Constructor.
@@ -57,6 +67,8 @@ class UserEditPanel {
 	public function register(): void {
 		add_action( 'edit_user_profile', [ $this, 'render' ], 22 );
 		add_action( 'edit_user_profile_update', [ $this, 'save' ] );
+		add_action( 'profile_update', [ $this, 'apply' ] );
+		add_action( 'admin_notices', [ $this, 'notice' ] );
 	}
 
 	/**
@@ -129,10 +141,11 @@ class UserEditPanel {
 	}
 
 	/**
-	 * Apply the panel on save.
+	 * Read the panel from the submitted form.
 	 *
 	 * Core has already checked the `update-user_{id}` nonce and `edit_user`
-	 * before this action fires.
+	 * before this action fires, but hasn't validated the rest of the form
+	 * yet; apply() runs once it has.
 	 *
 	 * @param int $user_id User being saved.
 	 *
@@ -144,12 +157,70 @@ class UserEditPanel {
 			return;
 		}
 
-		$required = sanitize_text_field( wp_unslash( $_POST['workos_mfa_required'] ) );
-		$this->factors->set_required( $user_id, '1' === $required );
-
-		if ( ! empty( $_POST['workos_mfa_reset'] ) ) {
-			$this->factors->reset( $user_id );
-		}
+		$this->queued[ $user_id ] = [
+			'required' => '1' === sanitize_text_field( wp_unslash( $_POST['workos_mfa_required'] ) ),
+			'reset'    => ! empty( $_POST['workos_mfa_reset'] ),
+		];
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
+	}
+
+	/**
+	 * `profile_update`: apply the queued changes once the profile saved.
+	 *
+	 * @param int $user_id User saved.
+	 *
+	 * @return void
+	 */
+	public function apply( $user_id ): void {
+		$user_id = (int) $user_id;
+		if ( ! isset( $this->queued[ $user_id ] ) ) {
+			return;
+		}
+
+		$changes = $this->queued[ $user_id ];
+		unset( $this->queued[ $user_id ] );
+
+		$this->factors->set_required( $user_id, $changes['required'] );
+
+		if ( $changes['reset'] ) {
+			$removed = $this->factors->reset( $user_id );
+			if ( is_wp_error( $removed ) ) {
+				set_transient( $this->notice_key(), $removed->get_error_message(), MINUTE_IN_SECONDS );
+			}
+		}
+	}
+
+	/**
+	 * Show a reset WorkOS refused, on the next screen.
+	 *
+	 * @return void
+	 */
+	public function notice(): void {
+		$message = get_transient( $this->notice_key() );
+		if ( ! is_string( $message ) || '' === $message ) {
+			return;
+		}
+
+		delete_transient( $this->notice_key() );
+
+		printf(
+			'<div class="notice notice-error"><p>%s</p></div>',
+			esc_html(
+				sprintf(
+					/* translators: %s: error from WorkOS */
+					__( 'Couldn’t remove the user’s authenticator apps: %s', 'integration-workos' ),
+					$message
+				)
+			)
+		);
+	}
+
+	/**
+	 * Transient key for the current admin's notice.
+	 *
+	 * @return string
+	 */
+	private function notice_key(): string {
+		return 'workos_mfa_reset_error_' . get_current_user_id();
 	}
 }

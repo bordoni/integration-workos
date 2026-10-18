@@ -27,9 +27,15 @@ interface Factor {
 
 interface Status {
 	enabled: boolean;
+	/** Admin flag on this user. */
 	required: boolean;
+	/** Must use MFA for any reason: the flag, a required role, or a filter. */
+	must_use?: boolean;
 	factors: Factor[];
 }
+
+const mustUse = ( status: Status ): boolean =>
+	status.must_use ?? status.required;
 
 interface Enrollment {
 	factor_id: string;
@@ -227,7 +233,7 @@ function Panel( { userId }: { userId: number } ) {
 							'integration-workos'
 					  ) }
 			</p>
-			{ status.required && (
+			{ mustUse( status ) && (
 				<p className="description">
 					{ __(
 						'Your administrator requires two-step verification for this account.',
@@ -271,7 +277,7 @@ function Panel( { userId }: { userId: number } ) {
 			{ removing && (
 				<form className="workos-mfa-step" onSubmit={ remove }>
 					<p>
-						{ status.required && status.factors.length === 1
+						{ mustUse( status ) && status.factors.length === 1
 							? __(
 									'This is your only authenticator app. Because two-step verification is required, you’ll set up a new one the next time you sign in.',
 									'integration-workos'

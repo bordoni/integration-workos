@@ -272,7 +272,9 @@ class AuthKitRestEmailVerificationTest extends WPTestCase {
 
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertTrue( $response->get_data()['mfa_required'] );
-		$this->assertSame( 'pat_mfa', $response->get_data()['pending_authentication_token'] );
+		// WorkOS's pending token stays on the server; the browser gets an mfa_token.
+		$this->assertArrayNotHasKey( 'pending_authentication_token', $response->get_data() );
+		$this->assertNotEmpty( $response->get_data()['mfa_token'] );
 	}
 
 	/**

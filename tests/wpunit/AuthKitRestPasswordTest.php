@@ -353,7 +353,9 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		$this->assertSame( 200, $response->get_status() );
 		$data = $response->get_data();
 		$this->assertTrue( $data['mfa_required'] );
-		$this->assertSame( 'pat_123', $data['pending_authentication_token'] );
+		// WorkOS's pending token stays on the server; the browser gets an mfa_token.
+		$this->assertArrayNotHasKey( 'pending_authentication_token', $data );
+		$this->assertNotEmpty( $data['mfa_token'] );
 		$this->assertCount( 1, $data['factors'] );
 	}
 
@@ -428,7 +430,9 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		$this->assertSame( 200, $response->get_status() );
 		$data = $response->get_data();
 		$this->assertTrue( $data['mfa_required'] );
-		$this->assertSame( 'pat_mfa', $data['pending_authentication_token'] );
+		// WorkOS's pending token stays on the server; the browser gets an mfa_token.
+		$this->assertArrayNotHasKey( 'pending_authentication_token', $data );
+		$this->assertNotEmpty( $data['mfa_token'] );
 		$this->assertSame( 'auth_factor_1', $data['factors'][0]['id'] );
 	}
 
@@ -1318,7 +1322,9 @@ class AuthKitRestPasswordTest extends WPTestCase {
 		$this->assertSame( 200, $response->get_status() );
 		$data = $response->get_data();
 		$this->assertTrue( $data['mfa_required'] ?? false );
-		$this->assertSame( 'pending_xyz', $data['pending_authentication_token'] ?? '' );
+		// WorkOS's pending token stays on the server; the browser gets an mfa_token.
+		$this->assertArrayNotHasKey( 'pending_authentication_token', $data );
+		$this->assertNotEmpty( $data['mfa_token'] );
 		$this->assertFalse( $data['signed_in'] ?? null, 'signed_in must NOT be true on the MFA path.' );
 		// User is not yet signed in — MFA verify will complete the session.
 		$this->assertSame( 0, get_current_user_id() );

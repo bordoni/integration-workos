@@ -78,6 +78,27 @@ class TokenAuth {
 
 		$wp_user_id = \WorkOS\Sync\UserSync::get_wp_user_id_by_workos_id( $workos_user_id );
 
+		/**
+		 * Filters the WP user a verified Bearer token acts as.
+		 *
+		 * Return 0 to refuse the token. The MFA module uses it so tokens
+		 * from sessions that never passed this site's MFA step can't act
+		 * for users who have or need MFA.
+		 *
+		 * @param int   $wp_user_id WP user ID, or 0 when the token maps to none.
+		 * @param array $payload    Verified JWT claims.
+		 */
+		$mapped     = (int) $wp_user_id;
+		$wp_user_id = (int) apply_filters( 'workos_bearer_token_user', $mapped, $payload );
+
+		if ( $mapped > 0 && 0 === $wp_user_id ) {
+			$this->auth_error = new WP_Error(
+				'workos_token_refused',
+				__( 'This token can’t be used here. Sign in on this site to get one.', 'integration-workos' ),
+				[ 'status' => 401 ]
+			);
+		}
+
 		return $wp_user_id ? $wp_user_id : $user_id;
 	}
 

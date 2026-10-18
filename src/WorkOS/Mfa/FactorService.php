@@ -8,6 +8,7 @@
 namespace WorkOS\Mfa;
 
 use WorkOS\ActivityLog\EventLogger;
+use WorkOS\App;
 use WorkOS\User;
 use WP_Error;
 
@@ -22,7 +23,11 @@ defined( 'ABSPATH' ) || exit;
  *
  * WorkOS holds the factors and their secrets. WordPress mirrors only:
  *
- * - `_workos_mfa_enabled`: the user has at least one confirmed factor.
+ * - `_workos_mfa_enabled`: the user has a confirmed factor. WorkOS is the
+ *   source of truth: the flag is set when a factor is confirmed or found in
+ *   WorkOS, and cleared when the user removes their last factor, an admin
+ *   resets them, or WorkOS answers with none (removed in the WorkOS
+ *   dashboard or another app). A failed WorkOS call never clears it.
  * - `_workos_mfa_required`: an admin requires MFA for the user.
  * - `_workos_mfa_pending_factor`: a factor enrolled but not yet confirmed
  *   with a code. It never counts as enabled, and is deleted from WorkOS
@@ -38,14 +43,31 @@ class FactorService {
 	public const PENDING_FACTOR_TTL = DAY_IN_SECONDS;
 
 	/**
+	 * Per-account lock and code limit.
+	 *
+	 * @var CodeGuard
+	 */
+	private CodeGuard $guard;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param CodeGuard|null $guard Per-account lock and code limit; the container's when omitted.
+	 */
+	public function __construct( ?CodeGuard $guard = null ) {
+		$this->guard = $guard ?? App::container()->get( CodeGuard::class );
+	}
+
+	/**
 	 * The user's MFA status, reconciled with WorkOS.
 	 *
 	 * @param int $user_id WP user ID.
 	 *
 	 * @return array|WP_Error {
-	 *     @type bool  $enabled  Whether the user has a confirmed factor.
-	 *     @type bool  $required Whether an admin set the require flag (roles and filters: see Policy::is_required()).
-	 *     @type array $factors  Confirmed factors: `{ id, type, created }`.
+	 *     @type bool  $enabled     Whether the user has a confirmed factor.
+	 *     @type bool  $required    Whether an admin set the require flag.
+	 *     @type bool  $must_use    Whether the user must use MFA for any reason (flag, role, filter).
+	 *     @type array $factors     Confirmed factors: `{ id, type, created }`.
 	 * }
 	 */
 	public function status( int $user_id ) {
@@ -55,8 +77,9 @@ class FactorService {
 		}
 
 		return [
-			'enabled'  => $this->is_enabled( $user_id ),
+			'enabled'  => ! empty( $factors ),
 			'required' => $this->is_required_flag( $user_id ),
+			'must_use' => App::container()->get( Policy::class )->is_required( $user_id ),
 			'factors'  => $factors,
 		];
 	}
@@ -64,8 +87,9 @@ class FactorService {
 	/**
 	 * Confirmed factors, read from WorkOS.
 	 *
-	 * Also keeps `_workos_mfa_enabled` in step with WorkOS, since factors
-	 * can be added or removed outside WordPress, and drops a stale
+	 * Mirrors the answer into `_workos_mfa_enabled`: set when WorkOS has a
+	 * factor the flag didn't know about (added outside WordPress, or before
+	 * this version), cleared when WorkOS has none left. Drops a stale
 	 * unconfirmed factor.
 	 *
 	 * @param int $user_id WP user ID.
@@ -84,14 +108,12 @@ class FactorService {
 		}
 
 		$pending = $this->pending_factor( $user_id );
-		if ( $pending && ( time() - $pending['created'] ) > self::PENDING_FACTOR_TTL ) {
-			workos()->api()->delete_auth_factor( $pending['factor_id'] );
-			delete_user_meta( $user_id, User::META_MFA_PENDING_FACTOR );
+		if ( $pending && ( time() - $pending['created'] ) > self::PENDING_FACTOR_TTL && $this->drop_pending( $user_id, $pending ) ) {
 			$pending = null;
 		}
 
 		$factors = [];
-		foreach ( (array) ( $result['data'] ?? $result ) as $factor ) {
+		foreach ( (array) ( $result['data'] ?? [] ) as $factor ) {
 			if ( ! is_array( $factor ) || empty( $factor['id'] ) ) {
 				continue;
 			}
@@ -105,9 +127,42 @@ class FactorService {
 			];
 		}
 
-		$this->sync_enabled( $user_id, ! empty( $factors ) );
+		if ( ! empty( $factors ) ) {
+			$this->sync_enabled( $user_id, true );
+		} elseif ( $this->is_enabled( $user_id ) ) {
+			$this->removed_in_workos( $user_id );
+		}
 
 		return $factors;
+	}
+
+	/**
+	 * Follow factors removed outside WordPress: turn the user's MFA off.
+	 *
+	 * The require flag and required roles are untouched, so a user who must
+	 * use MFA enrolls again at their next sign-in.
+	 *
+	 * @param int $user_id WP user ID.
+	 *
+	 * @return void
+	 */
+	private function removed_in_workos( int $user_id ): void {
+		$this->sync_enabled( $user_id, false );
+
+		EventLogger::log(
+			'mfa.removed_in_workos',
+			[
+				'user_id' => $user_id,
+			]
+		);
+
+		/**
+		 * Fires when WorkOS has no factors left for a user WordPress had as
+		 * enrolled, and WordPress turns their MFA off to match.
+		 *
+		 * @param int $user_id WP user ID.
+		 */
+		do_action( 'workos_mfa_removed_in_workos', $user_id );
 	}
 
 	/**
@@ -115,7 +170,12 @@ class FactorService {
 	 *
 	 * Creates the factor in WorkOS and remembers it as unconfirmed. Any
 	 * earlier unconfirmed factor is deleted first, so restarting doesn't
-	 * pile up factors the user never finished.
+	 * pile up factors the user never finished. Only one enrollment per
+	 * account runs at a time: two at once would leave a factor nobody
+	 * tracks as unconfirmed, which would then count as confirmed.
+	 *
+	 * Doesn't check whether the user already has a factor: callers that
+	 * shouldn't let a session add a second one without a code check first.
 	 *
 	 * @param int $user_id WP user ID.
 	 *
@@ -127,28 +187,44 @@ class FactorService {
 			return $workos_id;
 		}
 
-		$pending = $this->pending_factor( $user_id );
-		if ( $pending ) {
-			workos()->api()->delete_auth_factor( $pending['factor_id'] );
-			delete_user_meta( $user_id, User::META_MFA_PENDING_FACTOR );
+		$subject = 'enroll:' . $user_id;
+		if ( ! $this->guard->lock( $subject ) ) {
+			return new WP_Error(
+				'workos_mfa_busy',
+				__( 'Another setup is in progress for this account. Try again in a moment.', 'integration-workos' ),
+				[ 'status' => 429 ]
+			);
 		}
 
-		$user   = get_userdata( $user_id );
-		$enroll = $this->enroll_totp( $workos_id, $user ? (string) $user->user_email : '', $user_id );
-		if ( is_wp_error( $enroll ) ) {
+		try {
+			$pending = $this->pending_factor( $user_id );
+			if ( $pending && ! $this->drop_pending( $user_id, $pending ) ) {
+				return new WP_Error(
+					'workos_mfa_pending_cleanup_failed',
+					__( 'Couldn’t clear the earlier setup. Try again in a moment.', 'integration-workos' ),
+					[ 'status' => 502 ]
+				);
+			}
+
+			$user   = get_userdata( $user_id );
+			$enroll = $this->enroll_totp( $workos_id, $user ? (string) $user->user_email : '', $user_id );
+			if ( is_wp_error( $enroll ) ) {
+				return $enroll;
+			}
+
+			update_user_meta(
+				$user_id,
+				User::META_MFA_PENDING_FACTOR,
+				[
+					'factor_id' => $enroll['factor_id'],
+					'created'   => time(),
+				]
+			);
+
 			return $enroll;
+		} finally {
+			$this->guard->unlock( $subject );
 		}
-
-		update_user_meta(
-			$user_id,
-			User::META_MFA_PENDING_FACTOR,
-			[
-				'factor_id' => $enroll['factor_id'],
-				'created'   => time(),
-			]
-		);
-
-		return $enroll;
 	}
 
 	/**
@@ -216,7 +292,7 @@ class FactorService {
 			return $this->factor_not_found();
 		}
 
-		$valid = $this->verify_code( $factor_id, $code, $challenge_id );
+		$valid = $this->check_code( $user_id, $factor_id, $code, $challenge_id );
 		if ( is_wp_error( $valid ) ) {
 			return $valid;
 		}
@@ -235,10 +311,11 @@ class FactorService {
 	 *
 	 * @param int    $user_id   WP user ID.
 	 * @param string $factor_id Confirmed factor.
+	 * @param string $type      Factor type.
 	 *
 	 * @return void
 	 */
-	public function note_enrolled( int $user_id, string $factor_id ): void {
+	public function note_enrolled( int $user_id, string $factor_id, string $type = 'totp' ): void {
 		$this->sync_enabled( $user_id, true );
 
 		EventLogger::log(
@@ -247,7 +324,8 @@ class FactorService {
 				'user_id'  => $user_id,
 				'metadata' => [
 					'factor_id'   => $factor_id,
-					'factor_type' => 'totp',
+					'factor_type' => $type,
+					'actor_id'    => get_current_user_id(),
 				],
 			]
 		);
@@ -263,17 +341,50 @@ class FactorService {
 			$user_id,
 			[
 				'id'   => $factor_id,
-				'type' => 'totp',
+				'type' => $type,
 			]
 		);
 	}
 
 	/**
-	 * Check a code against one of the user's factors.
+	 * Check a code for a user, counted against the account's code limit.
 	 *
-	 * Used to confirm an enrollment and, in plugin mode, to answer the
-	 * sign-in challenge. Doesn't fire hooks: callers know which of the two
-	 * it was.
+	 * The way every surface checks a code: the sign-in step, confirming an
+	 * enrollment, removing a factor, adding a second one. A wrong code
+	 * counts toward {@see CodeGuard::POLICY}; a right one doesn't.
+	 *
+	 * @param int    $user_id      WP user ID.
+	 * @param string $factor_id    Factor ID (the caller has checked it's the user's).
+	 * @param string $code         Code from the authenticator app.
+	 * @param string $challenge_id Existing challenge; a new one is created when empty.
+	 *
+	 * @return true|WP_Error
+	 */
+	public function check_code( int $user_id, string $factor_id, string $code, string $challenge_id = '' ) {
+		$subject = CodeGuard::for_user( $user_id );
+		$begun   = $this->guard->begin( $subject );
+		if ( is_wp_error( $begun ) ) {
+			return $begun;
+		}
+
+		$valid = $this->verify_code( $factor_id, $code, $challenge_id );
+
+		if ( true === $valid ) {
+			$this->guard->passed( $subject );
+		} else {
+			$this->guard->failed( $subject );
+		}
+
+		return $valid;
+	}
+
+	/**
+	 * Check a code against a factor, with no account limit.
+	 *
+	 * Callers outside sign-in and self-service should use check_code().
+	 * Doesn't fire hooks: callers know what the code was for. A challenge
+	 * passed in must belong to the factor; WorkOS would accept a code for
+	 * any factor's challenge.
 	 *
 	 * @param string $factor_id    Factor ID.
 	 * @param string $code         Code from the authenticator app.
@@ -302,7 +413,72 @@ class FactorService {
 			return ( $status >= 400 && $status < 500 ) ? $this->invalid_code() : $result;
 		}
 
-		return empty( $result['valid'] ) ? $this->invalid_code() : true;
+		if ( empty( $result['valid'] ) ) {
+			return $this->invalid_code();
+		}
+
+		$challenged = (string) ( $result['challenge']['authentication_factor_id'] ?? '' );
+
+		return $challenged === $factor_id ? true : $this->invalid_code();
+	}
+
+	/**
+	 * Prove the caller holds one of the user's factors, if they have any.
+	 *
+	 * For actions a borrowed session shouldn't be able to take alone, like
+	 * adding a second authenticator: with a factor already on the account,
+	 * a current code from it is required. Counted against the account's
+	 * code limit.
+	 *
+	 * @param int    $user_id   WP user ID.
+	 * @param string $factor_id One of the user's factors.
+	 * @param string $code      Current code from it.
+	 *
+	 * @return true|WP_Error True when the user has no factor yet, or the code checks out.
+	 */
+	public function require_current_factor( int $user_id, string $factor_id, string $code ) {
+		$factors = $this->list_factors( $user_id );
+		if ( is_wp_error( $factors ) ) {
+			return $factors;
+		}
+
+		if ( empty( $factors ) ) {
+			return true;
+		}
+
+		if ( '' === $factor_id || '' === $code ) {
+			return new WP_Error(
+				'workos_mfa_code_required',
+				__( 'Enter a current code from your authenticator app to add another one.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
+		if ( ! in_array( $factor_id, array_column( $factors, 'id' ), true ) ) {
+			return $this->factor_not_found();
+		}
+
+		return $this->check_code( $user_id, $factor_id, $code );
+	}
+
+	/**
+	 * The same error without the WorkOS response body.
+	 *
+	 * `Api\Client` errors carry WorkOS's body (user and factor details),
+	 * which REST would hand to the browser.
+	 *
+	 * @param WP_Error $error Error.
+	 *
+	 * @return WP_Error
+	 */
+	public static function without_body( WP_Error $error ): WP_Error {
+		$data = $error->get_error_data();
+
+		return new WP_Error(
+			$error->get_error_code(),
+			$error->get_error_message(),
+			[ 'status' => is_array( $data ) ? (int) ( $data['status'] ?? 500 ) : 500 ]
+		);
 	}
 
 	/**
@@ -337,7 +513,10 @@ class FactorService {
 			'mfa.removed',
 			[
 				'user_id'  => $user_id,
-				'metadata' => [ 'factor_id' => $factor_id ],
+				'metadata' => [
+					'factor_id' => $factor_id,
+					'actor_id'  => get_current_user_id(),
+				],
 			]
 		);
 
@@ -374,7 +553,7 @@ class FactorService {
 		}
 
 		$removed = 0;
-		foreach ( (array) ( $result['data'] ?? $result ) as $factor ) {
+		foreach ( (array) ( $result['data'] ?? [] ) as $factor ) {
 			if ( ! is_array( $factor ) || empty( $factor['id'] ) ) {
 				continue;
 			}
@@ -487,6 +666,28 @@ class FactorService {
 			'factor_id' => (string) $pending['factor_id'],
 			'created'   => (int) ( $pending['created'] ?? 0 ),
 		];
+	}
+
+	/**
+	 * Delete an unconfirmed factor from WorkOS and forget it.
+	 *
+	 * Kept when WorkOS couldn't delete it, so it's never mistaken for a
+	 * confirmed factor; a later call tries again.
+	 *
+	 * @param int   $user_id WP user ID.
+	 * @param array $pending Unconfirmed factor from pending_factor().
+	 *
+	 * @return bool Whether it's gone.
+	 */
+	private function drop_pending( int $user_id, array $pending ): bool {
+		$deleted = workos()->api()->delete_auth_factor( $pending['factor_id'] );
+		if ( is_wp_error( $deleted ) && 404 !== (int) ( $deleted->get_error_data()['status'] ?? 0 ) ) {
+			return false;
+		}
+
+		delete_user_meta( $user_id, User::META_MFA_PENDING_FACTOR );
+
+		return true;
 	}
 
 	/**

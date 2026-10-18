@@ -156,7 +156,12 @@ class MfaAdminTest extends WPTestCase {
 		$_POST['workos_mfa_required'] = '1';
 		$_POST['workos_mfa_reset']    = '1';
 
-		( new UserEditPanel( new FactorService(), new Policy( new Settings() ) ) )->save( $this->user_id );
+		$panel = new UserEditPanel( new FactorService(), new Policy( new Settings() ) );
+		$panel->save( $this->user_id );
+
+		$this->assertSame( '', (string) get_user_meta( $this->user_id, User::META_MFA_REQUIRED, true ), 'Nothing changes until core saved the profile.' );
+
+		$panel->apply( $this->user_id );
 
 		$this->assertSame( '1', get_user_meta( $this->user_id, User::META_MFA_REQUIRED, true ) );
 		$this->assertSame( '', (string) get_user_meta( $this->user_id, User::META_MFA_ENABLED, true ) );
