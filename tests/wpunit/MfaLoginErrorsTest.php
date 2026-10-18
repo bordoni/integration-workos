@@ -100,7 +100,9 @@ class MfaLoginErrorsTest extends WPTestCase {
 
 		$this->assertIsArray( $result );
 		$this->assertTrue( $result['mfa_required'] );
-		$this->assertSame( 'pat_mfa', $result['pending_authentication_token'] );
+		// WorkOS's pending token stays on the server; the browser gets an mfa_token.
+		$this->assertArrayNotHasKey( 'pending_authentication_token', $result );
+		$this->assertNotEmpty( $result['mfa_token'] );
 		$this->assertSame( [ [ 'id' => 'auth_factor_1', 'type' => 'totp' ] ], $result['factors'] );
 		$this->assertSame( 0, get_current_user_id() );
 	}

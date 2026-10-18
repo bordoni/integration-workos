@@ -182,20 +182,26 @@ class FrontendRoute {
 
 		if ( null !== $mfa ) {
 			$context['mfa'] = $mfa;
+			nocache_headers();
+			header( 'Referrer-Policy: no-referrer' );
 		}
 
 		$this->renderer->render_full_page( $profile, $context );
 	}
 
 	/**
-	 * The MFA step to resume, when `?workos_mfa=` names a live parked sign-in.
+	 * The MFA step to resume, when `?workos_mfa=` carries a live resume code.
+	 *
+	 * The code works once (see PendingLogin::handoff()); the token it
+	 * stands for goes into the page, never the URL.
 	 *
 	 * @param Profile $profile Profile being rendered.
 	 *
 	 * @return array|null `{ mfa_required, mfa_token, enroll, factors }`, or null.
 	 */
 	private function parked_mfa( Profile $profile ): ?array {
-		$token   = sanitize_text_field( (string) ( SuperGlobals::get_get_var( 'workos_mfa' ) ?? '' ) );
+		$code    = sanitize_text_field( (string) ( SuperGlobals::get_get_var( 'workos_mfa' ) ?? '' ) );
+		$token   = PendingLogin::redeem( $code );
 		$pending = '' !== $token ? PendingLogin::get( $token, $profile->get_slug() ) : null;
 		if ( null === $pending ) {
 			return null;

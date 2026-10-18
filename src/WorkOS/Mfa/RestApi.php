@@ -205,7 +205,7 @@ class RestApi {
 	public function reset( WP_REST_Request $request ) {
 		$removed = $this->factors->reset( (int) $request->get_param( 'id' ) );
 		if ( is_wp_error( $removed ) ) {
-			return $removed;
+			return FactorService::without_body( $removed );
 		}
 
 		return new WP_REST_Response( [ 'removed' => $removed ], 200 );
@@ -256,18 +256,23 @@ class RestApi {
 	/**
 	 * Whether the current user may administer another user's MFA.
 	 *
+	 * Never your own account: WordPress grants `edit_user` on yourself to
+	 * every role, so a session someone else got hold of could reset the
+	 * factors and clear the require flag without a code. Your own factors
+	 * go through the account routes, which ask for one.
+	 *
 	 * @param int $user_id Target WP user ID.
 	 *
 	 * @return true|WP_Error
 	 */
 	public static function can_manage_user( int $user_id ) {
-		$can = $user_id > 0 && current_user_can( 'edit_user', $user_id );
+		$can = $user_id > 0 && get_current_user_id() !== $user_id && current_user_can( 'edit_user', $user_id );
 
 		/**
 		 * Filters whether the current user may administer a user's MFA
 		 * (read the status, reset factors, set the require flag).
 		 *
-		 * @param bool $can     Default: `edit_user` on the target.
+		 * @param bool $can     Default: `edit_user` on the target, and not yourself.
 		 * @param int  $user_id Target WP user ID.
 		 */
 		$can = (bool) apply_filters( 'workos_mfa_can_manage_user', $can, $user_id );
@@ -289,11 +294,15 @@ class RestApi {
 	public function status( WP_REST_Request $request ) {
 		$status = $this->factors->status( (int) $request->get_param( 'id' ) );
 
-		return is_wp_error( $status ) ? $status : new WP_REST_Response( $status, 200 );
+		return is_wp_error( $status ) ? FactorService::without_body( $status ) : new WP_REST_Response( $status, 200 );
 	}
 
 	/**
 	 * POST /users/{id}/mfa/enroll
+	 *
+	 * With a factor already on the account, takes `factor_id` and a current
+	 * `code` from it, so a session someone else got hold of can't add a
+	 * second authenticator of their own.
 	 *
 	 * @param WP_REST_Request $request REST request.
 	 *
@@ -307,9 +316,14 @@ class RestApi {
 			return $limited;
 		}
 
+		$holder = $this->factors->require_current_factor( $user_id, (string) $request->get_param( 'factor_id' ), (string) $request->get_param( 'code' ) );
+		if ( is_wp_error( $holder ) ) {
+			return FactorService::without_body( $holder );
+		}
+
 		$result = $this->factors->start_enrollment( $user_id );
 
-		return is_wp_error( $result ) ? $result : new WP_REST_Response( $result, 201 );
+		return is_wp_error( $result ) ? FactorService::without_body( $result ) : new WP_REST_Response( $result, 201 );
 	}
 
 	/**
@@ -334,7 +348,7 @@ class RestApi {
 			(string) $request->get_param( 'challenge_id' )
 		);
 
-		return is_wp_error( $result ) ? $result : new WP_REST_Response( $result, 200 );
+		return is_wp_error( $result ) ? FactorService::without_body( $result ) : new WP_REST_Response( $result, 200 );
 	}
 
 	/**
@@ -358,20 +372,20 @@ class RestApi {
 
 		$factors = $this->factors->list_factors( $user_id );
 		if ( is_wp_error( $factors ) ) {
-			return $factors;
+			return FactorService::without_body( $factors );
 		}
 		if ( ! in_array( $factor_id, array_column( $factors, 'id' ), true ) ) {
 			return $this->error( 'workos_mfa_factor_not_found', __( 'Factor not found.', 'integration-workos' ), 404 );
 		}
 
-		$valid = $this->factors->verify_code( $factor_id, (string) $request->get_param( 'code' ) );
+		$valid = $this->factors->check_code( $user_id, $factor_id, (string) $request->get_param( 'code' ) );
 		if ( is_wp_error( $valid ) ) {
-			return $valid;
+			return FactorService::without_body( $valid );
 		}
 
 		$result = $this->factors->delete_factor( $user_id, $factor_id );
 		if ( is_wp_error( $result ) ) {
-			return $result;
+			return FactorService::without_body( $result );
 		}
 
 		$status = $this->factors->status( $user_id );

@@ -57,13 +57,14 @@ Why the send policies layer: a single fixed window is burstable across its bound
 
 Why the request policies do not: a daily cap on sign-in attempts locks out legitimate users who mistype a password, and the abuse it would prevent is already covered by the send limits. Adding tiers there is a one-line edit if that changes.
 
-Two endpoints declare their own request policy instead of using the shared ones, each next to the endpoint that owns the reasoning:
+Three places declare their own policy instead of using the shared ones, each next to the endpoint that owns the reasoning:
 
 | Constant | Tiers | Why |
 |---|---|---|
 | `Signup::RATE_LIMIT_CREATE_IP` / `_CREATE_EMAIL` | 5 / min, 3 / min | Tighter: signup creates an account for an address nobody has proven they own. |
 | `Signup::RATE_LIMIT_VERIFY_IP` | 10 / min | Verify is cheap and users retype codes. |
 | `OAuth::RATE_LIMIT_URL_IP` | 20 / min | Looser: building an authorize URL sends nothing and costs no WorkOS call. |
+| `Mfa\CodeGuard::POLICY` | 5 / 15 min, 30 / day | Wrong MFA codes per account (`mfa_code_account`), across sign-ins and the account panel. Charged before WorkOS checks the code and refunded when it's right, under a per-account lock so parallel requests can't overspend it. Someone with the password can start unlimited sign-ins, so a per-sign-in cap alone doesn't bound guessing. |
 
 These are class constants, not settings. There is no admin UI and no filter. Retuning is a code change, deliberately: the numbers are a support contract, and the earlier per-feature options (`change_email_rate_limit_*`, removed) were four knobs nobody tuned, where a stored `0` silently meant "unlimited".
 
@@ -84,7 +85,8 @@ Every public auth route is throttled by requester. A subset also counts as a sen
 | `POST /auth/signup/verify` | — | `Signup` constants (IP only) | no |
 | `POST /auth/mfa/enroll` | `mfa_token` (hashed) | shared | no |
 | `POST /auth/mfa/challenge` | factor ID | shared | no |
-| `POST /auth/mfa/verify` | `mfa_token` (hashed) when given, else IP only | shared | no |
+| `POST /auth/mfa/verify` | `mfa_token` (hashed), plus the account (`CodeGuard`) | shared | no |
+| `POST`/`DELETE /users/{id}/mfa/…` | user ID, plus the account (`CodeGuard`) for code checks | shared | no |
 | `GET /auth/invitation/{token}` | — | shared (IP only) | no |
 | `POST /auth/invitation/accept` | — | shared (IP only) | no |
 | `GET /auth/oauth/authorize-url` | — | `OAuth` constant | no |

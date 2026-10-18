@@ -59,6 +59,13 @@ function parseConfig( root: HTMLElement ): AppProps {
 		? JSON.parse( mfaJson )
 		: undefined;
 
+	// The resume code in the URL is spent; keep it out of history.
+	const url = new URL( window.location.href );
+	if ( url.searchParams.has( 'workos_mfa' ) ) {
+		url.searchParams.delete( 'workos_mfa' );
+		window.history.replaceState( window.history.state, '', url.toString() );
+	}
+
 	return {
 		profile,
 		invitationToken: root.getAttribute( 'data-invitation-token' ) || '',

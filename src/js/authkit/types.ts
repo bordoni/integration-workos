@@ -88,9 +88,9 @@ export interface AuthFactor {
 }
 
 /**
- * The MFA step. WorkOS's own challenge carries
- * `pending_authentication_token`; a step the plugin's MFA policy asked for,
- * or any enrollment, carries `mfa_token` instead.
+ * The MFA step. Carries the plugin's `mfa_token`, whether WorkOS or the
+ * plugin's MFA policy asked for the code. `pending_authentication_token`
+ * is only sent by servers older than 1.1.0.
  */
 export interface MfaRequired {
 	mfa_required: true;

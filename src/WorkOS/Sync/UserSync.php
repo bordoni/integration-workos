@@ -177,7 +177,17 @@ class UserSync {
 		$previous_id = (string) get_user_meta( $wp_user_id, '_workos_user_id', true );
 		$is_relink   = '' !== $previous_id && $previous_id !== $new_id;
 
-		$protected = Config::is_relink_protection_enabled();
+		/**
+		 * Filters whether Re-link Protection applies to a WP user.
+		 *
+		 * The MFA module turns it on for users who have or need MFA, so a
+		 * different WorkOS identity with the same email can't take over the
+		 * account and skip its second factor.
+		 *
+		 * @param bool $protected  Default: the Re-link Protection setting.
+		 * @param int  $wp_user_id WP user ID.
+		 */
+		$protected = (bool) apply_filters( 'workos_relink_protected', Config::is_relink_protection_enabled(), $wp_user_id );
 
 		if ( $is_relink && ! $force && $protected ) {
 			self::refuse_link( $wp_user_id, $previous_id, $workos_user, $source );

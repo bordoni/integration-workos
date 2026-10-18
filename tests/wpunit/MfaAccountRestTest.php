@@ -194,7 +194,7 @@ class MfaAccountRestTest extends WPTestCase {
 		$this->assertSame( 201, $enroll->get_status() );
 		$this->assertSame( 'SECRET', $enroll->get_data()['secret'] );
 
-		$this->queue( 'POST /auth/challenges/auth_challenge_new/verify', [ 'valid' => true ] );
+		$this->queue( 'POST /auth/challenges/auth_challenge_new/verify', [ 'challenge' => [ 'id' => 'auth_challenge_new', 'authentication_factor_id' => 'auth_factor_new' ], 'valid' => true ] );
 		$this->factors( [ [ 'id' => 'auth_factor_new', 'type' => 'totp' ] ] );
 
 		$confirm = $this->request(
@@ -229,7 +229,7 @@ class MfaAccountRestTest extends WPTestCase {
 		update_user_meta( $this->user_id, User::META_MFA_ENABLED, '1' );
 		$this->factors( [ [ 'id' => 'auth_factor_1', 'type' => 'totp' ] ] );
 		$this->queue( 'POST /auth/factors/auth_factor_1/challenge', [ 'id' => 'auth_challenge_rm' ] );
-		$this->queue( 'POST /auth/challenges/auth_challenge_rm/verify', [ 'valid' => true ] );
+		$this->queue( 'POST /auth/challenges/auth_challenge_rm/verify', [ 'challenge' => [ 'id' => 'auth_challenge_rm', 'authentication_factor_id' => 'auth_factor_1' ], 'valid' => true ] );
 
 		$response = $this->request( 'DELETE', '/factors/auth_factor_1', [ 'code' => '123456' ] );
 

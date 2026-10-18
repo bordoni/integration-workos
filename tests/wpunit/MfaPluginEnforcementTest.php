@@ -184,7 +184,7 @@ class MfaPluginEnforcementTest extends WPTestCase {
 		$challenge = $this->dispatch( '/workos/v1/auth/mfa/challenge', [ 'mfa_token' => $token, 'factor_id' => 'auth_factor_1' ] );
 		$this->assertSame( 'auth_challenge_1', $challenge->get_data()['challenge_id'] );
 
-		$this->queue( 'POST /auth/challenges/auth_challenge_1/verify', [ 'valid' => true ] );
+		$this->queue( 'POST /auth/challenges/auth_challenge_1/verify', [ 'challenge' => [ 'id' => 'auth_challenge_1', 'authentication_factor_id' => 'auth_factor_1' ], 'valid' => true ] );
 		$done = $this->dispatch(
 			'/workos/v1/auth/mfa/verify',
 			[
@@ -276,7 +276,7 @@ class MfaPluginEnforcementTest extends WPTestCase {
 		$this->assertSame( 201, $enroll->get_status() );
 		$this->assertSame( 'SECRET', $enroll->get_data()['secret'] );
 
-		$this->queue( 'POST /auth/challenges/auth_challenge_enroll/verify', [ 'valid' => true ] );
+		$this->queue( 'POST /auth/challenges/auth_challenge_enroll/verify', [ 'challenge' => [ 'id' => 'auth_challenge_enroll', 'authentication_factor_id' => 'auth_factor_new' ], 'valid' => true ] );
 		$this->queue( 'GET /user_management/users/user_mfa/auth_factors', [ 'data' => [ [ 'id' => 'auth_factor_new', 'type' => 'totp' ] ] ] );
 		$done = $this->dispatch(
 			'/workos/v1/auth/mfa/verify',

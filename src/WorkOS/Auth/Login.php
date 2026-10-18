@@ -12,6 +12,8 @@ use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\MfaStep;
 use WorkOS\Auth\AuthKit\Profile;
 use WorkOS\Auth\AuthKit\ProfileRepository;
+use WorkOS\Mfa\PasswordGuard;
+use WorkOS\Mfa\PendingLogin;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
 use WP_Error;
 
@@ -179,6 +181,16 @@ class Login {
 			return $wp_user;
 		}
 
+		// A user who has or needs the plugin's MFA can't finish here, and
+		// this attempt mustn't overwrite their stored WorkOS session or
+		// look like a login to `workos_user_authenticated` listeners.
+		// PasswordGuard would refuse at priority 100 anyway; refusing now
+		// keeps the tokens and the hook out of it.
+		if ( \WorkOS\App::container()->get( PasswordGuard::class )->must_use_mfa( (int) $wp_user->ID ) ) {
+			$this->refusal = MfaStep::unsupported_error();
+			return $this->refusal;
+		}
+
 		// Store tokens.
 		self::store_tokens( $wp_user->ID, $result );
 
@@ -318,10 +330,12 @@ class Login {
 
 		// The plugin's MFA policy wants a code (or an enrollment) the hosted
 		// page didn't ask for. The sign-in is parked; finish it on the
-		// profile's AuthKit page, which renders just the MFA step.
+		// profile's AuthKit page, which renders just the MFA step. The URL
+		// carries a one-time resume code, not the token itself.
 		if ( ! empty( $outcome['mfa_token'] ) ) {
 			nocache_headers();
-			wp_safe_redirect( FrontendRoute::url_for_profile( $profile, [ 'workos_mfa' => (string) $outcome['mfa_token'] ] ) );
+			header( 'Referrer-Policy: no-referrer' );
+			wp_safe_redirect( FrontendRoute::url_for_profile( $profile, [ 'workos_mfa' => PendingLogin::handoff( (string) $outcome['mfa_token'] ) ] ) );
 			exit;
 		}
 

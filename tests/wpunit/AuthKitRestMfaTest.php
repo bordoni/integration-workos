@@ -11,6 +11,7 @@ use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\AuthKit\LoginCompleter;
 use WorkOS\Auth\AuthKit\Nonce;
 use WorkOS\Auth\AuthKit\Profile;
+use WorkOS\Mfa\PendingLogin;
 use WP_REST_Request;
 use WP_REST_Response;
 use WorkOS\Auth\AuthKit\ProfileRepository;
@@ -161,6 +162,23 @@ class AuthKitRestMfaTest extends WPTestCase {
 		return rest_get_server()->dispatch( $request );
 	}
 
+	/**
+	 * Park a sign-in WorkOS asked a code for, as LoginCompleter does.
+	 */
+	private function park_workos( string $profile_slug, string $pending_token, array $challenges = [] ): string {
+		return PendingLogin::park(
+			[
+				'kind'                         => PendingLogin::KIND_WORKOS,
+				'profile'                      => $profile_slug,
+				'pending_authentication_token' => $pending_token,
+				'workos_user_id'               => 'user_' . $pending_token,
+				'factor_ids'                   => [ 'factor_123' ],
+				'factors'                      => [ [ 'id' => 'factor_123', 'type' => 'totp' ] ],
+				'challenges'                   => $challenges,
+			]
+		);
+	}
+
 	// --------------------------- /auth/mfa/challenge ---------------------------
 
 	public function test_challenge_requires_factor_id(): void {
@@ -183,12 +201,33 @@ class AuthKitRestMfaTest extends WPTestCase {
 		$response = $this->dispatch_with_nonce(
 			'POST',
 			'/workos/v1/auth/mfa/challenge',
-			[ 'profile' => 'mfa-on', 'factor_id' => 'factor_123' ],
+			[
+				'profile'   => 'mfa-on',
+				'factor_id' => 'factor_123',
+				'mfa_token' => $this->park_workos( 'mfa-on', 'pat_1' ),
+			],
 			'mfa-on'
 		);
 
 		$this->assertSame( 200, $response->get_status() );
 		$this->assertSame( 'challenge_abc', $response->get_data()['challenge_id'] );
+	}
+
+	/**
+	 * Without a parked sign-in, nobody may challenge a factor: the route
+	 * would otherwise send codes to (and rate-limit) any factor ID.
+	 */
+	public function test_challenge_requires_a_parked_sign_in(): void {
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/mfa/challenge',
+			[ 'profile' => 'mfa-on', 'factor_id' => 'factor_123' ],
+			'mfa-on'
+		);
+
+		$this->assertSame( 403, $response->get_status() );
+		$this->assertSame( 'workos_authkit_mfa_expired', $response->get_data()['code'] );
+		$this->assertEmpty( $this->captured );
 	}
 
 	// --------------------------- /auth/mfa/verify ---------------------------
@@ -197,11 +236,38 @@ class AuthKitRestMfaTest extends WPTestCase {
 		$response = $this->dispatch_with_nonce(
 			'POST',
 			'/workos/v1/auth/mfa/verify',
-			[ 'profile' => 'mfa-on', 'code' => '111111' ],
+			[
+				'profile'   => 'mfa-on',
+				'code'      => '111111',
+				'mfa_token' => $this->park_workos( 'mfa-on', 'pat_1', [ 'chal_1' ] ),
+			],
 			'mfa-on'
 		);
 
 		$this->assertSame( 400, $response->get_status() );
+	}
+
+	/**
+	 * WorkOS's pending token alone no longer finishes a sign-in: the
+	 * browser never sees it, and a client-chosen challenge can't be paired
+	 * with someone else's.
+	 */
+	public function test_verify_refuses_a_bare_pending_token(): void {
+		$response = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/mfa/verify',
+			[
+				'profile'                      => 'mfa-on',
+				'pending_authentication_token' => 'pat_1',
+				'authentication_challenge_id'  => 'chal_1',
+				'code'                         => '123456',
+			],
+			'mfa-on'
+		);
+
+		$this->assertSame( 403, $response->get_status() );
+		$this->assertSame( 'workos_authkit_mfa_expired', $response->get_data()['code'] );
+		$this->assertEmpty( $this->captured );
 	}
 
 	public function test_verify_completes_login_on_success(): void {
@@ -218,10 +284,10 @@ class AuthKitRestMfaTest extends WPTestCase {
 			'POST',
 			'/workos/v1/auth/mfa/verify',
 			[
-				'profile'                       => 'mfa-on',
-				'pending_authentication_token'  => 'pat_1',
-				'authentication_challenge_id'   => 'chal_1',
-				'code'                          => '123456',
+				'profile'                     => 'mfa-on',
+				'mfa_token'                   => $this->park_workos( 'mfa-on', 'pat_1', [ 'chal_1' ] ),
+				'authentication_challenge_id' => 'chal_1',
+				'code'                        => '123456',
 			],
 			'mfa-on'
 		);
@@ -261,10 +327,10 @@ class AuthKitRestMfaTest extends WPTestCase {
 			'POST',
 			'/workos/v1/auth/mfa/verify',
 			[
-				'profile'                      => 'mfa-always',
-				'pending_authentication_token' => 'pat_always',
-				'authentication_challenge_id'  => 'chal_always',
-				'code'                         => '123456',
+				'profile'                     => 'mfa-always',
+				'mfa_token'                   => $this->park_workos( 'mfa-always', 'pat_always', [ 'chal_always' ] ),
+				'authentication_challenge_id' => 'chal_always',
+				'code'                        => '123456',
 			],
 			'mfa-always'
 		);
@@ -293,10 +359,10 @@ class AuthKitRestMfaTest extends WPTestCase {
 			'POST',
 			'/workos/v1/auth/mfa/verify',
 			[
-				'profile'                      => 'mfa-always',
-				'pending_authentication_token' => 'pat_always',
-				'authentication_challenge_id'  => 'chal_always',
-				'code'                         => '000000',
+				'profile'                     => 'mfa-always',
+				'mfa_token'                   => $this->park_workos( 'mfa-always', 'pat_always', [ 'chal_always' ] ),
+				'authentication_challenge_id' => 'chal_always',
+				'code'                        => '000000',
 			],
 			'mfa-always'
 		);
@@ -467,7 +533,7 @@ class AuthKitRestMfaTest extends WPTestCase {
 		);
 		// A current code from the factor proves it's the owner.
 		$this->queue_response( '/auth/factors/factor_x/challenge', [ 'id' => 'challenge_del' ] );
-		$this->queue_response( '/auth/challenges/challenge_del/verify', [ 'valid' => true ] );
+		$this->queue_response( '/auth/challenges/challenge_del/verify', [ 'challenge' => [ 'id' => 'challenge_del', 'authentication_factor_id' => 'factor_x' ], 'valid' => true ] );
 		$this->queue_response( '/auth/factors/factor_x', [] );
 
 		$response = $this->dispatch_with_nonce(
