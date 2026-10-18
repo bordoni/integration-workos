@@ -1041,6 +1041,21 @@ class Client {
 	}
 
 	/**
+	 * Encode a request body as a JSON object.
+	 *
+	 * `wp_json_encode( [] )` is `[]`, a JSON array, and WorkOS answers 422
+	 * "Validation failed" to it (e.g. a challenge with no SMS template).
+	 * An empty body goes out as `{}`.
+	 *
+	 * @param array $data Request body.
+	 *
+	 * @return string
+	 */
+	private static function json_body( array $data ): string {
+		return (string) wp_json_encode( empty( $data ) ? new \stdClass() : $data );
+	}
+
+	/**
 	 * Send a POST request.
 	 *
 	 * @param string $path          API path.
@@ -1054,7 +1069,7 @@ class Client {
 			self::BASE_URL . $path,
 			[
 				'headers' => $this->headers( true, $extra_headers ),
-				'body'    => wp_json_encode( $data ),
+				'body'    => self::json_body( $data ),
 				'timeout' => 15,
 			]
 		);
@@ -1077,7 +1092,7 @@ class Client {
 			[
 				'method'  => 'PUT',
 				'headers' => $this->headers( true, $extra_headers ),
-				'body'    => wp_json_encode( $data ),
+				'body'    => self::json_body( $data ),
 				'timeout' => 15,
 			]
 		);

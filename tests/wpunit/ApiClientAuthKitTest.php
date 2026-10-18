@@ -326,7 +326,8 @@ class ApiClientAuthKitTest extends WPTestCase {
 		$this->assertSame( 'POST', $request['method'] );
 		$this->assertStringContainsString( '/auth/factors/factor_abc/challenge', $request['url'] );
 		$this->assertStringNotContainsString( '/user_management/', $request['url'] );
-		$this->assertSame( [], $this->last_body_json() );
+		// A JSON object: WorkOS answers 422 to an empty array.
+		$this->assertSame( '{}', $request['body'] );
 	}
 
 	public function test_challenge_auth_factor_includes_sms_template(): void {
