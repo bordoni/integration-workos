@@ -275,7 +275,7 @@ The validation runs on every endpoint that accepts `redirect_url` (start, confir
 
 Use this when your own plugin or theme needs to trigger a reset programmatically (e.g. from a custom REST endpoint, a WP-CLI command, or an admin action handler).
 
-The shortest way is `workos_send_password_reset( $wp_user_id, [ 'redirect_url' => … ] )`. It runs the same code as the endpoint (rate limits, profile gating, `redirect_url` validation, activity log) without a REST round-trip, and returns `true` or the endpoint's `WP_Error`. It leaves the `edit_user` check to you. See [`php-helpers.md`](php-helpers.md#workos_send_password_reset). The example below goes through the endpoint instead, which also does the capability check.
+The shortest way is `workos_send_password_reset( $wp_user_id, [ 'redirect_url' => … ] )`. It runs the same code as the endpoint (rate limits, profile gating, `redirect_url` validation, activity log) without a REST round-trip, and returns `true` or the endpoint's `WP_Error`. It leaves the `workos_send_password_reset` check to you. See [`php-helpers.md`](php-helpers.md#workos_send_password_reset). The example below goes through the endpoint instead, which also does the capability check.
 
 ```php
 <?php
@@ -342,7 +342,7 @@ add_action( 'admin_post_my_send_reset', static function () {
 
 Why call into the internal endpoint instead of `workos()->api()->send_password_reset()` directly? Three reasons:
 
-1. The endpoint enforces `edit_user`, rate limits, profile gating, and `redirect_url` validation in one place. Bypassing it duplicates that surface area in your code.
+1. The endpoint enforces `workos_send_password_reset`, rate limits, profile gating, and `redirect_url` validation in one place. Bypassing it duplicates that surface area in your code.
 2. It writes the `password_reset.admin_sent` activity-log row — so audit history stays consistent.
 3. It builds the URL via `FrontendRoute::url_for_profile()`, picking up any host-side `home_url` filter that escapes ampersands. Skipping that machinery is exactly how broken reset links land in inboxes.
 

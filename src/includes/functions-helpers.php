@@ -145,11 +145,12 @@ function workos_get_valid_access_token( int $user_id = 0 ) {
  * the activity log.
  *
  * It does not check capabilities. The REST route requires
- * `current_user_can( 'edit_user', $user_id )`; do the same check before
+ * `current_user_can( 'workos_send_password_reset', $user_id )` (which maps
+ * to `edit_user`; see docs/capabilities.md); do the same check before
  * calling this from a request handler.
  *
  * ```php
- * if ( current_user_can( 'edit_user', $user_id ) ) {
+ * if ( current_user_can( 'workos_send_password_reset', $user_id ) ) {
  *     $sent = workos_send_password_reset( $user_id, [ 'redirect_url' => home_url( '/account/' ) ] );
  * }
  * ```

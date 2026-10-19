@@ -60,14 +60,14 @@ Runs the same code as `POST /wp-json/workos/v1/admin/users/{id}/password-reset` 
 | `redirect_url` | `''` | Where the user lands after setting the new password |
 | `profile` | `'default'` | Login Profile slug whose reset page the email links to |
 
-The helper does not check capabilities; the REST route does. Check `edit_user` yourself when the call comes from a request:
+The helper does not check capabilities; the REST route does. Check `workos_send_password_reset` yourself when the call comes from a request. It maps to `edit_user` unless a role is granted it directly (see [capabilities.md](capabilities.md)):
 
 ```php
 add_action( 'admin_post_my_account_reset_password', static function () {
 	check_admin_referer( 'my_account_reset_password' );
 
 	$user_id = get_current_user_id();
-	if ( ! current_user_can( 'edit_user', $user_id ) ) {
+	if ( ! current_user_can( 'workos_send_password_reset', $user_id ) ) {
 		wp_die( 'Not allowed.', 403 );
 	}
 

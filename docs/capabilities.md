@@ -15,6 +15,8 @@ Code: [`src/WorkOS/Capabilities.php`](../src/WorkOS/Capabilities.php). Tests: [`
 
 `edit_user` is per user: WordPress gives every logged-in user `edit_user` on their own account. That is what keeps the self-service password reset and email change working for subscribers, and it still does.
 
+The PHP helper `workos_send_password_reset()` runs the same code as the route but checks no capability. Check `workos_send_password_reset` before calling it from a request; see [php-helpers.md](php-helpers.md#workos_send_password_reset).
+
 ## What stays on core capabilities
 
 - **Settings and the other WorkOS admin pages** (Settings, Organization, Login Profiles, Activity Log, Diagnostics, Onboarding) stay on `manage_options`. None of the plugin capabilities opens them.

@@ -185,7 +185,7 @@ class RestApi {
 	 * Send a WorkOS reset email for a WP user.
 	 *
 	 * The work behind the REST route, minus the capability check: the route
-	 * checks `edit_user` before calling this, and `workos_send_password_reset()`
+	 * checks `workos_send_password_reset` before calling this, and `workos_send_password_reset()`
 	 * leaves that to its caller. Everything else (linked-user and email
 	 * checks, profile policy, rate limits, redirect validation, the activity
 	 * log row) is shared.
