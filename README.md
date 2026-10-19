@@ -290,7 +290,9 @@ The token is verified using WorkOS JWKS and mapped to a WordPress user via their
 The plugin exposes a stable, read-only API for checking WorkOS state on
 a WP user so integrations don't need to know what meta keys the plugin
 stores. Everything lives in `WorkOS\User` (instance-free static class)
-with matching global function shortcuts.
+with matching global function shortcuts. A few session helpers (a valid
+access token, the logout URL, sending a password reset) sit alongside
+them so integrations never call the WorkOS API themselves.
 
 ### `WorkOS\User` methods
 
@@ -304,10 +306,13 @@ with matching global function shortcuts.
 | `User::get_session_id( $user_id = 0 )` | `string` | WorkOS `sid` claim for the active session             |
 | `User::get_organization_id( $user_id = 0 )` | `string` | WorkOS organization id pinned to the user        |
 | `User::snapshot( $user_id = 0 )`      | `array`  | All of the above in one predictable payload            |
+| `User::get_valid_access_token( $user_id = 0 )` | `string\|WP_Error` | Access token, refreshed first when it has expired or expires within 60s |
+| `User::get_logout_url( $user_id = 0, $return_to = '' )` | `string` | WorkOS logout URL for the stored session, or `wp_logout_url()` |
 
 All methods accept `0` (or omitted) to target the currently-authenticated
-user. All return empty strings / `false` safely when no user is available,
-so there's no need to null-check `get_current_user_id()` first.
+user. The read methods return empty strings / `false` safely when no user
+is available, so there's no need to null-check `get_current_user_id()`
+first. `get_valid_access_token()` returns a `WP_Error` instead.
 
 The meta keys are also exposed as constants (`User::META_WORKOS_ID`,
 `META_ACCESS_TOKEN`, etc.) for callers that need them in SQL queries or
@@ -319,8 +324,16 @@ REST schemas.
 workos_is_sso_user( $user_id = 0 );       // bool   — is the user linked?
 workos_has_active_session( $user_id = 0 ); // bool  — is a session stored?
 workos_get_user_id( $user_id = 0 );       // string — WorkOS user id
-workos_get_access_token( $user_id = 0 );  // string — current access token
+workos_get_access_token( $user_id = 0 );  // string — current access token, as stored
+
+workos_get_valid_access_token( $user_id = 0 );            // string|WP_Error — refreshed when needed
+workos_send_password_reset( $user_id, $args = [] );        // true|WP_Error  — same path as the admin action
+workos_get_logout_url( $user_id = 0, $return_to = '' );   // string          — WorkOS or WP logout URL
 ```
+
+The last three call WorkOS (or build WorkOS URLs) through the plugin's
+own client and settings. See [`docs/php-helpers.md`](docs/php-helpers.md)
+for examples and error codes.
 
 ### Distinguishing "linked" vs "currently signed in"
 
