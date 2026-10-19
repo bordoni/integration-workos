@@ -16,6 +16,7 @@ WorkOS users.
 | Mode | `mfa_mode` option per environment, filter `workos_mfa_mode` | Site |
 | Who must use MFA | Require flag per user, `mfa_required_roles` option, filter `workos_mfa_required_for_user` | Admin, code |
 | What a sign-in needs | `WorkOS\Mfa\Policy::decide()`, filter `workos_mfa_decision`, helper `workos_mfa_decision()` | Code |
+| Passkey and SSO sign-ins | Count as MFA (`mfa_trust_sso` option for SSO, filter `workos_mfa_satisfied_by_sign_in`) | Site, code |
 | Sign-in step | `POST /auth/mfa/enroll`, `/auth/mfa/challenge`, `/auth/mfa/verify` and the React shell | Visitors |
 | Password-only sign-ins | Refused for users with MFA (`workos_mfa_allow_password_fallback`) | Site |
 | Account panel | Profile screen, `[workos:mfa]` shortcode, `/users/{id}/mfa…` routes | Users |
@@ -155,6 +156,57 @@ check capabilities.
 | `workos_mfa_busy` | 429 | Another code check or enrollment is running for the account |
 | `workos_mfa_invalid_user` | 404 | `workos_mfa_set_required()` got an unknown user |
 | `workos_mfa_invalid_response` | 502 | WorkOS answered an enrollment without a factor |
+
+## Passkey and SSO sign-ins
+
+Some sign-ins already include a second factor, so the plugin's code step is
+skipped for them. WorkOS's authenticate response says how the user signed in
+(`authentication_method`), and the server reads it from WorkOS itself.
+
+| Method | Skips the code step | Why |
+|---|---|---|
+| `Passkey` | Always | WorkOS only accepts a passkey with user verification (fingerprint, face or PIN), so it is both factors. WorkOS's own MFA counts it the same way |
+| `SSO` | When **SSO and Two-Step Verification** is on (default, option `mfa_trust_sso`, filter `workos_mfa_trust_sso`) | The company's identity provider runs its own MFA. WorkOS's own MFA never applies to SSO users either |
+| Anything else (`Password`, `MagicAuth`, `GoogleOAuth`, …) | No | |
+
+It applies in every mode, so an `enforce: always` profile accepts a passkey
+sign-in too. A user who must use MFA and has no authenticator isn't asked to
+enroll after a passkey sign-in. When the policy would otherwise have asked for
+a code or an enrollment, the plugin logs `mfa.step_skipped` and fires
+`workos_mfa_step_skipped`.
+
+```php
+// Ask SSO users from one organization for a code anyway.
+add_filter( 'workos_mfa_satisfied_by_sign_in', function ( bool $satisfied, string $method, array $response ) {
+    if ( 'SSO' === $method && 'org_untrusted' === ( $response['organization_id'] ?? '' ) ) {
+        return false;
+    }
+    return $satisfied;
+}, 10, 3 );
+```
+
+### Offering passkeys
+
+WorkOS runs passkey sign-ins on its hosted page only; there is no API for the
+plugin's own form. A Login Profile with the **Passkey** method shows a
+**Sign in with a passkey** button that sends the visitor to the hosted page
+(`GET /auth/oauth/authorize-url?provider=passkey` returns a
+`provider=authkit` URL), and the callback finishes the sign-in like any
+other. To set it up:
+
+1. Turn on Passkeys in the WorkOS dashboard (**Authentication**). In
+   production, set up an AuthKit custom domain first: a passkey is bound to
+   the domain it was created on.
+2. Turn on WorkOS's progressive enrollment (**Authentication → Passkeys**). It
+   offers password users a passkey at their next hosted sign-in, and it's how
+   existing users get one: on staging, the hosted sign-up page didn't offer a
+   passkey without it.
+3. Tick **Passkey** on the Login Profile.
+
+The hosted page offers every sign-in method turned on in WorkOS, not only
+passkeys. A password sign-in there still gets the plugin's code step.
+Users manage their passkeys in WorkOS; an admin can delete one from the user's
+page in the WorkOS dashboard.
 
 ## Sign-in
 
@@ -333,6 +385,8 @@ const { enabled, required } = await res.json();
 | Filter | Arguments | Default |
 |---|---|---|
 | `workos_mfa_mode` | `string $mode` | `mfa_mode` option, else `plugin` |
+| `workos_mfa_trust_sso` | `bool $trust` | `mfa_trust_sso` option, else `true` |
+| `workos_mfa_satisfied_by_sign_in` | `bool $satisfied, string $method, array $response, Profile $profile` | `true` for `Passkey`, and for `SSO` when trusted |
 | `workos_mfa_required_for_user` | `bool $required, int $user_id, ?Profile $profile` | Flag or role |
 | `workos_mfa_decision` | `string $decision, int $user_id, Profile $profile, array $context` | Policy table |
 | `workos_mfa_totp_issuer` | `string $issuer, int $user_id` | Site name |
@@ -358,6 +412,7 @@ const { enabled, required } = await res.json();
 | `workos_mfa_challenge_succeeded` | `int $user_id` | The plugin's sign-in challenge is answered |
 | `workos_mfa_challenge_failed` | `int $user_id, string $error_code` | A wrong code at the plugin's sign-in challenge |
 | `workos_mfa_blocked` | `int $user_id, Profile $profile` | A sign-in is refused by MFA policy |
+| `workos_mfa_step_skipped` | `int $user_id, string $method, Profile $profile` | A passkey or trusted SSO sign-in skips a code or enrollment the policy would have asked for |
 
 ## Activity log
 
@@ -370,6 +425,7 @@ const { enabled, required } = await res.json();
 | `mfa.required_set`, `mfa.required_cleared` | `actor_id` |
 | `mfa.challenge_succeeded`, `mfa.challenge_failed` | `factor_type` |
 | `mfa.blocked` | `profile` |
+| `mfa.step_skipped` | `method`, `profile` |
 
 ## Security model
 
@@ -414,6 +470,9 @@ Known limits:
   per-account daily cap is what keeps guessing out of reach.
 - In `workos` mode WorkOS enforces MFA, which doesn't cover SSO users, and
   Bearer tokens aren't gated.
+- SSO sign-ins trust the identity provider's MFA by default. Turn
+  **SSO and Two-Step Verification** off if an identity provider doesn't
+  enforce it.
 
 ## Don't do this
 

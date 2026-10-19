@@ -49,6 +49,11 @@ class Settings {
 	public const OPTION_REQUIRED_ROLES = 'mfa_required_roles';
 
 	/**
+	 * Option key for trusting the identity provider's MFA on SSO sign-ins.
+	 */
+	public const OPTION_TRUST_SSO = 'mfa_trust_sso';
+
+	/**
 	 * Every mode.
 	 *
 	 * @return string[]
@@ -89,5 +94,24 @@ class Settings {
 		$roles = workos()->option( self::OPTION_REQUIRED_ROLES, [] );
 
 		return is_array( $roles ) ? array_values( array_filter( array_map( 'strval', $roles ) ) ) : [];
+	}
+
+	/**
+	 * Whether an SSO sign-in skips the plugin's code step.
+	 *
+	 * On by default, like WorkOS's own MFA, which never applies to SSO
+	 * users: their identity provider runs its own MFA.
+	 *
+	 * @return bool
+	 */
+	public function trust_sso(): bool {
+		$trust = (bool) workos()->option( self::OPTION_TRUST_SSO, true );
+
+		/**
+		 * Filters whether an SSO sign-in skips the plugin's code step.
+		 *
+		 * @param bool $trust Whether to trust the identity provider's MFA.
+		 */
+		return (bool) apply_filters( 'workos_mfa_trust_sso', $trust );
 	}
 }

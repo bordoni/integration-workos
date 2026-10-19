@@ -148,13 +148,12 @@ const methodOptions = (): OptionItem< AuthMethod >[] => [
 	{ value: 'oauth_microsoft', label: __( 'Microsoft', 'integration-workos' ) },
 	{ value: 'oauth_github',    label: __( 'GitHub', 'integration-workos' ) },
 	{ value: 'oauth_apple',     label: __( 'Apple', 'integration-workos' ) },
-	{ value: 'passkey',         label: __( 'Passkey', 'integration-workos' ) },
+	{ value: 'passkey',         label: __( 'Passkey (on the WorkOS sign-in page)', 'integration-workos' ) },
 ];
 
 const factorOptions = (): OptionItem< MfaFactor >[] => [
 	{ value: 'totp',     label: __( 'Authenticator app (TOTP)', 'integration-workos' ) },
 	{ value: 'sms',      label: __( 'SMS', 'integration-workos' ) },
-	{ value: 'webauthn', label: __( 'WebAuthn / passkey', 'integration-workos' ) },
 ];
 
 const enforceOptions = (): OptionItem< MfaEnforce >[] => [

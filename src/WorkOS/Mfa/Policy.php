@@ -57,6 +57,16 @@ class Policy {
 	public const BLOCK = 'block';
 
 	/**
+	 * WorkOS `authentication_method` for a passkey sign-in.
+	 */
+	public const SIGN_IN_PASSKEY = 'Passkey';
+
+	/**
+	 * WorkOS `authentication_method` for an SSO sign-in.
+	 */
+	public const SIGN_IN_SSO = 'SSO';
+
+	/**
 	 * MFA settings.
 	 *
 	 * @var Settings
@@ -154,6 +164,41 @@ class Policy {
 	 */
 	public function is_enrolled( int $user_id ): bool {
 		return '1' === (string) get_user_meta( $user_id, User::META_MFA_ENABLED, true );
+	}
+
+	/**
+	 * The sign-in method that already counts as MFA, if this one does.
+	 *
+	 * - `Passkey`: WorkOS only accepts a passkey with user verification
+	 *   (fingerprint, face or PIN), so it is both factors at once. WorkOS's
+	 *   own MFA counts it the same way.
+	 * - `SSO`: the identity provider runs its own MFA. Trusted unless the
+	 *   site turned that off (`Settings::trust_sso()`).
+	 *
+	 * The method comes from WorkOS's authenticate response, which the
+	 * server fetched itself; nothing the browser sends can set it.
+	 *
+	 * @param array   $workos_response WorkOS authenticate response.
+	 * @param Profile $profile         Login Profile.
+	 *
+	 * @return string The WorkOS method, or '' when the code step still applies.
+	 */
+	public function satisfied_by_sign_in( array $workos_response, Profile $profile ): string {
+		$method    = (string) ( $workos_response['authentication_method'] ?? '' );
+		$satisfied = self::SIGN_IN_PASSKEY === $method
+			|| ( self::SIGN_IN_SSO === $method && $this->settings->trust_sso() );
+
+		/**
+		 * Filters whether a sign-in method already counts as MFA.
+		 *
+		 * @param bool    $satisfied       Whether the plugin's code step is skipped.
+		 * @param string  $method          WorkOS `authentication_method` (`Password`, `Passkey`, `SSO`, `MagicAuth`, `GoogleOAuth`, …).
+		 * @param array   $workos_response WorkOS authenticate response.
+		 * @param Profile $profile         Login Profile.
+		 */
+		$satisfied = (bool) apply_filters( 'workos_mfa_satisfied_by_sign_in', $satisfied, $method, $workos_response, $profile );
+
+		return $satisfied && '' !== $method ? $method : '';
 	}
 
 	/**

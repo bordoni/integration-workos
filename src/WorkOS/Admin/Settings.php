@@ -751,6 +751,19 @@ class Settings {
 			'workos_auth'
 		);
 
+		add_settings_field(
+			'workos_env_mfa_trust_sso',
+			__( 'SSO and Two-Step Verification', 'integration-workos' ),
+			[ $this, 'render_checkbox' ],
+			'workos',
+			'workos_auth',
+			[
+				'name'    => $this->env_option( MfaSettings::OPTION_TRUST_SSO ),
+				'label'   => __( 'Don’t ask for a code after an SSO sign-in: the company’s identity provider runs its own MFA. Passkey sign-ins never ask, since a passkey counts as both steps.', 'integration-workos' ),
+				'default' => true,
+			]
+		);
+
 		// --- Audit Logging section ---
 		add_settings_section(
 			'workos_audit',
@@ -2389,7 +2402,7 @@ class Settings {
 		}
 
 		// Boolean fields.
-		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation', 'allow_magic_code_registration', 'allow_legacy_magic_code_registration', 'relink_protection', 'require_linked_identity' ];
+		$bool_keys = [ 'allow_password_fallback', 'audit_logging_enabled', 'wp_password_fallback_email_confirmation', 'allow_magic_code_registration', 'allow_legacy_magic_code_registration', 'relink_protection', 'require_linked_identity', MfaSettings::OPTION_TRUST_SSO ];
 		foreach ( $bool_keys as $key ) {
 			if ( isset( $input[ $key ] ) ) {
 				$sanitized[ $key ] = rest_sanitize_boolean( $input[ $key ] );

@@ -165,7 +165,7 @@ Each profile stores:
 | `invite_flow`            | Allow invitation acceptance                                      |
 | `password_reset_flow`    | Allow in-app password reset                                      |
 | `auto_login_after_reset` | When `true` (default), `reset_confirm` re-authenticates the user with the new password (still running MFA / org-selection / entitlement gates via `LoginCompleter`), sets the WP auth cookie, and lands them on the validated `redirect_url`. When `false`, the user lands on the "Password reset — Continue to sign in" card and signs in manually. |
-| `mfa`                    | `{enforce: never|if_required|always, factors: [totp,sms,webauthn]}` |
+| `mfa`                    | `{enforce: never|if_required|always, factors: [totp,sms]}` — passkey and SSO sign-ins count as MFA; see [`docs/mfa.md`](docs/mfa.md#passkey-and-sso-sign-ins) |
 | `branding`               | `{logo_mode, logo_attachment_id, primary_color, heading, subheading}` — `logo_mode` is `default` / `custom` / `none` (see "Logo modes" in [`docs/extending-the-login-ui.md`](docs/extending-the-login-ui.md)) |
 | `post_login_redirect`    | URL the React shell navigates to on success (beats `redirect_to`)|
 | `forward_query_args`     | When `true`, appends safe inbound query args (`utm_*`, `ref`, custom params — never `redirect_to`, `_wpnonce`, `loggedout`, `wp_lang`, `workos_*`, etc.) to the post-login destination |

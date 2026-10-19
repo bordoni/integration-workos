@@ -70,6 +70,8 @@ function methodLabel( method: AuthMethod ): string {
 			return __( 'Continue with GitHub', 'integration-workos' );
 		case 'oauth_apple':
 			return __( 'Continue with Apple', 'integration-workos' );
+		case 'passkey':
+			return __( 'Sign in with a passkey', 'integration-workos' );
 		default:
 			return method;
 	}
@@ -95,7 +97,11 @@ export function MethodPicker( { profile, onChoose, onError }: MethodPickerProps 
 	const methods = profile.methods || [];
 	const hasPassword = methods.includes( 'password' );
 	const hasMagic = methods.includes( 'magic_code' );
-	const oauthMethods = methods.filter( ( m ) => m.startsWith( 'oauth_' ) );
+	// Passkeys run on WorkOS's hosted sign-in page, so they redirect like
+	// the social providers do.
+	const oauthMethods = methods.filter(
+		( m ) => m.startsWith( 'oauth_' ) || m === 'passkey'
+	);
 
 	const handleOAuth = async ( method: AuthMethod ): Promise< void > => {
 		try {
@@ -114,7 +120,11 @@ export function MethodPicker( { profile, onChoose, onError }: MethodPickerProps 
 				onError( errorMessage( data ) );
 			}
 		} catch ( _ ) {
-			onError( __( 'Unable to start social sign-in.', 'integration-workos' ) );
+			onError(
+				method === 'passkey'
+					? __( 'Unable to start passkey sign-in.', 'integration-workos' )
+					: __( 'Unable to start social sign-in.', 'integration-workos' )
+			);
 		}
 	};
 
