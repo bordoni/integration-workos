@@ -38,6 +38,11 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
+		// Plugin capabilities resolve on every request (admin, REST, front
+		// end shortcodes), so map them before any feature checks one.
+		$this->container->singleton( Capabilities::class );
+		$this->container->get( Capabilities::class )->register();
+
 		// Ahead of the features that resolve these at construction.
 		$this->container->register( HttpController::class );
 		$this->container->register( EmailController::class );

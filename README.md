@@ -14,7 +14,7 @@ Enterprise identity management for WordPress powered by [WorkOS](https://workos.
 - **Login Profiles** — admin-defined presets (enabled methods, pinned organization, signup/invite/reset toggles, MFA policy, branding) managed through a React admin editor at **WorkOS → Login Profiles**
 - **Sign-in methods**: email + password, magic code, social OAuth (Google, Microsoft, GitHub, Apple), passkey
 - **In-app flows**: self-serve sign-up with email verification, invitation acceptance, password reset (two-field new-password form with `wp.passwordStrength.meter` gating, optional auto-login on success, post-reset `redirect_url` validated same-host)
-- **Admin-triggered password reset** — send a WorkOS reset email on behalf of any linked user via `POST /wp-json/workos/v1/admin/users/{id}/password-reset` (gated by `edit_user($id)` so the same route covers self-service). Surfaced as a row action under the **WorkOS column** on `wp-admin/users.php`, a button on the user-edit screen, a per-row button on the WorkOS Users admin page, and a `[workos:password-reset]` shortcode. Successful sends are audited as `password_reset.admin_sent` in the activity log; emails point at the in-site React shell (`/workos/login/{slug}?token=…&redirect_to=…`) and the new password is mirrored to the linked WP user so `?fallback=1` / `wp_authenticate` / REST app passwords stay in sync. See [`docs/password-reset.md`](docs/password-reset.md).
+- **Admin-triggered password reset** — send a WorkOS reset email on behalf of any linked user via `POST /wp-json/workos/v1/admin/users/{id}/password-reset` (gated by `workos_send_password_reset`, which maps to `edit_user($id)` so the same route covers self-service). Surfaced as a row action under the **WorkOS column** on `wp-admin/users.php`, a button on the user-edit screen, a per-row button on the WorkOS Users admin page, and a `[workos:password-reset]` shortcode. Successful sends are audited as `password_reset.admin_sent` in the activity log; emails point at the in-site React shell (`/workos/login/{slug}?token=…&redirect_to=…`) and the new password is mirrored to the linked WP user so `?fallback=1` / `wp_authenticate` / REST app passwords stay in sync. See [`docs/password-reset.md`](docs/password-reset.md).
 - **Change email** — WorkOS-verified, conflict-guarded email-change flow. Self-service via `[workos:change-email]` shortcode confirms a WP-side hashed token sent to the new address (with a cancel-link notice to the old address) before committing; an admin acting on *another* account commits immediately (gated by `edit_users`, no verification round-trip). Admin surfaces are a row action under the **WorkOS column** on `wp-admin/users.php`, a panel on the user-edit screen, and a "Change email" action on the **WorkOS → Users** admin page. A configurable conflict policy (`block`, `allow_orphan`, `merge_request`) keeps the new email from silently overwriting another local WP user. Commits to WorkOS first (via `update_user`) then mirrors into WP, with a 60-second in-progress transient that short-circuits the webhook fan-back. See [`docs/change-email.md`](docs/change-email.md).
 - **Skeleton placeholders** on every AuthKit surface (wp-login.php takeover, `/workos/login/{profile}`, shortcode) — pre-hydration markup from PHP plus a React `FlowSkeleton` during bootstrap, mirroring the real card heights so swap-in is a flicker not a jump.
 - **MFA** — TOTP, SMS, WebAuthn/passkey with full enrollment + challenge UI; profile-level `mfa.enforce` (`never` / `if_required` / `always`) and factor allowlist
@@ -289,7 +289,9 @@ The token is verified using WorkOS JWKS and mapped to a WordPress user via their
 The plugin exposes a stable, read-only API for checking WorkOS state on
 a WP user so integrations don't need to know what meta keys the plugin
 stores. Everything lives in `WorkOS\User` (instance-free static class)
-with matching global function shortcuts.
+with matching global function shortcuts. A few session helpers (a valid
+access token, the logout URL, sending a password reset) sit alongside
+them so integrations never call the WorkOS API themselves.
 
 ### `WorkOS\User` methods
 
@@ -303,10 +305,13 @@ with matching global function shortcuts.
 | `User::get_session_id( $user_id = 0 )` | `string` | WorkOS `sid` claim for the active session             |
 | `User::get_organization_id( $user_id = 0 )` | `string` | WorkOS organization id pinned to the user        |
 | `User::snapshot( $user_id = 0 )`      | `array`  | All of the above in one predictable payload            |
+| `User::get_valid_access_token( $user_id = 0 )` | `string\|WP_Error` | Access token, refreshed first when it has expired or expires within 60s |
+| `User::get_logout_url( $user_id = 0, $return_to = '' )` | `string` | WorkOS logout URL for the stored session, or `wp_logout_url()` |
 
 All methods accept `0` (or omitted) to target the currently-authenticated
-user. All return empty strings / `false` safely when no user is available,
-so there's no need to null-check `get_current_user_id()` first.
+user. The read methods return empty strings / `false` safely when no user
+is available, so there's no need to null-check `get_current_user_id()`
+first. `get_valid_access_token()` returns a `WP_Error` instead.
 
 The meta keys are also exposed as constants (`User::META_WORKOS_ID`,
 `META_ACCESS_TOKEN`, etc.) for callers that need them in SQL queries or
@@ -318,8 +323,16 @@ REST schemas.
 workos_is_sso_user( $user_id = 0 );       // bool   — is the user linked?
 workos_has_active_session( $user_id = 0 ); // bool  — is a session stored?
 workos_get_user_id( $user_id = 0 );       // string — WorkOS user id
-workos_get_access_token( $user_id = 0 );  // string — current access token
+workos_get_access_token( $user_id = 0 );  // string — current access token, as stored
+
+workos_get_valid_access_token( $user_id = 0 );            // string|WP_Error — refreshed when needed
+workos_send_password_reset( $user_id, $args = [] );        // true|WP_Error  — same path as the admin action
+workos_get_logout_url( $user_id = 0, $return_to = '' );   // string          — WorkOS or WP logout URL
 ```
+
+The last three call WorkOS (or build WorkOS URLs) through the plugin's
+own client and settings. See [`docs/php-helpers.md`](docs/php-helpers.md)
+for examples and error codes.
 
 ### Distinguishing "linked" vs "currently signed in"
 

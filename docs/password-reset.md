@@ -14,8 +14,8 @@ It is written for two audiences in parallel: a developer integrating against the
 | --- | --- | --- | --- |
 | Self-service start | `POST /wp-json/workos/v1/auth/password/reset/start` | Profile-scoped nonce | Anyone (anonymous OK) |
 | Self-service confirm | `POST /wp-json/workos/v1/auth/password/reset/confirm` | Profile-scoped nonce | Anyone with a valid reset token |
-| Admin-triggered | `POST /wp-json/workos/v1/admin/users/{id}/password-reset` | WP REST nonce + `edit_user($id)` capability | Editors / admins (also covers self-service from a logged-in context) |
-| WP Users list (row action under the WorkOS column) | Posts to the admin endpoint | WP REST nonce + `edit_user($id)` | Admins, in the linked-user row only |
+| Admin-triggered | `POST /wp-json/workos/v1/admin/users/{id}/password-reset` | WP REST nonce + `workos_send_password_reset($id)` (maps to `edit_user($id)`; see [capabilities](capabilities.md)) | Editors / admins (also covers self-service from a logged-in context) |
+| WP Users list (row action under the WorkOS column) | Posts to the admin endpoint | WP REST nonce + `workos_send_password_reset($id)` | Admins, in the linked-user row only |
 | Shortcode | `[workos:password-reset]` | Rendered server-side; uses admin endpoint | Page authors |
 
 All three converge on the same WorkOS API call (`POST /user_management/password_reset/send`), and all three honor the same `redirect_url` and profile policy (`password_reset_flow`, `auto_login_after_reset`).
@@ -176,7 +176,7 @@ X-WorkOS-Nonce: <profile-scoped nonce>
 
 ### Admin: `POST /wp-json/workos/v1/admin/users/{id}/password-reset`
 
-Sends a reset email on behalf of any user the caller has `edit_user($id)` capability on. WordPress grants that capability on one's own user ID, so the same endpoint covers both **admin-of-another** and **self-service** call paths.
+Sends a reset email on behalf of any user the caller has `workos_send_password_reset($id)` on. That capability maps to `edit_user($id)` (see [capabilities](capabilities.md)), which WordPress grants on one's own user ID, so the same endpoint covers both **admin-of-another** and **self-service** call paths.
 
 **Headers**
 
@@ -213,7 +213,7 @@ X-WP-Nonce: <wp_rest nonce>
 | --- | --- | --- |
 | 400 | `workos_invalid_user` | `id` path segment is not a positive integer |
 | 400 | `workos_reset_disabled` | Profile has `password_reset_flow=false` |
-| 403 | `workos_forbidden` | Caller lacks `edit_user` on the target |
+| 403 | `workos_forbidden` | Caller lacks `workos_send_password_reset` on the target |
 | 404 | `workos_user_not_found` | No WP user with that ID |
 | 409 | `workos_user_not_linked` | WP user exists but has no `_workos_user_id` meta |
 | 409 | `workos_user_missing_email` | WP user has no usable email address |
@@ -275,6 +275,8 @@ The validation runs on every endpoint that accepts `redirect_url` (start, confir
 
 Use this when your own plugin or theme needs to trigger a reset programmatically (e.g. from a custom REST endpoint, a WP-CLI command, or an admin action handler).
 
+The shortest way is `workos_send_password_reset( $wp_user_id, [ 'redirect_url' => … ] )`. It runs the same code as the endpoint (rate limits, profile gating, `redirect_url` validation, activity log) without a REST round-trip, and returns `true` or the endpoint's `WP_Error`. It leaves the `workos_send_password_reset` check to you. See [`php-helpers.md`](php-helpers.md#workos_send_password_reset). The example below goes through the endpoint instead, which also does the capability check.
+
 ```php
 <?php
 /**
@@ -289,7 +291,7 @@ function my_plugin_trigger_workos_password_reset( int $wp_user_id, string $redir
         return new WP_Error( 'forbidden', 'Must be logged in.' );
     }
 
-    if ( ! current_user_can( 'edit_user', $wp_user_id ) ) {
+    if ( ! current_user_can( 'workos_send_password_reset', $wp_user_id ) ) {
         return new WP_Error( 'forbidden', 'You do not have permission to edit this user.' );
     }
 
@@ -340,7 +342,7 @@ add_action( 'admin_post_my_send_reset', static function () {
 
 Why call into the internal endpoint instead of `workos()->api()->send_password_reset()` directly? Three reasons:
 
-1. The endpoint enforces `edit_user`, rate limits, profile gating, and `redirect_url` validation in one place. Bypassing it duplicates that surface area in your code.
+1. The endpoint enforces `workos_send_password_reset`, rate limits, profile gating, and `redirect_url` validation in one place. Bypassing it duplicates that surface area in your code.
 2. It writes the `password_reset.admin_sent` activity-log row — so audit history stays consistent.
 3. It builds the URL via `FrontendRoute::url_for_profile()`, picking up any host-side `home_url` filter that escapes ampersands. Skipping that machinery is exactly how broken reset links land in inboxes.
 
@@ -549,7 +551,7 @@ wp_localize_script(
 
 **Modes**
 
-- **Admin-of-other:** `user="42"` — renders only when the viewer has `edit_user(42)`.
+- **Admin-of-other:** `user="42"` — renders only when the viewer has `workos_send_password_reset(42)`.
 - **Self-service:** no `user` attribute — renders for the current logged-in user only.
 
 In both cases the click POSTs to the admin endpoint with the WP REST nonce.
@@ -583,7 +585,7 @@ This section catalogs the failure modes we've seen people hit. If your integrati
 workos()->api()->send_password_reset( $email, 'https://example.com/whatever' );
 ```
 
-The URL you hand WorkOS gets emailed verbatim. Get the host wrong and the email link is dead. Skip the entity-decode and a host-side `home_url` filter will silently break it. Always route through `POST /admin/users/{id}/password-reset` or `POST /auth/password/reset/start`.
+The URL you hand WorkOS gets emailed verbatim. Get the host wrong and the email link is dead. Skip the entity-decode and a host-side `home_url` filter will silently break it. Always route through `POST /admin/users/{id}/password-reset`, `POST /auth/password/reset/start`, or `workos_send_password_reset()` from PHP.
 
 ### ❌ Don't store reset tokens or replay them.
 

@@ -42,6 +42,10 @@ interface WorkosUser {
 	id: string;
 	/** Linked WP user id, or 0 if this WorkOS user has no WP counterpart. */
 	wp_user_id: number;
+	/** Whether the current admin may send this user a password reset. */
+	can_send_password_reset: boolean;
+	/** Whether the current admin may change this user's email. */
+	can_change_email: boolean;
 	email: string;
 	email_verified: boolean;
 	first_name: string;
@@ -530,7 +534,7 @@ function App(): JSX.Element {
 												{ __( '—', 'integration-workos' ) }
 											</span>
 										) }
-										{ user.wp_user_id > 0 && (
+										{ user.can_send_password_reset && (
 											<button
 												type="button"
 												className="button button-small workos-pwreset-trigger"
@@ -543,7 +547,7 @@ function App(): JSX.Element {
 												{ __( 'Send password reset', 'integration-workos' ) }
 											</button>
 										) }
-										{ user.wp_user_id > 0 && cfg.changeEmailEnabled && (
+										{ user.can_change_email && cfg.changeEmailEnabled && (
 											<button
 												type="button"
 												className="button button-small"

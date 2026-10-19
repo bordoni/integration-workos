@@ -7,6 +7,7 @@
 
 namespace WorkOS\Admin\Users;
 
+use WorkOS\Capabilities;
 use WorkOS\Config;
 use WorkOS\Sync\UserLinks;
 use WP_Error;
@@ -21,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Thin proxy over `Api\Client::list_users()` — the WorkOS upstream already
  * paginates, filters, and authorizes. Responsibilities here are:
  *
- *   1. `manage_options` enforcement,
+ *   1. `workos_view_users` enforcement (maps to `manage_options`),
  *   2. parameter sanitization,
  *   3. enrichment of each user record with a `dashboard_url` so the React
  *      side doesn't reconstruct it,
@@ -97,12 +98,12 @@ class RestApi {
 	}
 
 	/**
-	 * Permission check — admin capability required.
+	 * Permission check — `workos_view_users` (maps to `manage_options`).
 	 *
 	 * @return true|WP_Error
 	 */
 	public function permission_check() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( Capabilities::VIEW_USERS ) ) {
 			return new WP_Error(
 				'workos_forbidden',
 				__( 'You do not have permission to manage WorkOS users.', 'integration-workos' ),
@@ -273,16 +274,20 @@ class RestApi {
 		$wp_user_id = '' !== $id ? (int) ( $wp_user_ids[ $id ] ?? 0 ) : 0;
 
 		return [
-			'id'              => $id,
-			'wp_user_id'      => $wp_user_id,
-			'email'           => $email,
-			'email_verified'  => ! empty( $user['email_verified'] ),
-			'first_name'      => isset( $user['first_name'] ) ? (string) $user['first_name'] : '',
-			'last_name'       => isset( $user['last_name'] ) ? (string) $user['last_name'] : '',
-			'last_sign_in_at' => isset( $user['last_sign_in_at'] ) ? (string) $user['last_sign_in_at'] : '',
-			'created_at'      => isset( $user['created_at'] ) ? (string) $user['created_at'] : '',
-			'updated_at'      => isset( $user['updated_at'] ) ? (string) $user['updated_at'] : '',
-			'dashboard_url'   => $dashboard_url,
+			'id'                      => $id,
+			'wp_user_id'              => $wp_user_id,
+			// What the caller may do with this row, so the screen only shows
+			// actions they can use. A row with no linked WP user has none.
+			'can_send_password_reset' => $wp_user_id > 0 && current_user_can( Capabilities::SEND_PASSWORD_RESET, $wp_user_id ),
+			'can_change_email'        => $wp_user_id > 0 && current_user_can( Capabilities::CHANGE_EMAIL, $wp_user_id ),
+			'email'                   => $email,
+			'email_verified'          => ! empty( $user['email_verified'] ),
+			'first_name'              => isset( $user['first_name'] ) ? (string) $user['first_name'] : '',
+			'last_name'               => isset( $user['last_name'] ) ? (string) $user['last_name'] : '',
+			'last_sign_in_at'         => isset( $user['last_sign_in_at'] ) ? (string) $user['last_sign_in_at'] : '',
+			'created_at'              => isset( $user['created_at'] ) ? (string) $user['created_at'] : '',
+			'updated_at'              => isset( $user['updated_at'] ) ? (string) $user['updated_at'] : '',
+			'dashboard_url'           => $dashboard_url,
 		];
 	}
 }

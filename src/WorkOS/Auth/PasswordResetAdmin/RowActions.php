@@ -8,6 +8,8 @@
 
 namespace WorkOS\Auth\PasswordResetAdmin;
 
+use WorkOS\Capabilities;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -53,7 +55,7 @@ class RowActions {
 			return $actions;
 		}
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+		if ( ! current_user_can( Capabilities::SEND_PASSWORD_RESET, $user_id ) ) {
 			return $actions;
 		}
 

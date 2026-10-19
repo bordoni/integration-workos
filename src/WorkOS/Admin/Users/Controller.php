@@ -14,7 +14,8 @@ use WorkOS\Contracts\Controller as BaseController;
  * supporting REST endpoint. Always active — the REST routes need to be
  * registered during `rest_api_init` regardless of admin context, and the
  * AdminPage is gated internally via the `admin_menu` / `admin_enqueue_scripts`
- * hooks plus a `manage_options` capability check.
+ * hooks plus a `workos_view_users` capability check (maps to
+ * `manage_options`; see {@see \WorkOS\Capabilities}).
  */
 class Controller extends BaseController {
 

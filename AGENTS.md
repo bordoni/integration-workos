@@ -60,6 +60,10 @@ Per-environment constants (take priority over generic):
 - `WORKOS_PRODUCTION_API_KEY`, `WORKOS_PRODUCTION_CLIENT_ID`, etc.
 - `WORKOS_STAGING_API_KEY`, `WORKOS_STAGING_CLIENT_ID`, etc.
 
+### Capabilities
+
+WorkOS user-management checks use plugin capabilities (`workos_view_users`, `workos_send_password_reset`, `workos_change_email`, `workos_manage_lockouts`) mapped through `map_meta_cap` in `src/WorkOS/Capabilities.php`. Each maps to the core capability the check used before, so default roles behave the same; sites grant them to custom roles for narrower access. Settings pages stay on `manage_options`. New user-management checks should use a plugin capability, not a core one. See [`docs/capabilities.md`](docs/capabilities.md).
+
 ## Key Files
 
 | File | Purpose |
@@ -68,7 +72,8 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Plugin.php` | Bootstrap, constants, container init, app boot |
 | `src/WorkOS/App.php` | Static facade for the DI container |
 | `src/WorkOS/Config.php` | Centralized config with constant overrides |
-| `src/WorkOS/User.php` | Public read-only helper for WorkOS metadata on WP users (`is_sso`, `has_active_session`, `get_workos_id`, `get_access_token`, `snapshot`) |
+| `src/WorkOS/User.php` | Public helper for WorkOS metadata on WP users (`is_sso`, `has_active_session`, `get_workos_id`, `get_access_token`, `snapshot`), plus two session helpers: `get_valid_access_token` (refreshes through `Api\Client::refresh_session()` + `Login::store_tokens()` when the token expires within `ACCESS_TOKEN_REFRESH_LEEWAY`) and `get_logout_url` (WorkOS `sessions/logout` URL for the stored session, else `wp_logout_url()`). See [`docs/php-helpers.md`](docs/php-helpers.md) |
+| `src/WorkOS/Capabilities.php` | Plugin capabilities (`workos_view_users`, `workos_send_password_reset`, `workos_change_email`, `workos_manage_lockouts`) resolved through `map_meta_cap`. Each maps to the core capability its check used before (`manage_options`, `edit_user`, `edit_user`, `edit_users`) unless the user holds the capability directly, in which case that grant decides (`false` denies). Registered first in the main `Controller`. See [`docs/capabilities.md`](docs/capabilities.md). |
 | `src/WorkOS/Controller.php` | Main controller, registers all feature controllers |
 | `src/WorkOS/Contracts/Container.php` | DI container (di52-based) |
 | `src/WorkOS/Contracts/Controller.php` | Abstract base controller with `isActive()` |
@@ -84,9 +89,9 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Admin/OnboardingAjax.php` | Onboarding wizard AJAX handlers |
 | **Admin — Users** | |
 | `src/WorkOS/Admin/Users/Controller.php` | Wires the WorkOS Users admin submenu + REST endpoint |
-| `src/WorkOS/Admin/Users/AdminPage.php` | Admin submenu (WorkOS → Users) that mounts the React user list and enqueues the shared `workos-admin-password-reset` JS/CSS so the per-row trigger button works. Also localizes `changeEmailUrl` + `changeEmailEnabled` for the React-native "Change email" action (handled in-bundle, so it does *not* enqueue the shared change-email handler). |
-| `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters, a server-computed `dashboard_url` per row, and a `wp_user_id` resolved via `_workos_user_id` meta so the React side can show the "Send password reset" trigger only for linked rows. |
-| `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link + per-row Send-password-reset button when `wp_user_id > 0` + native "Change email" button with its own modal, immediate POST, and in-place row refresh) |
+| `src/WorkOS/Admin/Users/AdminPage.php` | Admin submenu (WorkOS → Users, `workos_view_users`) that mounts the React user list and enqueues the shared `workos-admin-password-reset` JS/CSS so the per-row trigger button works. Also localizes `changeEmailUrl` + `changeEmailEnabled` for the React-native "Change email" action (handled in-bundle, so it does *not* enqueue the shared change-email handler). |
+| `src/WorkOS/Admin/Users/RestApi.php` | `GET /wp-json/workos/v1/admin/users` — proxies `Api\Client::list_users()` with sanitized pagination + filters, a server-computed `dashboard_url` per row, and a `wp_user_id` resolved via `_workos_user_id` meta plus per-row `can_send_password_reset` / `can_change_email` flags (the caller's plugin capability on that WP user; false for unlinked rows) so the React side only shows actions the caller can use. Gated by `workos_view_users`. |
+| `src/js/admin-users/index.tsx` | React user list (search + cursor pagination + Open in WorkOS deep-link + per-row Send-password-reset button when `can_send_password_reset` + native "Change email" button (when `can_change_email`) with its own modal, immediate POST, and in-place row refresh) |
 | **Admin — Login Profiles (Custom AuthKit)** | |
 | `src/WorkOS/Admin/LoginProfiles/Controller.php` | Wires Login Profile admin page + CRUD REST |
 | `src/WorkOS/Admin/LoginProfiles/AdminPage.php` | Admin submenu that mounts the React editor |
@@ -100,7 +105,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/PasswordReset.php` | Legacy guard — blocks WP's native password-reset flow for WorkOS-linked users so they're funneled to the WorkOS-backed reset (`PasswordResetAdmin/*`) instead. |
 | **Auth — Password Reset Admin** ([`docs/password-reset.md`](docs/password-reset.md)) | |
 | `src/WorkOS/Auth/PasswordResetAdmin/Controller.php` | DI controller — wires the REST endpoint, JS/CSS assets, WP user-row trigger, user-edit panel, and the `[workos:password-reset]` shortcode. |
-| `src/WorkOS/Auth/PasswordResetAdmin/RestApi.php` | `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. Gated by `current_user_can('edit_user', $id)` — the same route covers admin-of-other and self-service (WP grants `edit_user($self)` to any logged-in user). Per-IP (10/min) and per-target (5/min) rate limits via `Auth\AuthKit\RateLimiter`. Writes `password_reset.admin_sent` to the activity log. Builds the email URL via `FrontendRoute::url_for_profile()` so reset emails land on the React shell. |
+| `src/WorkOS/Auth/PasswordResetAdmin/RestApi.php` | `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. Gated by `current_user_can('workos_send_password_reset', $id)`, which maps to `edit_user` — the same route covers admin-of-other and self-service (WP grants `edit_user($self)` to any logged-in user). Per-IP (10/min) and per-target (5/min) rate limits via `Auth\AuthKit\RateLimiter`. Writes `password_reset.admin_sent` to the activity log. Builds the email URL via `FrontendRoute::url_for_profile()` so reset emails land on the React shell. The work after the capability check lives in `send_for_user( $user_id, $redirect_url, $profile_slug )`, which `workos_send_password_reset()` also calls. |
 | `src/WorkOS/Auth/PasswordResetAdmin/RedirectValidator.php` | Same-host validator for `redirect_url`. Rejects cross-origin, protocol-relative (`//host`), and non-`http(s)` schemes. Falls back to `Profile::get_post_login_redirect()` then `home_url('/')`. |
 | `src/WorkOS/Auth/PasswordResetAdmin/RowActions.php` | "Send password reset" row action under the **WorkOS column** on `wp-admin/users.php` (hooks `workos_user_list_column_actions` filter exposed by `Admin\UserList`). |
 | `src/WorkOS/Auth/PasswordResetAdmin/UserProfilePanel.php` | "Password Reset" panel + trigger button on the WP user-edit screen (`edit_user_profile` / `show_user_profile` at priority 20 so it renders after the existing read-only WorkOS panel). |
@@ -109,7 +114,7 @@ Per-environment constants (take priority over generic):
 | `src/js/admin-password-reset/index.ts` | Delegated `.workos-pwreset-trigger` click handler — POSTs to the admin endpoint and surfaces a transient admin notice. Same handler powers every trigger surface (WP Users row, user-edit panel, shortcode, WorkOS Users admin page row). |
 | **Auth — Change Email** ([`docs/change-email.md`](docs/change-email.md)) | |
 | `src/WorkOS/Auth/ChangeEmail/Controller.php` | DI controller — wires REST endpoints, JS/CSS, row action, profile panel, shortcode, and the frontend confirm route. Honors the `change_email_enabled` setting + `workos_change_email_enabled` filter. |
-| `src/WorkOS/Auth/ChangeEmail/RestApi.php` | Three endpoints: `POST /workos/v1/users/{id}/email-change` (initiate, `edit_user` cap), `…/email-change/confirm` (token-gated, race re-check), `…/email-change/cancel` (cancel-token *or* `edit_user` cap). Initiate branches on `is_admin_action()` (`edit_users` + initiator ≠ target): self-service is rate-limited, enumeration-safe, and verified via emailed token; admin-of-other commits immediately (no rate limit, no notification, WP core email-change notice suppressed), gets a real `409` conflict, and logs `email_change.admin_changed`. Shared `commit_change()` (WorkOS `update_user` → `wp_update_user` → rollback → transient → sync-hash refresh) backs both the confirm and admin-direct paths. Logs `email_change.*` events. |
+| `src/WorkOS/Auth/ChangeEmail/RestApi.php` | Three endpoints: `POST /workos/v1/users/{id}/email-change` (initiate, `workos_change_email` cap, maps to `edit_user`), `…/email-change/confirm` (token-gated, race re-check), `…/email-change/cancel` (cancel-token *or* `workos_change_email` cap). Initiate branches on `is_admin_action()` (`edit_users` + initiator ≠ target): self-service is rate-limited, enumeration-safe, and verified via emailed token; admin-of-other commits immediately (no rate limit, no notification, WP core email-change notice suppressed), gets a real `409` conflict, and logs `email_change.admin_changed`. Shared `commit_change()` (WorkOS `update_user` → `wp_update_user` → rollback → transient → sync-hash refresh) backs both the confirm and admin-direct paths. Logs `email_change.*` events. |
 | `src/WorkOS/Auth/ChangeEmail/PendingChange.php` | Stores the pending record as `_workos_pending_email_change` user_meta — only hashes (HMAC-SHA256 + `wp_salt('auth')`), never plaintext tokens. Single-use: cleared on confirm/cancel/expiry. |
 | `src/WorkOS/Auth/ChangeEmail/TokenFactory.php` | `wp_generate_password()`-backed token generator + `hash_hmac()` storage + `hash_equals()` verify. |
 | `src/WorkOS/Auth/ChangeEmail/ConflictResolver.php` | Enforces `change_email_conflict_policy`: `block` (default), `allow_orphan` (gated by `_workos_user_id`, posts, comments, last-login window — defaults to 90 days, filterable via `workos_change_email_orphan_max_inactive_days`), `merge_request` (rejects + fires `workos_change_email_merge_requested` for Issue 2). Fires `workos_change_email_conflict_detected` on any collision. |
@@ -196,7 +201,7 @@ Per-environment constants (take priority over generic):
 | **Database** | |
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
 | **Helpers** | |
-| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User` |
+| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` (as stored), `workos_get_valid_access_token()`, `workos_get_logout_url()` — these proxy to `WorkOS\User` — and `workos_send_password_reset()`, which calls `PasswordResetAdmin\RestApi::send_for_user()`. Documented with examples in [`docs/php-helpers.md`](docs/php-helpers.md) |
 | **Browser — Custom AuthKit (TypeScript + TSX)** | |
 | `src/js/authkit/index.tsx` | Entry + data-* hydration |
 | `src/js/authkit/App.tsx` | Top-level step machine. Renders `FlowSkeleton` while `client.bootstrap()` is in-flight (replaces the prior `return null;` blank window). The `reset_confirm` step receives the `onSignedIn` + `onMfa` callbacks so the auto-login-after-reset path can navigate to the validated redirect or hand off to the MFA challenge step. |
@@ -333,6 +338,7 @@ tests/
     ├── AuthKitRestMfaTest.php                      # mfa/{challenge,verify,factors,*/enroll,factor/delete}
     ├── AuthKitRestPasswordTest.php                 # password/{authenticate,reset/start,reset/confirm}
     ├── AuthKitRestSignupInvitationOAuthTest.php    # signup/{create,verify}, invitation/{token,accept}, oauth/authorize-url
+    ├── CapabilitiesTest.php                        # Plugin capabilities: role × self/other matrix matches the old core checks, direct grants, `false` denies, surfaces follow their capability
     ├── ConfigTest.php                              # Config class tests
     ├── DirectorySyncTest.php                       # Directory sync tests
     ├── EntitlementGateTest.php                     # Entitlement gate tests
@@ -351,6 +357,7 @@ tests/
     ├── PasswordResetAdminRestApiTest.php            # `POST /admin/users/{id}/password-reset` — capability matrix, missing user, unlinked user, masked-email response, redirect_url validation, rate limit, activity-log row content
     ├── PasswordResetAdminRowActionsTest.php         # `workos_user_list_column_actions` filter + RowActions injection (capability check, self-service, defensive empty-workos_id)
     ├── PluginTest.php                              # Plugin singleton + constants tests
+    ├── PublicHelpersTest.php                       # workos_get_valid_access_token (fresh, unlinked, signed out, expired/expiring → refresh, refresh failure, concurrent rotation), workos_send_password_reset (shared path, rate limit, redirect validation), workos_get_logout_url
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
     ├── RoleMapperTest.php                          # Role mapper tests
