@@ -7,6 +7,7 @@
 
 namespace WorkOS\Admin\Users;
 
+use WorkOS\ActivityLog\EventLogger;
 use WorkOS\Capabilities;
 use WorkOS\Config;
 use WorkOS\Sync\UserLinks;
@@ -17,7 +18,8 @@ use WP_REST_Response;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Admin-only REST routes under /wp-json/workos/v1/admin/users.
+ * Admin-only REST routes under /wp-json/workos/v1/admin/users: the user
+ * list, and `POST {id}/verify-email` to mark a WorkOS email verified.
  *
  * Thin proxy over `Api\Client::list_users()` — the WorkOS upstream already
  * paginates, filters, and authorizes. Responsibilities here are:
@@ -94,6 +96,130 @@ class RestApi {
 					],
 				],
 			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			self::BASE . '/(?P<id>\d+)/verify-email',
+			[
+				'methods'             => 'POST',
+				'callback'            => [ $this, 'verify_email' ],
+				'permission_callback' => [ $this, 'verify_email_permission_check' ],
+				'args'                => [
+					'id' => [ 'sanitize_callback' => 'absint' ],
+				],
+			]
+		);
+	}
+
+	/**
+	 * Permission check for verify-email — `workos_verify_email` (maps to
+	 * `edit_users`, so nobody can verify their own email by default).
+	 *
+	 * @return true|WP_Error
+	 */
+	public function verify_email_permission_check() {
+		if ( ! current_user_can( Capabilities::VERIFY_EMAIL ) ) {
+			return new WP_Error(
+				'workos_forbidden',
+				__( 'You do not have permission to mark this email verified.', 'integration-workos' ),
+				[ 'status' => 403 ]
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * POST /admin/users/{id}/verify-email — mark the linked WorkOS user's
+	 * email verified.
+	 *
+	 * For support cases where the sign-in code never arrives and the person
+	 * has been confirmed another way. A no-op when WorkOS already has the
+	 * email verified.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function verify_email( WP_REST_Request $request ) {
+		$user = get_userdata( absint( $request['id'] ) );
+		if ( ! $user instanceof \WP_User ) {
+			return new WP_Error(
+				'workos_user_not_found',
+				__( 'User not found.', 'integration-workos' ),
+				[ 'status' => 404 ]
+			);
+		}
+
+		$workos_user_id = (string) get_user_meta( $user->ID, '_workos_user_id', true );
+		if ( '' === $workos_user_id ) {
+			return new WP_Error(
+				'workos_user_not_linked',
+				__( 'This user is not linked to a WorkOS account.', 'integration-workos' ),
+				[ 'status' => 409 ]
+			);
+		}
+
+		$workos_user = workos()->api()->get_user( $workos_user_id );
+		if ( is_wp_error( $workos_user ) ) {
+			return $this->upstream_error( $workos_user );
+		}
+
+		if ( ! empty( $workos_user['email_verified'] ) ) {
+			return new WP_REST_Response(
+				[
+					'ok'               => true,
+					'email_verified'   => true,
+					'already_verified' => true,
+				],
+				200
+			);
+		}
+
+		$result = workos()->api()->update_user( $workos_user_id, [ 'email_verified' => true ] );
+		if ( is_wp_error( $result ) ) {
+			return $this->upstream_error( $result );
+		}
+
+		// The user-edit panel caches the WorkOS user for a few minutes.
+		delete_transient( 'workos_profile_user_' . md5( $workos_user_id ) );
+
+		EventLogger::log(
+			'email.admin_verified',
+			[
+				'user_id'        => $user->ID,
+				'workos_user_id' => $workos_user_id,
+				'metadata'       => [
+					'email'        => (string) ( $workos_user['email'] ?? '' ),
+					'initiator_id' => get_current_user_id(),
+				],
+			]
+		);
+
+		return new WP_REST_Response(
+			[
+				'ok'               => true,
+				'email_verified'   => true,
+				'already_verified' => false,
+			],
+			200
+		);
+	}
+
+	/**
+	 * Wrap a WorkOS API failure as a 502 so the client doesn't read the
+	 * upstream status (a WorkOS 401, say) as its own.
+	 *
+	 * @param WP_Error $error Error from the API client.
+	 *
+	 * @return WP_Error
+	 */
+	private function upstream_error( WP_Error $error ): WP_Error {
+		return new WP_Error(
+			'workos_api_error',
+			$error->get_error_message(),
+			[ 'status' => 502 ]
 		);
 	}
 
@@ -280,6 +406,7 @@ class RestApi {
 			// actions they can use. A row with no linked WP user has none.
 			'can_send_password_reset' => $wp_user_id > 0 && current_user_can( Capabilities::SEND_PASSWORD_RESET, $wp_user_id ),
 			'can_change_email'        => $wp_user_id > 0 && current_user_can( Capabilities::CHANGE_EMAIL, $wp_user_id ),
+			'can_verify_email'        => $wp_user_id > 0 && current_user_can( Capabilities::VERIFY_EMAIL ),
 			'email'                   => $email,
 			'email_verified'          => ! empty( $user['email_verified'] ),
 			'first_name'              => isset( $user['first_name'] ) ? (string) $user['first_name'] : '',
