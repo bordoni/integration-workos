@@ -197,8 +197,10 @@ other. To set it up:
 1. Turn on Passkeys in the WorkOS dashboard (**Authentication**). In
    production, set up an AuthKit custom domain first: a passkey is bound to
    the domain it was created on.
-2. Optionally turn on WorkOS's progressive enrollment, which offers password
-   users a passkey at their next hosted sign-in.
+2. Turn on WorkOS's progressive enrollment (**Authentication → Passkeys**). It
+   offers password users a passkey at their next hosted sign-in, and it's how
+   existing users get one: on staging, the hosted sign-up page didn't offer a
+   passkey without it.
 3. Tick **Passkey** on the Login Profile.
 
 The hosted page offers every sign-in method turned on in WorkOS, not only
