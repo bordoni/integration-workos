@@ -132,6 +132,13 @@ class LoginCompleter {
 			);
 		}
 
+		// A passkey, and by default an SSO sign-in, already counts as MFA.
+		$satisfied_by = '';
+		if ( ! $mfa_satisfied && is_array( $workos_response ) ) {
+			$satisfied_by  = App::container()->get( Policy::class )->satisfied_by_sign_in( $workos_response, $profile );
+			$mfa_satisfied = '' !== $satisfied_by;
+		}
+
 		// When the profile insists MFA is always required and WorkOS did
 		// not return a pending factor (i.e., the user has nothing enrolled
 		// or WorkOS is not enforcing org-level MFA), we must refuse to
@@ -170,6 +177,10 @@ class LoginCompleter {
 		$entitlement = EntitlementGate::evaluate( $wp_user->ID, $workos_response );
 		if ( is_wp_error( $entitlement ) ) {
 			return $entitlement;
+		}
+
+		if ( '' !== $satisfied_by && $this->plugin_decides() ) {
+			$this->note_step_skipped( $wp_user, $satisfied_by, $profile );
 		}
 
 		if ( ! $mfa_satisfied && $this->plugin_decides() ) {
@@ -394,6 +405,46 @@ class LoginCompleter {
 			'enroll'       => $enroll,
 			'factors'      => $enroll ? [] : $this->public_factors( $factors ),
 		];
+	}
+
+	/**
+	 * Record a sign-in whose method stood in for the plugin's code step.
+	 *
+	 * Only when the policy would otherwise have asked for a code or an
+	 * enrollment, so ordinary SSO sign-ins don't fill the log.
+	 *
+	 * @param WP_User $wp_user Matching WP user.
+	 * @param string  $method  WorkOS `authentication_method`.
+	 * @param Profile $profile Active Login Profile.
+	 *
+	 * @return void
+	 */
+	private function note_step_skipped( WP_User $wp_user, string $method, Profile $profile ): void {
+		$decision = App::container()->get( Policy::class )->decide( $wp_user->ID, $profile );
+		if ( Policy::CHALLENGE !== $decision && Policy::ENROLL !== $decision ) {
+			return;
+		}
+
+		EventLogger::log(
+			'mfa.step_skipped',
+			[
+				'user_id'  => $wp_user->ID,
+				'metadata' => [
+					'method'  => $method,
+					'profile' => $profile->get_slug(),
+				],
+			]
+		);
+
+		/**
+		 * Fires when a sign-in skips the plugin's code step because its
+		 * method already counts as MFA (a passkey, or a trusted SSO).
+		 *
+		 * @param int     $user_id WP user ID.
+		 * @param string  $method  WorkOS `authentication_method`.
+		 * @param Profile $profile Login Profile.
+		 */
+		do_action( 'workos_mfa_step_skipped', $wp_user->ID, $method, $profile );
 	}
 
 	/**

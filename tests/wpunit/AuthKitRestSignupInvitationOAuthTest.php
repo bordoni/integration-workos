@@ -369,6 +369,33 @@ class AuthKitRestSignupInvitationOAuthTest extends WPTestCase {
 		$this->assertStringContainsString( 'state=', $data['authorize_url'] );
 	}
 
+	public function test_passkey_sends_the_user_to_the_hosted_sign_in_page(): void {
+		$open            = $this->repository->find_by_slug( 'open' );
+		$data            = $open->to_array();
+		$data['methods'] = array_merge( $data['methods'], [ Profile::METHOD_PASSKEY ] );
+		$this->repository->save( Profile::from_array( $data ) );
+
+		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
+		$request->set_param( 'profile', 'open' );
+		$request->set_param( 'provider', Profile::METHOD_PASSKEY );
+
+		$response = rest_get_server()->dispatch( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertStringContainsString( 'provider=authkit', $response->get_data()['authorize_url'] );
+	}
+
+	public function test_passkey_is_refused_when_the_profile_does_not_offer_it(): void {
+		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
+		$request->set_param( 'profile', 'open' );
+		$request->set_param( 'provider', Profile::METHOD_PASSKEY );
+
+		$response = rest_get_server()->dispatch( $request );
+
+		$this->assertSame( 400, $response->get_status() );
+		$this->assertSame( 'workos_authkit_method_disabled', $response->get_data()['code'] );
+	}
+
 	public function test_oauth_authorize_url_rejects_disabled_provider(): void {
 		$request = new WP_REST_Request( 'GET', '/workos/v1/auth/oauth/authorize-url' );
 		$request->set_param( 'profile', 'open' );

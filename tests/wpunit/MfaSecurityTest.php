@@ -409,6 +409,78 @@ class MfaSecurityTest extends WPTestCase {
 		$this->assertSame( '1', get_user_meta( $this->user_id, User::META_MFA_ENABLED, true ) );
 	}
 
+	// ------------------------- Sign-in methods that count as MFA -------------------------
+
+	public function test_passkey_sign_in_skips_the_code_step(): void {
+		$this->enroll_member();
+		$skipped = [];
+		add_action(
+			'workos_mfa_step_skipped',
+			static function ( $user_id, $method ) use ( &$skipped ) {
+				$skipped[] = [ $user_id, $method ];
+			},
+			10,
+			2
+		);
+
+		$result = $this->complete_with( Policy::SIGN_IN_PASSKEY );
+
+		$this->assertArrayNotHasKey( 'mfa_required', $result );
+		$this->assertSame( $this->user_id, get_current_user_id() );
+		$this->assertSame( [ [ $this->user_id, 'Passkey' ] ], $skipped );
+	}
+
+	public function test_passkey_sign_in_also_satisfies_a_required_user_without_factors(): void {
+		delete_user_meta( $this->user_id, User::META_MFA_ENABLED );
+		update_user_meta( $this->user_id, User::META_MFA_REQUIRED, '1' );
+		$this->factors( [] );
+
+		$result = $this->complete_with( Policy::SIGN_IN_PASSKEY );
+
+		$this->assertArrayNotHasKey( 'mfa_required', $result );
+		$this->assertSame( $this->user_id, get_current_user_id() );
+	}
+
+	public function test_sso_sign_in_trusts_the_identity_provider_by_default(): void {
+		$this->enroll_member();
+		$result = $this->complete_with( Policy::SIGN_IN_SSO );
+
+		$this->assertArrayNotHasKey( 'mfa_required', $result );
+		$this->assertSame( $this->user_id, get_current_user_id() );
+	}
+
+	public function test_sso_sign_in_asks_for_a_code_when_the_site_stops_trusting_it(): void {
+		$this->enroll_member();
+		$options                             = get_option( 'workos_production' );
+		$options[ Settings::OPTION_TRUST_SSO ] = false;
+		update_option( 'workos_production', $options );
+		App::container()->get( \WorkOS\Options\Production::class )->reset();
+
+		$result = $this->complete_with( Policy::SIGN_IN_SSO );
+
+		$this->assertTrue( $result['mfa_required'] );
+		$this->assertSame( 0, get_current_user_id() );
+	}
+
+	public function test_password_and_social_sign_ins_still_ask_for_a_code(): void {
+		$this->enroll_member();
+		foreach ( [ 'Password', 'GoogleOAuth', 'MagicAuth', '' ] as $method ) {
+			$result = $this->complete_with( $method );
+			$this->assertTrue( $result['mfa_required'], $method );
+			$this->assertSame( 0, get_current_user_id(), $method );
+		}
+	}
+
+	public function test_satisfied_by_sign_in_filter_can_require_a_code_after_a_passkey(): void {
+		$this->enroll_member();
+		add_filter( 'workos_mfa_satisfied_by_sign_in', '__return_false' );
+
+		$result = $this->complete_with( Policy::SIGN_IN_PASSKEY );
+
+		remove_filter( 'workos_mfa_satisfied_by_sign_in', '__return_false' );
+		$this->assertTrue( $result['mfa_required'] );
+	}
+
 	// ------------------------- PendingLogin -------------------------
 
 	public function test_touching_a_parked_sign_in_never_extends_it(): void {
@@ -637,6 +709,32 @@ class MfaSecurityTest extends WPTestCase {
 			],
 			$profile
 		);
+	}
+
+	private function enroll_member(): void {
+		update_user_meta( $this->user_id, User::META_MFA_ENABLED, '1' );
+		$this->factors( [ [ 'id' => 'auth_factor_1', 'type' => 'totp' ] ] );
+	}
+
+	private function complete_with( string $method ): array {
+		$response = [
+			'access_token'  => $this->jwt(
+				[
+					'sub' => 'user_mfa',
+					'sid' => 'sess_m',
+				]
+			),
+			'refresh_token' => 'rt_mfa',
+			'user'          => [ 'id' => 'user_mfa', 'email' => 'member@example.com' ],
+		];
+		if ( '' !== $method ) {
+			$response['authentication_method'] = $method;
+		}
+
+		$result = ( new LoginCompleter() )->complete( $response, $this->repository->find_by_slug( 'members' ) );
+		$this->assertIsArray( $result );
+
+		return $result;
 	}
 
 	private function enroll_response(): array {

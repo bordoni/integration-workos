@@ -54,6 +54,8 @@ class Staging extends Options {
 			'relink_protection'                       => false,
 			'require_linked_identity'                 => false,
 			'identity_gate_profile'                   => 'default',
+			// Two-step verification (see src/WorkOS/Mfa).
+			'mfa_trust_sso'                           => true,
 		];
 	}
 }

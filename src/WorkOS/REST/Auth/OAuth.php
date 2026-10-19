@@ -19,7 +19,9 @@ defined( 'ABSPATH' ) || exit;
  * GET /auth/oauth/authorize-url
  *
  * Builds a WorkOS /user_management/authorize URL for a specific social
- * provider (Google, Microsoft, GitHub, Apple). The React shell hits this
+ * provider (Google, Microsoft, GitHub, Apple), or for WorkOS's hosted
+ * sign-in page when the profile offers passkeys: WorkOS only runs passkey
+ * sign-ins on that page, with no API to build one here. The React shell hits this
  * endpoint when the user clicks a provider button, receives the URL, and
  * does a `window.location` redirect. WorkOS hands the user back off to
  * the existing `/workos/callback` handler which exchanges the code.
@@ -44,6 +46,7 @@ class OAuth extends BaseEndpoint {
 		Profile::METHOD_OAUTH_MICROSOFT => 'MicrosoftOAuth',
 		Profile::METHOD_OAUTH_GITHUB    => 'GitHubOAuth',
 		Profile::METHOD_OAUTH_APPLE     => 'AppleOAuth',
+		Profile::METHOD_PASSKEY         => 'authkit',
 	];
 
 	/**
@@ -139,7 +142,8 @@ class OAuth extends BaseEndpoint {
 		/*
 		 * Intentionally no organization_id. This endpoint only handles
 		 * social OAuth providers (Google / Microsoft / GitHub / Apple),
-		 * which are environment-level apps in WorkOS. Passing
+		 * which are environment-level apps in WorkOS, and the hosted page
+		 * for passkeys, which are bound to the user. Passing
 		 * organization_id forces WorkOS to resolve an org-scoped
 		 * connection and returns "missing_code — No Connection associated
 		 * with Organization" when one is not configured. WorkOS scopes
