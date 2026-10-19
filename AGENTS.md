@@ -72,7 +72,7 @@ WorkOS user-management checks use plugin capabilities (`workos_view_users`, `wor
 | `src/WorkOS/Plugin.php` | Bootstrap, constants, container init, app boot |
 | `src/WorkOS/App.php` | Static facade for the DI container |
 | `src/WorkOS/Config.php` | Centralized config with constant overrides |
-| `src/WorkOS/User.php` | Public read-only helper for WorkOS metadata on WP users (`is_sso`, `has_active_session`, `get_workos_id`, `get_access_token`, `snapshot`) |
+| `src/WorkOS/User.php` | Public helper for WorkOS metadata on WP users (`is_sso`, `has_active_session`, `get_workos_id`, `get_access_token`, `snapshot`), plus two session helpers: `get_valid_access_token` (refreshes through `Api\Client::refresh_session()` + `Login::store_tokens()` when the token expires within `ACCESS_TOKEN_REFRESH_LEEWAY`) and `get_logout_url` (WorkOS `sessions/logout` URL for the stored session, else `wp_logout_url()`). See [`docs/php-helpers.md`](docs/php-helpers.md) |
 | `src/WorkOS/Capabilities.php` | Plugin capabilities (`workos_view_users`, `workos_send_password_reset`, `workos_change_email`, `workos_manage_lockouts`) resolved through `map_meta_cap`. Each maps to the core capability its check used before (`manage_options`, `edit_user`, `edit_user`, `edit_users`) unless the user holds the capability directly, in which case that grant decides (`false` denies). Registered first in the main `Controller`. See [`docs/capabilities.md`](docs/capabilities.md). |
 | `src/WorkOS/Controller.php` | Main controller, registers all feature controllers |
 | `src/WorkOS/Contracts/Container.php` | DI container (di52-based) |
@@ -105,7 +105,7 @@ WorkOS user-management checks use plugin capabilities (`workos_view_users`, `wor
 | `src/WorkOS/Auth/PasswordReset.php` | Legacy guard — blocks WP's native password-reset flow for WorkOS-linked users so they're funneled to the WorkOS-backed reset (`PasswordResetAdmin/*`) instead. |
 | **Auth — Password Reset Admin** ([`docs/password-reset.md`](docs/password-reset.md)) | |
 | `src/WorkOS/Auth/PasswordResetAdmin/Controller.php` | DI controller — wires the REST endpoint, JS/CSS assets, WP user-row trigger, user-edit panel, and the `[workos:password-reset]` shortcode. |
-| `src/WorkOS/Auth/PasswordResetAdmin/RestApi.php` | `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. Gated by `current_user_can('workos_send_password_reset', $id)`, which maps to `edit_user` — the same route covers admin-of-other and self-service (WP grants `edit_user($self)` to any logged-in user). Per-IP (10/min) and per-target (5/min) rate limits via `Auth\AuthKit\RateLimiter`. Writes `password_reset.admin_sent` to the activity log. Builds the email URL via `FrontendRoute::url_for_profile()` so reset emails land on the React shell. |
+| `src/WorkOS/Auth/PasswordResetAdmin/RestApi.php` | `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. Gated by `current_user_can('workos_send_password_reset', $id)`, which maps to `edit_user` — the same route covers admin-of-other and self-service (WP grants `edit_user($self)` to any logged-in user). Per-IP (10/min) and per-target (5/min) rate limits via `Auth\AuthKit\RateLimiter`. Writes `password_reset.admin_sent` to the activity log. Builds the email URL via `FrontendRoute::url_for_profile()` so reset emails land on the React shell. The work after the capability check lives in `send_for_user( $user_id, $redirect_url, $profile_slug )`, which `workos_send_password_reset()` also calls. |
 | `src/WorkOS/Auth/PasswordResetAdmin/RedirectValidator.php` | Same-host validator for `redirect_url`. Rejects cross-origin, protocol-relative (`//host`), and non-`http(s)` schemes. Falls back to `Profile::get_post_login_redirect()` then `home_url('/')`. |
 | `src/WorkOS/Auth/PasswordResetAdmin/RowActions.php` | "Send password reset" row action under the **WorkOS column** on `wp-admin/users.php` (hooks `workos_user_list_column_actions` filter exposed by `Admin\UserList`). |
 | `src/WorkOS/Auth/PasswordResetAdmin/UserProfilePanel.php` | "Password Reset" panel + trigger button on the WP user-edit screen (`edit_user_profile` / `show_user_profile` at priority 20 so it renders after the existing read-only WorkOS panel). |
@@ -201,7 +201,7 @@ WorkOS user-management checks use plugin capabilities (`workos_view_users`, `wor
 | **Database** | |
 | `src/WorkOS/Database/Schema.php` | DB schema creation and upgrades |
 | **Helpers** | |
-| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` — the latter four proxy to `WorkOS\User` |
+| `src/includes/functions-helpers.php` | Global helpers: `workos()`, `workos_log()`, `workos_is_sso_user()`, `workos_has_active_session()`, `workos_get_user_id()`, `workos_get_access_token()` (as stored), `workos_get_valid_access_token()`, `workos_get_logout_url()` — these proxy to `WorkOS\User` — and `workos_send_password_reset()`, which calls `PasswordResetAdmin\RestApi::send_for_user()`. Documented with examples in [`docs/php-helpers.md`](docs/php-helpers.md) |
 | **Browser — Custom AuthKit (TypeScript + TSX)** | |
 | `src/js/authkit/index.tsx` | Entry + data-* hydration |
 | `src/js/authkit/App.tsx` | Top-level step machine. Renders `FlowSkeleton` while `client.bootstrap()` is in-flight (replaces the prior `return null;` blank window). The `reset_confirm` step receives the `onSignedIn` + `onMfa` callbacks so the auto-login-after-reset path can navigate to the validated redirect or hand off to the MFA challenge step. |
@@ -357,6 +357,7 @@ tests/
     ├── PasswordResetAdminRestApiTest.php            # `POST /admin/users/{id}/password-reset` — capability matrix, missing user, unlinked user, masked-email response, redirect_url validation, rate limit, activity-log row content
     ├── PasswordResetAdminRowActionsTest.php         # `workos_user_list_column_actions` filter + RowActions injection (capability check, self-service, defensive empty-workos_id)
     ├── PluginTest.php                              # Plugin singleton + constants tests
+    ├── PublicHelpersTest.php                       # workos_get_valid_access_token (fresh, unlinked, signed out, expired/expiring → refresh, refresh failure, concurrent rotation), workos_send_password_reset (shared path, rate limit, redirect validation), workos_get_logout_url
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
     ├── RoleMapperTest.php                          # Role mapper tests
