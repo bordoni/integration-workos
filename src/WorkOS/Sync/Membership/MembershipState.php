@@ -22,6 +22,7 @@ final class MembershipState {
 	 *
 	 * @param int                $user_id    WordPress user ID.
 	 * @param MembershipSnapshot $membership Validated remote membership.
+	 *
 	 * @return true|\WP_Error
 	 */
 	public function check_current( int $user_id, MembershipSnapshot $membership ) {
@@ -49,6 +50,7 @@ final class MembershipState {
 	 *
 	 * @param int                $user_id    WordPress user ID.
 	 * @param MembershipSnapshot $membership Applied remote membership.
+	 *
 	 * @return true|\WP_Error
 	 */
 	public function record_applied( int $user_id, MembershipSnapshot $membership ) {

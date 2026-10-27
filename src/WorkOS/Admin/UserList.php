@@ -379,6 +379,7 @@ class UserList {
 	 *
 	 * @param int  $user_id    Target user ID.
 	 * @param bool $roles_only Whether this is a role-only refresh.
+	 *
 	 * @return bool
 	 */
 	private function can_resync_user( int $user_id, bool $roles_only = false ): bool {
@@ -392,6 +393,7 @@ class UserList {
 	 * @param string $redirect_url Redirect URL.
 	 * @param array  $user_ids     Selected user IDs.
 	 * @param bool   $roles_only   Refresh membership without profile fields.
+	 *
 	 * @return string
 	 */
 	private function handle_bulk_refresh( string $redirect_url, array $user_ids, bool $roles_only ): string {

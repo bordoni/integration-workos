@@ -39,6 +39,7 @@ final class MembershipReader {
 	 *
 	 * @param string $workos_id Linked WorkOS user ID.
 	 * @param string $org_id    Configured WorkOS organization ID.
+	 *
 	 * @return MembershipSnapshot|\WP_Error
 	 */
 	public function read( string $workos_id, string $org_id ) {
@@ -76,6 +77,7 @@ final class MembershipReader {
 	 * @param array  $membership WorkOS membership payload.
 	 * @param string $workos_id  Expected WorkOS user ID.
 	 * @param string $org_id     Expected WorkOS organization ID.
+	 *
 	 * @return MembershipSnapshot|\WP_Error
 	 */
 	private function validate_membership( array $membership, string $workos_id, string $org_id ) {

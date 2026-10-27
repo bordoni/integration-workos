@@ -101,6 +101,7 @@ final class MembershipSyncTest extends WPTestCase {
 	 * @param mixed  $pre  Existing HTTP interception.
 	 * @param array  $args Request arguments.
 	 * @param string $url  Request URL.
+	 *
 	 * @return array|\WP_Error|mixed
 	 */
 	public function http( $pre, array $args, string $url ) {

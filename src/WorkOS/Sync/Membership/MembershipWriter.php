@@ -39,6 +39,7 @@ final class MembershipWriter {
 	 * @param int                $user_id      WordPress user ID.
 	 * @param int                $local_org_id Local organization ID.
 	 * @param MembershipSnapshot $membership   Validated remote membership.
+	 *
 	 * @return true|\WP_Error
 	 */
 	public function apply( int $user_id, int $local_org_id, MembershipSnapshot $membership ) {
@@ -69,6 +70,7 @@ final class MembershipWriter {
 	 * @param int                $user_id      WordPress user ID.
 	 * @param int                $local_org_id Local organization ID.
 	 * @param MembershipSnapshot $membership   Validated remote membership.
+	 *
 	 * @return true|\WP_Error
 	 */
 	private function save_membership( int $user_id, int $local_org_id, MembershipSnapshot $membership ) {

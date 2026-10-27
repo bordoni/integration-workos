@@ -37,6 +37,7 @@ final class OrganizationResolver {
 	 * Restore a missing local organization before saving its membership.
 	 *
 	 * @param string $org_id WorkOS organization ID.
+	 *
 	 * @return object|\WP_Error
 	 */
 	public function resolve( string $org_id ) {

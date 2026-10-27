@@ -524,6 +524,7 @@ class UserSync {
 	 *
 	 * @param int    $user_id   WordPress user ID.
 	 * @param string $workos_id Identity whose profile was fetched.
+	 *
 	 * @return bool
 	 */
 	private function has_current_identity( int $user_id, string $workos_id ): bool {

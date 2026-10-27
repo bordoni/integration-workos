@@ -71,6 +71,7 @@ final class MembershipSync {
 	 * Missing or inactive memberships are reported for review, not deprovisioned.
 	 *
 	 * @param int $user_id WordPress user ID.
+	 *
 	 * @return true|\WP_Error
 	 */
 	public function refresh( int $user_id ) {

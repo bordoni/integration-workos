@@ -111,6 +111,7 @@ final class UserListMembershipSyncTest extends WPTestCase {
 	 * @param mixed  $response Existing preempted response.
 	 * @param array  $args Request arguments.
 	 * @param string $url Request URL.
+	 *
 	 * @return mixed Mock HTTP response.
 	 */
 	public function intercept_http( $response, array $args, string $url ) {
@@ -170,6 +171,7 @@ final class UserListMembershipSyncTest extends WPTestCase {
 	 *
 	 * @param string $action Bulk action name.
 	 * @param int[]  $users Selected users.
+	 *
 	 * @return array Redirect query parameters.
 	 */
 	private function dispatch( string $action, array $users ): array {
