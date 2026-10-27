@@ -13,7 +13,7 @@ use WorkOS\Sync\UserSync;
 /**
  * Inbound re-sync (WorkOS → WP) tests.
  */
-class UserSyncResyncTest extends WPTestCase {
+final class UserSyncResyncTest extends WPTestCase {
 
 	/**
 	 * Captured HTTP requests (URL + args).

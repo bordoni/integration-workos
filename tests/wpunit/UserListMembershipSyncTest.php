@@ -16,11 +16,12 @@ use WorkOS\App;
 use WorkOS\Config;
 use WorkOS\Options\Production;
 use WorkOS\Organization\Manager;
+use WorkOS\Sync\MembershipSync;
 
 /**
  * Integration coverage for the two inbound bulk actions on the Users screen.
  */
-class UserListMembershipSyncTest extends WPTestCase {
+final class UserListMembershipSyncTest extends WPTestCase {
 
 	/** @var int Local organization ID. */
 	private int $org_id;
@@ -169,7 +170,7 @@ class UserListMembershipSyncTest extends WPTestCase {
 	 * @return array Redirect query parameters.
 	 */
 	private function dispatch( string $action, array $users ): array {
-		$list = new UserList();
+		$list = new UserList( App::container()->get( MembershipSync::class ) );
 		$url  = $list->handle_bulk_action( admin_url( 'users.php' ), $action, $users );
 		parse_str( (string) wp_parse_url( $url, PHP_URL_QUERY ), $query );
 		return $query;

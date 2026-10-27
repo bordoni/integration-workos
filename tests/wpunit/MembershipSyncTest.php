@@ -19,7 +19,7 @@ use WorkOS\Sync\RoleMapper;
 /**
  * Manual refresh repairs stale roles without treating uncertainty as a downgrade.
  */
-class MembershipSyncTest extends WPTestCase {
+final class MembershipSyncTest extends WPTestCase {
 
 	/** @var array Captured outbound requests. */
 	private array $requests = [];
@@ -157,7 +157,7 @@ class MembershipSyncTest extends WPTestCase {
 		$this->assertSame( 'member', Manager::get_user_orgs( $this->user_id )[0]->workos_role );
 		set_transient( 'workos_profile_memberships_' . md5( 'user_refresh' ), [ 'stale' ], 300 );
 
-		$this->assertTrue( MembershipSync::refresh( $this->user_id ) );
+		$this->assertTrue( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
 
 		$rows = Manager::get_user_orgs( $this->user_id );
 		$this->assertCount( 1, $rows );
@@ -179,7 +179,7 @@ class MembershipSyncTest extends WPTestCase {
 		$this->store_stale_membership();
 		$this->response['data'][0]['role'] = [ 'slug' => 'member' ];
 
-		$this->assertTrue( MembershipSync::refresh( $this->user_id ) );
+		$this->assertTrue( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
 
 		$this->assertSame( [ 'subscriber' ], get_userdata( $this->user_id )->roles );
 		$this->assertSame( [ 'GET' ], array_column( $this->requests, 'method' ) );
@@ -199,7 +199,7 @@ class MembershipSyncTest extends WPTestCase {
 		add_filter( 'update_user_metadata', $reject_write, 10, 3 );
 
 		try {
-			$result = MembershipSync::refresh( $this->user_id );
+			$result = App::container()->get( MembershipSync::class )->refresh( $this->user_id );
 		} finally {
 			remove_filter( 'update_user_metadata', $reject_write, 10 );
 		}
@@ -211,6 +211,36 @@ class MembershipSyncTest extends WPTestCase {
 	}
 
 	/**
+	 * A refresh is incomplete if its protection against older events is not saved.
+	 */
+	public function test_failed_timestamp_write_reports_error_and_can_be_retried(): void {
+		$this->store_stale_membership();
+		$this->response['data'][0]['role'] = [ 'slug' => 'member' ];
+
+		$reject_write = function ( $check, $user_id, $meta_key ) {
+			return $this->user_id === (int) $user_id && RoleMapper::META_MEMBERSHIP_UPDATED_AT === $meta_key ? false : $check;
+		};
+		add_filter( 'update_user_metadata', $reject_write, 10, 3 );
+
+		try {
+			$result = App::container()->get( MembershipSync::class )->refresh( $this->user_id );
+		} finally {
+			remove_filter( 'update_user_metadata', $reject_write, 10 );
+		}
+
+		$this->assertWPError( $result );
+		$this->assertSame( 'workos_membership_timestamp_save_failed', $result->get_error_code() );
+		$this->assertSame( [ 'subscriber' ], get_userdata( $this->user_id )->roles );
+		$this->assertSame( '', get_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true ) );
+
+		$this->assertTrue( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
+		$this->assertSame(
+			[ 'om_refresh' => $this->membership()['updated_at'] ],
+			get_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true )
+		);
+	}
+
+	/**
 	 * An existing mapped role must not conceal an additional privileged role.
 	 */
 	public function test_additional_roles_are_reported_without_silently_discarding_them(): void {
@@ -218,7 +248,7 @@ class MembershipSyncTest extends WPTestCase {
 		get_userdata( $this->user_id )->add_role( 'subscriber' );
 		$this->response['data'][0]['role'] = [ 'slug' => 'member' ];
 
-		$result = MembershipSync::refresh( $this->user_id );
+		$result = App::container()->get( MembershipSync::class )->refresh( $this->user_id );
 
 		$this->assertWPError( $result );
 		$this->assertSame( [ 'administrator', 'subscriber' ], get_userdata( $this->user_id )->roles );
@@ -233,8 +263,8 @@ class MembershipSyncTest extends WPTestCase {
 		$this->assertNull( Manager::get_by_workos_id( 'org_refresh' ) );
 		$this->assertSame( '', Manager::get_membership_id_for_user( $this->user_id, 'org_refresh' ) );
 
-		$this->assertTrue( MembershipSync::refresh( $this->user_id ) );
-		$this->assertTrue( MembershipSync::refresh( $this->user_id ) );
+		$this->assertTrue( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
+		$this->assertTrue( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
 
 		$rows = Manager::get_user_orgs( $this->user_id );
 		$this->assertCount( 1, $rows );
@@ -250,7 +280,7 @@ class MembershipSyncTest extends WPTestCase {
 		$this->store_stale_membership();
 		update_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, [ 'om_refresh' => $this->membership()['updated_at'] ] );
 
-		$this->assertTrue( MembershipSync::refresh( $this->user_id ) );
+		$this->assertTrue( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
 
 		$this->assertSame( 'org-admin', Manager::get_user_orgs( $this->user_id )[0]->workos_role );
 	}
@@ -263,10 +293,76 @@ class MembershipSyncTest extends WPTestCase {
 		$newer = [ 'om_refresh' => '2026-10-28T00:00:00.000Z' ];
 		update_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, $newer );
 
-		$this->assertWPError( MembershipSync::refresh( $this->user_id ) );
+		$this->assertWPError( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
 
 		$this->assertSame( 'member', Manager::get_user_orgs( $this->user_id )[0]->workos_role );
 		$this->assertSame( $newer, get_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true ) );
+	}
+
+	/**
+	 * Re-read persisted timestamps after HTTP, even when this request cached older meta.
+	 */
+	public function test_refresh_rejects_newer_watermark_written_during_request(): void {
+		global $wpdb;
+		$this->store_stale_membership();
+		$this->response['data'][0]['role'] = [ 'slug' => 'member' ];
+		$older = [ 'om_refresh' => '2026-10-26T00:00:00.000Z' ];
+		$newer = [ 'om_refresh' => '2026-10-28T00:00:00.000Z' ];
+		update_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, $older );
+		$this->assertSame( $older, get_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true ) );
+		$write = function ( $pre, array $args, string $url ) use ( $wpdb, $newer ) {
+			if ( false !== strpos( $url, '/user_management/organization_memberships' ) ) {
+				$wpdb->update( $wpdb->usermeta, [ 'meta_value' => maybe_serialize( $newer ) ], [
+					'user_id' => $this->user_id,
+					'meta_key' => RoleMapper::META_MEMBERSHIP_UPDATED_AT,
+				] );
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $write, 9, 3 );
+		try {
+			$result = App::container()->get( MembershipSync::class )->refresh( $this->user_id );
+		} finally {
+			remove_filter( 'pre_http_request', $write, 9 );
+		}
+
+		$this->assertWPError( $result );
+		$this->assertSame( 'workos_stale_membership', $result->get_error_code() );
+		$this->assertSame( [ 'administrator' ], get_userdata( $this->user_id )->roles );
+		$this->assertSame( 'member', Manager::get_user_orgs( $this->user_id )[0]->workos_role );
+		$this->assertSame( $newer, get_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true ) );
+	}
+
+	/**
+	 * A response for a previous identity must not change a user relinked during HTTP.
+	 */
+	public function test_refresh_rejects_identity_changed_during_request(): void {
+		global $wpdb;
+		$this->store_stale_membership();
+		$this->response['data'][0]['role'] = [ 'slug' => 'member' ];
+		$this->assertSame( 'user_refresh', get_user_meta( $this->user_id, '_workos_user_id', true ) );
+		$write = function ( $pre, array $args, string $url ) use ( $wpdb ) {
+			if ( false !== strpos( $url, '/user_management/organization_memberships' ) ) {
+				$wpdb->update( $wpdb->usermeta, [ 'meta_value' => 'user_relinked' ], [
+					'user_id' => $this->user_id,
+					'meta_key' => '_workos_user_id',
+				] );
+			}
+			return $pre;
+		};
+		add_filter( 'pre_http_request', $write, 9, 3 );
+		try {
+			$result = App::container()->get( MembershipSync::class )->refresh( $this->user_id );
+		} finally {
+			remove_filter( 'pre_http_request', $write, 9 );
+		}
+
+		$this->assertWPError( $result );
+		$this->assertSame( 'workos_identity_changed', $result->get_error_code() );
+		$this->assertSame( [ 'administrator' ], get_userdata( $this->user_id )->roles );
+		$this->assertSame( 'member', Manager::get_user_orgs( $this->user_id )[0]->workos_role );
+		$this->assertSame( 'user_relinked', get_user_meta( $this->user_id, '_workos_user_id', true ) );
+		$this->assertSame( '', get_user_meta( $this->user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true ) );
 	}
 
 	/**
@@ -274,7 +370,7 @@ class MembershipSyncTest extends WPTestCase {
 	 */
 	public function test_older_webhook_cannot_undo_refresh(): void {
 		$this->store_stale_membership();
-		$this->assertTrue( MembershipSync::refresh( $this->user_id ) );
+		$this->assertTrue( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
 		$older               = $this->membership();
 		$older['role']       = [ 'slug' => 'member' ];
 		$older['updated_at'] = '2026-10-26T00:00:00.000Z';
@@ -329,7 +425,7 @@ class MembershipSyncTest extends WPTestCase {
 				break;
 		}
 
-		$this->assertWPError( MembershipSync::refresh( $this->user_id ) );
+		$this->assertWPError( App::container()->get( MembershipSync::class )->refresh( $this->user_id ) );
 
 		$this->assertSame( [ 'administrator' ], get_userdata( $this->user_id )->roles );
 		$this->assertSame( 'member', Manager::get_user_orgs( $this->user_id )[0]->workos_role );

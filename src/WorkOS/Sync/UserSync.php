@@ -8,6 +8,7 @@
 namespace WorkOS\Sync;
 
 use WorkOS\ActivityLog\EventLogger;
+use WorkOS\App;
 use WorkOS\Auth\ChangeEmail\RestApi as ChangeEmailRestApi;
 use WorkOS\Config;
 use WorkOS\Organization\Manager as OrganizationManager;
@@ -475,7 +476,8 @@ class UserSync {
 		}
 
 		if ( '' !== Config::get_organization_id() ) {
-			$membership = MembershipSync::refresh( $user_id );
+			$membership = App::container()->get( MembershipSync::class )->refresh( $user_id );
+
 			if ( is_wp_error( $membership ) ) {
 				return $membership;
 			}

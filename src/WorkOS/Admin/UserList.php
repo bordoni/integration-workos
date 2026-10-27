@@ -12,8 +12,8 @@ namespace WorkOS\Admin;
 
 use WorkOS\Config;
 use WorkOS\Organization\Manager;
-use WorkOS\Sync\RoleMapper;
 use WorkOS\Sync\MembershipSync;
+use WorkOS\Sync\RoleMapper;
 use WorkOS\Sync\RoleSyncCheck;
 use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
@@ -33,9 +33,20 @@ class UserList {
 	private bool $primed = false;
 
 	/**
-	 * Constructor — registers all hooks.
+	 * Refreshes memberships and mapped roles from WorkOS.
+	 *
+	 * @var MembershipSync
 	 */
-	public function __construct() {
+	private MembershipSync $membership_sync;
+
+	/**
+	 * Register Users-screen hooks.
+	 *
+	 * @param MembershipSync $membership_sync Membership refresh service.
+	 */
+	public function __construct( MembershipSync $membership_sync ) {
+		$this->membership_sync = $membership_sync;
+
 		add_filter( 'manage_users_columns', [ $this, 'add_column' ] );
 		add_filter( 'manage_users_custom_column', [ $this, 'render_column' ], 10, 3 );
 		add_filter( 'bulk_actions-users', [ $this, 'add_bulk_action' ] );
@@ -382,13 +393,14 @@ class UserList {
 
 		foreach ( $user_ids as $user_id ) {
 			$user_id = absint( $user_id );
+
 			if ( ! $this->can_resync_user( $user_id, $roles_only ) ) {
 				$result = new \WP_Error( 'workos_sync_forbidden', __( 'You do not have permission to refresh this user and their role.', 'integration-workos' ) );
 			} elseif ( ! get_user_meta( $user_id, '_workos_user_id', true ) ) {
 				++$skipped;
 				continue;
 			} else {
-				$result = $roles_only ? MembershipSync::refresh( $user_id ) : UserSync::resync_from_workos( $user_id );
+				$result = $roles_only ? $this->membership_sync->refresh( $user_id ) : UserSync::resync_from_workos( $user_id );
 			}
 
 			if ( is_wp_error( $result ) ) {

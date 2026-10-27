@@ -14,7 +14,7 @@ use WorkOS\Database\Schema;
 /**
  * Organization management tests.
  */
-class OrganizationManagerTest extends WPTestCase {
+final class OrganizationManagerTest extends WPTestCase {
 
 	/**
 	 * Set up each test.

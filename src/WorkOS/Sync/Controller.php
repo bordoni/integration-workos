@@ -27,7 +27,6 @@ class Controller extends BaseController {
 		$this->container->singleton( UserSync::class );
 		$this->container->get( UserSync::class );
 
-		$this->container->singleton( RoleMapper::class );
 		$this->container->get( RoleMapper::class );
 
 		$this->container->singleton( RoleSyncCheck::class );
