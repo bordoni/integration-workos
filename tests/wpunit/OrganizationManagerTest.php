@@ -55,6 +55,38 @@ class OrganizationManagerTest extends WPTestCase {
 	}
 
 	/**
+	 * A login without role data must not undo a previously refreshed membership.
+	 */
+	public function test_login_without_role_preserves_existing_membership(): void {
+		$org_id = Manager::upsert_organization( [ 'id' => 'org_configured', 'name' => 'Configured' ] );
+		$user_id = self::factory()->user->create( [ 'role' => 'administrator' ] );
+		Manager::add_membership( $org_id, $user_id, [
+			'workos_membership_id' => 'om_refreshed',
+			'workos_role' => 'admin',
+			'wp_role' => 'administrator',
+		] );
+
+		Manager::ensure_user_org_membership( $user_id, [] );
+
+		$orgs = Manager::get_user_orgs( $user_id );
+		$this->assertSame( 'admin', $orgs[0]->workos_role );
+		$this->assertSame( 'administrator', $orgs[0]->wp_role );
+		$this->assertSame( 'om_refreshed', Manager::get_membership_id_for_user( $user_id, 'org_configured' ) );
+	}
+
+	/**
+	 * New memberships retain the existing default when login omits a role.
+	 */
+	public function test_login_without_role_defaults_new_membership_to_member(): void {
+		Manager::upsert_organization( [ 'id' => 'org_configured', 'name' => 'Configured' ] );
+		$user_id = self::factory()->user->create();
+
+		Manager::ensure_user_org_membership( $user_id, [] );
+
+		$this->assertSame( 'member', Manager::get_user_orgs( $user_id )[0]->workos_role );
+	}
+
+	/**
 	 * Test upsert creates new org.
 	 */
 	public function test_upsert_creates_new_org(): void {

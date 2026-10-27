@@ -445,7 +445,8 @@ class UserSync {
 	/**
 	 * Re-sync a linked WordPress user from WorkOS.
 	 *
-	 * Fetches the latest profile data from WorkOS and updates the local WP user.
+	 * Fetches the current membership and mapped role when an organization is
+	 * configured, then refreshes the linked user's profile from WorkOS.
 	 * Intended for manual re-sync when profile data drifts or webhooks are missed.
 	 *
 	 * @param int $user_id WordPress user ID.
@@ -473,7 +474,15 @@ class UserSync {
 			return $result;
 		}
 
+		if ( '' !== Config::get_organization_id() ) {
+			$membership = MembershipSync::refresh( $user_id );
+			if ( is_wp_error( $membership ) ) {
+				return $membership;
+			}
+		}
+
 		self::update_wp_user_from_workos( $user_id, $result );
+		delete_transient( 'workos_profile_user_' . md5( $workos_id ) );
 
 		return $result;
 	}

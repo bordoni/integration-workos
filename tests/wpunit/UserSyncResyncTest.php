@@ -29,14 +29,18 @@ class UserSyncResyncTest extends WPTestCase {
 	 */
 	private ?array $mock_response = null;
 
+	/** @var array|null Membership API response body. */
+	private ?array $membership_response = null;
+
 	/**
 	 * Set up each test.
 	 */
 	public function setUp(): void {
 		parent::setUp();
 
-		$this->http_requests = [];
-		$this->mock_response = null;
+		$this->http_requests       = [];
+		$this->mock_response       = null;
+		$this->membership_response = null;
 
 		// Make is_enabled() return true (requires api_key + client_id + environment_id).
 		\WorkOS\Config::set_active_environment( 'production' );
@@ -61,6 +65,14 @@ class UserSyncResyncTest extends WPTestCase {
 	 * Tear down each test.
 	 */
 	public function tearDown(): void {
+		global $wpdb;
+		$org = \WorkOS\Organization\Manager::get_by_workos_id( 'org_resync' );
+		if ( $org ) {
+			$wpdb->delete( $wpdb->prefix . 'workos_org_memberships', [ 'org_id' => $org->id ] );
+			$wpdb->delete( $wpdb->prefix . 'workos_organizations', [ 'id' => $org->id ] );
+			wp_cache_delete( 'org_' . $org->id, 'workos' );
+		}
+		wp_cache_delete( 'org_workos_org_resync', 'workos' );
 		remove_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10 );
 		delete_option( 'workos_production' );
 		\WorkOS\Config::set_active_environment( 'staging' );
@@ -94,6 +106,10 @@ class UserSyncResyncTest extends WPTestCase {
 			'url'  => $url,
 			'args' => $args,
 		];
+
+		if ( false !== strpos( $url, '/organization_memberships' ) ) {
+			return [ 'response' => [ 'code' => 200 ], 'body' => wp_json_encode( $this->membership_response ) ];
+		}
 
 		if ( null !== $this->mock_response ) {
 			return $this->mock_response;
@@ -253,4 +269,54 @@ class UserSyncResyncTest extends WPTestCase {
 
 		$this->assertFalse( UserSync::is_syncing(), 'Syncing flag should be false after re-sync completes.' );
 	}
+
+	/** Full re-sync must include the configured organization's live role. */
+	public function test_resync_refreshes_profile_and_membership(): void {
+		$user_id = $this->create_linked_user( [ 'role' => 'administrator' ] );
+		$opts                    = get_option( 'workos_production' );
+		$opts['organization_id'] = 'org_resync';
+		update_option( 'workos_production', $opts );
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+		$org_id = \WorkOS\Organization\Manager::upsert_organization( [ 'id' => 'org_resync', 'name' => 'Resync' ] );
+		\WorkOS\Organization\Manager::add_membership( $org_id, $user_id, [ 'workos_role' => 'admin' ] );
+		$this->membership_response = [
+			'data' => [
+				[
+					'id'              => 'om_resync',
+					'user_id'         => 'user_workos_resync',
+					'organization_id' => 'org_resync',
+					'status'          => 'active',
+					'role'            => [ 'slug' => 'member' ],
+					'updated_at'      => '2026-10-27T15:47:03.946Z',
+				],
+			],
+		];
+		set_transient( 'workos_profile_user_' . md5( 'user_workos_resync' ), [ 'first_name' => 'Old' ], 300 );
+
+		$result = UserSync::resync_from_workos( $user_id );
+
+		$this->assertIsArray( $result );
+		$this->assertSame( [ 'subscriber' ], get_userdata( $user_id )->roles );
+		$this->assertSame( 'Updated', get_userdata( $user_id )->first_name );
+		$this->assertFalse( get_transient( 'workos_profile_user_' . md5( 'user_workos_resync' ) ) );
+		$this->assertCount( 2, $this->http_requests );
+	}
+
+	/** A failed membership read must not report a successful profile-only refresh. */
+	public function test_membership_failure_preserves_profile_and_role(): void {
+		$user_id = $this->create_linked_user( [ 'role' => 'administrator' ] );
+		$opts                    = get_option( 'workos_production' );
+		$opts['organization_id'] = 'org_resync';
+		update_option( 'workos_production', $opts );
+		\WorkOS\App::container()->get( \WorkOS\Options\Production::class )->reset();
+		$this->membership_response = [ 'data' => [] ];
+
+		$result = UserSync::resync_from_workos( $user_id );
+
+		$this->assertWPError( $result );
+		$this->assertSame( [ 'administrator' ], get_userdata( $user_id )->roles );
+		$this->assertSame( 'Original', get_userdata( $user_id )->first_name );
+		$this->assertEmpty( get_user_meta( $user_id, '_workos_last_synced_at', true ) );
+	}
+
 }

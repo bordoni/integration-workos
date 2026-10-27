@@ -13,6 +13,7 @@ namespace WorkOS\Admin;
 use WorkOS\Config;
 use WorkOS\Organization\Manager;
 use WorkOS\Sync\RoleMapper;
+use WorkOS\Sync\MembershipSync;
 use WorkOS\Sync\RoleSyncCheck;
 use WorkOS\Sync\UserSync;
 use WorkOS\Vendor\StellarWP\SuperGlobals\SuperGlobals;
@@ -120,7 +121,7 @@ class UserList {
 			);
 		}
 
-		if ( workos()->is_enabled() && current_user_can( 'edit_users' ) ) {
+		if ( workos()->is_enabled() && $this->can_resync_user( $user_id ) ) {
 			$resync_url = wp_nonce_url(
 				add_query_arg(
 					[
@@ -306,11 +307,11 @@ class UserList {
 		}
 
 		if ( 'workos_bulk_resync' === $action ) {
-			return $this->handle_bulk_resync( $redirect_url, $user_ids );
+			return $this->handle_bulk_refresh( $redirect_url, $user_ids, false );
 		}
 
 		if ( 'workos_bulk_sync_roles' === $action ) {
-			return $this->handle_bulk_sync_roles( $redirect_url, $user_ids );
+			return $this->handle_bulk_refresh( $redirect_url, $user_ids, true );
 		}
 
 		$synced  = 0;
@@ -354,29 +355,41 @@ class UserList {
 	}
 
 	/**
-	 * Handle the bulk "Re-sync from WorkOS" action.
+	 * Whether the actor can edit this user and, when applicable, change roles.
+	 *
+	 * @param int  $user_id    Target user ID.
+	 * @param bool $roles_only Whether this is a role-only refresh.
+	 * @return bool
+	 */
+	private function can_resync_user( int $user_id, bool $roles_only = false ): bool {
+		return current_user_can( 'edit_users' ) && current_user_can( 'edit_user', $user_id )
+			&& ( ( ! $roles_only && '' === Config::get_organization_id() ) || current_user_can( 'promote_user', $user_id ) );
+	}
+
+	/**
+	 * Refresh selected users from WorkOS and report per-user failures.
 	 *
 	 * @param string $redirect_url Redirect URL.
 	 * @param array  $user_ids     Selected user IDs.
-	 *
-	 * @return string Updated redirect URL with result query args.
+	 * @param bool   $roles_only   Refresh membership without profile fields.
+	 * @return string
 	 */
-	private function handle_bulk_resync( string $redirect_url, array $user_ids ): string {
-		$resynced = 0;
-		$failed   = 0;
-		$skipped  = 0;
-		$errors   = [];
+	private function handle_bulk_refresh( string $redirect_url, array $user_ids, bool $roles_only ): string {
+		$synced  = 0;
+		$failed  = 0;
+		$skipped = 0;
+		$errors  = [];
 
 		foreach ( $user_ids as $user_id ) {
-			$user_id   = absint( $user_id );
-			$workos_id = get_user_meta( $user_id, '_workos_user_id', true );
-
-			if ( ! $workos_id ) {
+			$user_id = absint( $user_id );
+			if ( ! $this->can_resync_user( $user_id, $roles_only ) ) {
+				$result = new \WP_Error( 'workos_sync_forbidden', __( 'You do not have permission to refresh this user and their role.', 'integration-workos' ) );
+			} elseif ( ! get_user_meta( $user_id, '_workos_user_id', true ) ) {
 				++$skipped;
 				continue;
+			} else {
+				$result = $roles_only ? MembershipSync::refresh( $user_id ) : UserSync::resync_from_workos( $user_id );
 			}
-
-			$result = UserSync::resync_from_workos( $user_id );
 
 			if ( is_wp_error( $result ) ) {
 				++$failed;
@@ -387,16 +400,16 @@ class UserList {
 					$result->get_error_message()
 				);
 			} else {
-				++$resynced;
+				++$synced;
 			}
 		}
 
 		return add_query_arg(
 			[
-				'workos_resynced' => $resynced,
-				'workos_failed'   => $failed,
-				'workos_skipped'  => $skipped,
-				'workos_errors'   => rawurlencode( implode( ' | ', $errors ) ),
+				$roles_only ? 'workos_roles_synced' : 'workos_resynced' => $synced,
+				$roles_only ? 'workos_roles_skipped' : 'workos_skipped' => $skipped,
+				'workos_failed' => $failed,
+				'workos_errors' => rawurlencode( implode( ' | ', $errors ) ),
 			],
 			$redirect_url
 		);
@@ -454,7 +467,7 @@ class UserList {
 
 		check_admin_referer( 'workos_resync_user_' . $user_id );
 
-		if ( ! current_user_can( 'edit_users' ) ) {
+		if ( ! $this->can_resync_user( $user_id ) ) {
 			wp_die( esc_html__( 'You do not have permission to perform this action.', 'integration-workos' ) );
 		}
 
@@ -470,57 +483,6 @@ class UserList {
 
 		wp_safe_redirect( add_query_arg( $query_args, admin_url( 'users.php' ) ) );
 		exit;
-	}
-
-	/**
-	 * Handle the bulk "Sync Roles from WorkOS" action.
-	 *
-	 * Re-applies the role mapping for selected users based on their WorkOS role.
-	 *
-	 * @param string $redirect_url Redirect URL.
-	 * @param array  $user_ids     Selected user IDs.
-	 *
-	 * @return string Updated redirect URL with result query args.
-	 */
-	private function handle_bulk_sync_roles( string $redirect_url, array $user_ids ): string {
-		$synced  = 0;
-		$skipped = 0;
-
-		$role_mapper = new RoleMapper();
-
-		foreach ( $user_ids as $user_id ) {
-			$user_id   = absint( $user_id );
-			$user_orgs = Manager::get_user_orgs( $user_id );
-
-			if ( empty( $user_orgs ) ) {
-				++$skipped;
-				continue;
-			}
-
-			$applied = false;
-			foreach ( $user_orgs as $org ) {
-				$workos_role = $org->workos_role ?? '';
-				if ( ! empty( $workos_role ) ) {
-					$role_mapper->apply_role( $user_id, $workos_role );
-					$applied = true;
-					break;
-				}
-			}
-
-			if ( $applied ) {
-				++$synced;
-			} else {
-				++$skipped;
-			}
-		}
-
-		return add_query_arg(
-			[
-				'workos_roles_synced'  => $synced,
-				'workos_roles_skipped' => $skipped,
-			],
-			$redirect_url
-		);
 	}
 
 	/**
@@ -690,8 +652,8 @@ class UserList {
 					sprintf(
 						/* translators: %d: number of users whose roles were synced */
 						_n(
-							'%d user role synced from WorkOS mapping.',
-							'%d user roles synced from WorkOS mapping.',
+							'%d user role refreshed from WorkOS.',
+							'%d user roles refreshed from WorkOS.',
 							$roles_synced,
 							'integration-workos'
 						),

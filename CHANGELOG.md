@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Manual re-sync and role sync now fetch the current WorkOS membership instead of leaving stale membership roles in place. Admin actions check permission to edit and promote each target user, and report membership failures without assigning a fallback role.
+- Logins without role data preserve an existing membership role instead of replacing it with `member`.
+
 ## [1.0.10] - 2026-10-14
 
 ### Security
