@@ -7,6 +7,10 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Api\Client;
+
+use WorkOS\Sync\MembershipSync;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\App;
 use WorkOS\Config;
@@ -19,7 +23,7 @@ use WorkOS\Webhook\Receiver;
 /**
  * Retried events run once; late events don't roll data back.
  */
-class WebhookEventGuardTest extends WPTestCase {
+final class WebhookEventGuardTest extends WPTestCase {
 
 	/**
 	 * Set up each test.
@@ -193,7 +197,7 @@ class WebhookEventGuardTest extends WPTestCase {
 	 */
 	public function test_late_user_updated_does_not_roll_back(): void {
 		$user_id = $this->linked_user( 'user_order' );
-		$sync    = new UserSync();
+		$sync    = new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) );
 
 		$sync->handle_user_updated( $this->user_updated( 'user_order', 'Newer', '2026-10-12T10:00:02.000Z' ) );
 		$this->assertSame( 'Newer', get_user_meta( $user_id, 'first_name', true ) );
@@ -211,7 +215,7 @@ class WebhookEventGuardTest extends WPTestCase {
 	 */
 	public function test_user_updated_without_timestamp_applies(): void {
 		$user_id = $this->linked_user( 'user_no_ts' );
-		$sync    = new UserSync();
+		$sync    = new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) );
 
 		$sync->handle_user_updated( $this->user_updated( 'user_no_ts', 'Stamped', '2026-10-12T10:00:02.000Z' ) );
 		$sync->handle_user_updated( $this->user_updated( 'user_no_ts', 'Unstamped', '' ) );
@@ -224,7 +228,7 @@ class WebhookEventGuardTest extends WPTestCase {
 	 */
 	public function test_unchanged_profile_records_updated_at(): void {
 		$user_id = $this->linked_user( 'user_same' );
-		$sync    = new UserSync();
+		$sync    = new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) );
 
 		$sync->handle_user_updated( $this->user_updated( 'user_same', 'Same', '2026-10-12T10:00:01.000Z' ) );
 		$sync->handle_user_updated( $this->user_updated( 'user_same', 'Same', '2026-10-12T10:00:05.000Z' ) );

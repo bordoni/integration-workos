@@ -10,13 +10,16 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Sync\UserSync;
+
+use WorkOS\Sync\MembershipSync;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Admin\UserList;
 use WorkOS\App;
 use WorkOS\Config;
 use WorkOS\Options\Production;
 use WorkOS\Organization\Manager;
-use WorkOS\Sync\MembershipSync;
 
 /**
  * Integration coverage for the two inbound bulk actions on the Users screen.
@@ -170,7 +173,7 @@ final class UserListMembershipSyncTest extends WPTestCase {
 	 * @return array Redirect query parameters.
 	 */
 	private function dispatch( string $action, array $users ): array {
-		$list = new UserList( App::container()->get( MembershipSync::class ) );
+		$list = new UserList( App::container()->get( MembershipSync::class ), App::container()->get( UserSync::class ) );
 		$url  = $list->handle_bulk_action( admin_url( 'users.php' ), $action, $users );
 		parse_str( (string) wp_parse_url( $url, PHP_URL_QUERY ), $query );
 		return $query;

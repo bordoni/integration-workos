@@ -17,6 +17,23 @@ use WP_CLI;
 class SyncCommand extends \WP_CLI_Command {
 
 	/**
+	 * Inbound user refresh service.
+	 *
+	 * @var UserSync
+	 */
+	private UserSync $user_sync;
+
+	/**
+	 * Receive the shared user sync service from the CLI controller.
+	 *
+	 * @param UserSync $user_sync User refresh service.
+	 */
+	public function __construct( UserSync $user_sync ) {
+		$this->user_sync = $user_sync;
+	}
+
+
+	/**
 	 * Push unlinked WordPress users to WorkOS.
 	 *
 	 * Creates each user in WorkOS and links the accounts.
@@ -168,7 +185,7 @@ class SyncCommand extends \WP_CLI_Command {
 		$skipped  = 0;
 
 		foreach ( $user_ids as $user_id ) {
-			$result = UserSync::resync_from_workos( (int) $user_id );
+			$result = $this->user_sync->resync_from_workos( (int) $user_id );
 
 			if ( is_wp_error( $result ) ) {
 				if ( 'workos_not_linked' === $result->get_error_code() ) {

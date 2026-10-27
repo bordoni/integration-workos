@@ -9,48 +9,66 @@
 
 namespace WorkOS\Sync;
 
-use WorkOS\Api\Client;
 use WorkOS\Config;
-use WorkOS\Organization\Manager;
-use WorkOS\Webhook\EventGuard;
+use WorkOS\Sync\Membership\MembershipReader;
+use WorkOS\Sync\Membership\MembershipState;
+use WorkOS\Sync\Membership\MembershipWriter;
+use WorkOS\Sync\Membership\OrganizationResolver;
 
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Repairs local membership and role drift from an authoritative WorkOS read.
+ * Coordinates remote reads, freshness checks and verified local membership updates.
  */
 final class MembershipSync {
 
 	/**
-	 * WorkOS API client.
+	 * Validated remote memberships.
 	 *
-	 * @var Client
+	 * @var MembershipReader
 	 */
-	private Client $client;
+	private MembershipReader $reader;
 
 	/**
-	 * Applies mapped roles without pushing them back to WorkOS.
+	 * Local organization resolution.
 	 *
-	 * @var RoleMapper
+	 * @var OrganizationResolver
 	 */
-	private RoleMapper $role_mapper;
+	private OrganizationResolver $organizations;
 
 	/**
-	 * Receive the shared API client and role mapper from the container.
+	 * Linked identity and applied membership versions.
 	 *
-	 * @param Client     $client      WorkOS API client.
-	 * @param RoleMapper $role_mapper Shared role mapper.
+	 * @var MembershipState
 	 */
-	public function __construct( Client $client, RoleMapper $role_mapper ) {
-		$this->client      = $client;
-		$this->role_mapper = $role_mapper;
+	private MembershipState $state;
+
+	/**
+	 * Local membership and role updates.
+	 *
+	 * @var MembershipWriter
+	 */
+	private MembershipWriter $writer;
+
+	/**
+	 * Receive the collaborators that perform each refresh stage.
+	 *
+	 * @param MembershipReader     $reader        Validated remote reads.
+	 * @param OrganizationResolver $organizations Local organization resolution.
+	 * @param MembershipState      $state         Identity and version checks.
+	 * @param MembershipWriter     $writer        Local membership and role writes.
+	 */
+	public function __construct( MembershipReader $reader, OrganizationResolver $organizations, MembershipState $state, MembershipWriter $writer ) {
+		$this->reader        = $reader;
+		$this->organizations = $organizations;
+		$this->state         = $state;
+		$this->writer        = $writer;
 	}
 
 	/**
-	 * Fetch and apply the active membership for the configured organization.
+	 * Refresh an active mapped membership, stopping at the first failed stage.
 	 *
-	 * Missing or inactive memberships are reported for review. This operation
-	 * does not invent a role or apply a separate deprovisioning policy.
+	 * Missing or inactive memberships are reported for review, not deprovisioned.
 	 *
 	 * @param int $user_id WordPress user ID.
 	 * @return true|\WP_Error
@@ -71,162 +89,30 @@ final class MembershipSync {
 			return new \WP_Error( 'workos_org_not_configured', __( 'Configure an organization before refreshing roles.', 'integration-workos' ) );
 		}
 
-		$response = $this->client->list_organization_memberships(
-			[
-				'user_id'         => $workos_id,
-				'organization_id' => $org_id,
-				'limit'           => 100,
-			]
-		);
+		$membership = $this->reader->read( $workos_id, $org_id );
 
-		if ( is_wp_error( $response ) ) {
-			return $response;
+		if ( is_wp_error( $membership ) ) {
+			return $membership;
 		}
 
-		if (
-			! is_array( $response )
-			|| ! isset( $response['data'] )
-			|| ! is_array( $response['data'] )
-			|| ! empty( $response['list_metadata']['after'] )
-		) {
-			return new \WP_Error( 'workos_invalid_membership_response', __( 'WorkOS returned an invalid or incomplete membership response. No role was changed.', 'integration-workos' ) );
+		$organization = $this->organizations->resolve( $org_id );
+
+		if ( is_wp_error( $organization ) ) {
+			return $organization;
 		}
 
-		if ( 1 !== count( $response['data'] ) || ! isset( $response['data'][0] ) || ! is_array( $response['data'][0] ) ) {
-			return new \WP_Error( 'workos_membership_not_unique', __( 'Expected one membership for this user and organization. Review their WorkOS membership before retrying.', 'integration-workos' ) );
+		$current = $this->state->check_current( $user_id, $membership );
+
+		if ( is_wp_error( $current ) ) {
+			return $current;
 		}
 
-		$membership = $response['data'][0];
+		$applied = $this->writer->apply( $user_id, (int) $organization->id, $membership );
 
-		if (
-			( $membership['user_id'] ?? null ) !== $workos_id
-			|| ( $membership['organization_id'] ?? null ) !== $org_id
-			|| ! isset( $membership['id'] )
-			|| ! is_string( $membership['id'] )
-			|| '' === $membership['id']
-		) {
-			return new \WP_Error( 'workos_invalid_membership', __( 'WorkOS returned a membership that does not match this user and organization. No role was changed.', 'integration-workos' ) );
+		if ( is_wp_error( $applied ) ) {
+			return $applied;
 		}
 
-		if ( 'active' !== ( $membership['status'] ?? null ) ) {
-			return new \WP_Error( 'workos_inactive_membership', __( 'The WorkOS membership is not active. Review access separately; no local role was changed.', 'integration-workos' ) );
-		}
-
-		$role    = RoleMapper::role_slug( $membership['role'] ?? '' );
-		$map     = RoleMapper::get_role_map();
-		$wp_role = $map[ $role ] ?? '';
-
-		if ( '' === $role || ! is_string( $wp_role ) || '' === $wp_role || ! get_role( $wp_role ) ) {
-			return new \WP_Error( 'workos_unmapped_role', __( 'Map the current WorkOS role to an existing WordPress role before retrying. No role was changed.', 'integration-workos' ) );
-		}
-
-		$updated_at = $membership['updated_at'] ?? '';
-
-		if ( ! is_string( $updated_at ) || '' === EventGuard::latest( $updated_at, '' ) ) {
-			return new \WP_Error( 'workos_invalid_membership_timestamp', __( 'WorkOS returned an invalid membership timestamp. No role was changed.', 'integration-workos' ) );
-		}
-
-		$org = $this->local_organization( $org_id );
-
-		if ( is_wp_error( $org ) ) {
-			return $org;
-		}
-
-		// The API requests may outlast a webhook or an administrator's identity change.
-		wp_cache_delete( $user_id, 'user_meta' );
-
-		if ( get_user_meta( $user_id, '_workos_user_id', true ) !== $workos_id ) {
-			return new \WP_Error( 'workos_identity_changed', __( 'The linked WorkOS identity changed during the request. Retry the refresh.', 'integration-workos' ) );
-		}
-
-		$applied = get_user_meta( $user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true );
-		$applied = is_array( $applied ) ? $applied : [];
-		$last    = $applied[ $membership['id'] ] ?? '';
-
-		// Equal timestamps must still repair drift; only a strictly older read is rejected.
-		if ( EventGuard::is_stale( $updated_at, $last ) && ! EventGuard::is_stale( $last, $updated_at ) ) {
-			return new \WP_Error( 'workos_stale_membership', __( 'A newer membership update has already been processed. Retry the refresh.', 'integration-workos' ) );
-		}
-
-		Manager::add_membership(
-			(int) $org->id,
-			$user_id,
-			[
-				'workos_membership_id' => $membership['id'],
-				'workos_role'          => $role,
-				'wp_role'              => $wp_role,
-			]
-		);
-		wp_cache_delete( "membership_{$user_id}_{$org_id}", 'workos' );
-
-		// The storage API returns void. Verify the row before changing WordPress access.
-		$stored = false;
-
-		foreach ( Manager::get_user_orgs( $user_id ) as $user_org ) {
-			if ( $user_org->workos_org_id === $org_id && $user_org->workos_role === $role && $user_org->wp_role === $wp_role ) {
-				$stored = true;
-				break;
-			}
-		}
-
-		if ( ! $stored || Manager::get_membership_id_for_user( $user_id, $org_id ) !== $membership['id'] ) {
-			return new \WP_Error( 'workos_membership_save_failed', __( 'Could not save the refreshed membership. Retry the refresh.', 'integration-workos' ) );
-		}
-
-		$this->role_mapper->apply_role( $user_id, $role );
-
-		// Read persisted roles, not the WP_User instance modified by set_role().
-		clean_user_cache( $user_id );
-		$user = get_user_by( 'id', $user_id );
-
-		if ( ! $user || array_values( $user->roles ) !== [ $wp_role ] ) {
-			return new \WP_Error( 'workos_role_save_failed', __( 'The WordPress roles do not match the refreshed membership. Review the user roles before retrying.', 'integration-workos' ) );
-		}
-
-		$applied[ $membership['id'] ] = $updated_at;
-		update_user_meta( $user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, $applied );
-		delete_transient( 'workos_profile_memberships_' . md5( $workos_id ) );
-
-		$persisted = get_user_meta( $user_id, RoleMapper::META_MEMBERSHIP_UPDATED_AT, true );
-
-		if ( ! is_array( $persisted ) || ( $persisted[ $membership['id'] ] ?? '' ) !== $updated_at ) {
-			return new \WP_Error( 'workos_membership_timestamp_save_failed', __( 'The role was refreshed, but its membership timestamp could not be saved. Retry the refresh to protect it from older webhook events.', 'integration-workos' ) );
-		}
-
-		return true;
-	}
-
-	/**
-	 * Restore a missing local organization before saving its membership.
-	 *
-	 * @param string $org_id WorkOS organization ID.
-	 * @return object|\WP_Error
-	 */
-	private function local_organization( string $org_id ) {
-		$org = Manager::get_by_workos_id( $org_id );
-
-		if ( $org ) {
-			return $org;
-		}
-
-		$data = $this->client->get_organization( $org_id );
-
-		if ( is_wp_error( $data ) ) {
-			return $data;
-		}
-
-		if (
-			! is_array( $data )
-			|| ( $data['id'] ?? null ) !== $org_id
-			|| ! isset( $data['name'] )
-			|| ! is_string( $data['name'] )
-		) {
-			return new \WP_Error( 'workos_invalid_organization', __( 'WorkOS returned an invalid organization. No role was changed.', 'integration-workos' ) );
-		}
-
-		Manager::upsert_organization( $data );
-		$org = Manager::get_by_workos_id( $org_id );
-
-		return $org ? $org : new \WP_Error( 'workos_org_save_failed', __( 'Could not save the WorkOS organization.', 'integration-workos' ) );
+		return $this->state->record_applied( $user_id, $membership );
 	}
 }

@@ -7,6 +7,10 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Api\Client;
+
+use WorkOS\Sync\MembershipSync;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\App;
 use WorkOS\Config;
@@ -17,7 +21,7 @@ use WorkOS\Sync\UserSync;
 /**
  * Re-link Protection tests.
  */
-class UserSyncRelinkProtectionTest extends WPTestCase {
+final class UserSyncRelinkProtectionTest extends WPTestCase {
 
 	/**
 	 * Calls to workos_user_linked: [ wp_user_id, workos_id, previous_id, source ].
@@ -397,7 +401,7 @@ class UserSyncRelinkProtectionTest extends WPTestCase {
 		$this->enable_protection();
 		$user_id = $this->linked_user( 'hook@example.com', 'user_old' );
 
-		( new UserSync() )->handle_user_created(
+		( new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) ) )->handle_user_created(
 			[
 				'event' => 'user.created',
 				'data'  => [ 'id' => 'user_new', 'email' => 'hook@example.com' ],

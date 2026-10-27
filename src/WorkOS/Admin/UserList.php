@@ -40,12 +40,21 @@ class UserList {
 	private MembershipSync $membership_sync;
 
 	/**
+	 * Refreshes complete user profiles and memberships.
+	 *
+	 * @var UserSync
+	 */
+	private UserSync $user_sync;
+
+	/**
 	 * Register Users-screen hooks.
 	 *
 	 * @param MembershipSync $membership_sync Membership refresh service.
+	 * @param UserSync       $user_sync       Full user refresh service.
 	 */
-	public function __construct( MembershipSync $membership_sync ) {
+	public function __construct( MembershipSync $membership_sync, UserSync $user_sync ) {
 		$this->membership_sync = $membership_sync;
+		$this->user_sync       = $user_sync;
 
 		add_filter( 'manage_users_columns', [ $this, 'add_column' ] );
 		add_filter( 'manage_users_custom_column', [ $this, 'render_column' ], 10, 3 );
@@ -400,7 +409,7 @@ class UserList {
 				++$skipped;
 				continue;
 			} else {
-				$result = $roles_only ? $this->membership_sync->refresh( $user_id ) : UserSync::resync_from_workos( $user_id );
+				$result = $roles_only ? $this->membership_sync->refresh( $user_id ) : $this->user_sync->resync_from_workos( $user_id );
 			}
 
 			if ( is_wp_error( $result ) ) {
@@ -483,7 +492,7 @@ class UserList {
 			wp_die( esc_html__( 'You do not have permission to perform this action.', 'integration-workos' ) );
 		}
 
-		$result = UserSync::resync_from_workos( $user_id );
+		$result = $this->user_sync->resync_from_workos( $user_id );
 
 		$query_args = [];
 		if ( is_wp_error( $result ) ) {

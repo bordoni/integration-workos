@@ -40,7 +40,12 @@ class Controller extends BaseController {
 	protected function doRegister(): void {
 		// Bind shared sync services before admin constructors resolve them.
 		$this->container->singleton( Sync\RoleMapper::class );
+		$this->container->singleton( Sync\Membership\MembershipReader::class );
+		$this->container->singleton( Sync\Membership\OrganizationResolver::class );
+		$this->container->singleton( Sync\Membership\MembershipState::class );
+		$this->container->singleton( Sync\Membership\MembershipWriter::class );
 		$this->container->singleton( Sync\MembershipSync::class );
+		$this->container->singleton( Sync\UserSync::class );
 
 		// Ahead of the features that resolve these at construction.
 		$this->container->register( HttpController::class );

@@ -7,6 +7,10 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Sync\UserSync;
+
+use WorkOS\Sync\MembershipSync;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Admin\UserList;
 use WorkOS\App;
@@ -16,7 +20,6 @@ use WorkOS\Options\Production;
 use WorkOS\Organization\Manager;
 use WorkOS\Sync\RoleMapper;
 use WorkOS\Sync\RoleSyncCheck;
-use WorkOS\Sync\MembershipSync;
 
 /**
  * Batched role sync check, stored result, and per-user rechecks.
@@ -532,7 +535,7 @@ final class RoleSyncCheckTest extends WPTestCase {
 		global $wpdb;
 
 		$seed = $this->seed_mix();
-		$list = new UserList( App::container()->get( MembershipSync::class ) );
+		$list = new UserList( App::container()->get( MembershipSync::class ), App::container()->get( UserSync::class ) );
 
 		$before = $wpdb->num_queries;
 		$views  = $list->add_out_of_sync_view( [] );
@@ -556,7 +559,7 @@ final class RoleSyncCheckTest extends WPTestCase {
 
 		$_GET['workos_sync_status'] = 'out_of_sync';
 		$query                      = new \WP_User_Query();
-		( new UserList( App::container()->get( MembershipSync::class ) ) )->filter_out_of_sync_users( $query );
+		( new UserList( App::container()->get( MembershipSync::class ), App::container()->get( UserSync::class ) ) )->filter_out_of_sync_users( $query );
 		unset( $_GET['workos_sync_status'] );
 
 		$this->assertEqualsCanonicalizing( $seed['out'], $query->get( 'include' ) );
