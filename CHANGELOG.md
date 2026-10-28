@@ -1,13 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.11] - 2026-10-28
 
 ### Fixed
 
-- Sync failure notices display quoted error messages without extra backslashes.
-- Re-sync returns administrators to their searched or filtered Users list, preserving sorting and pagination on both success and failure. Invalid return addresses fall back to the Users screen.
-- Manual re-sync and role sync now fetch the current WorkOS membership instead of leaving stale membership roles in place. Admin actions check permission to edit and promote each target user, and report membership failures without assigning a fallback role.
-- Logins without role data preserve an existing membership role instead of replacing it with `member`.
+- **Re-sync left stale WorkOS roles in place** (#93) — **Re-sync from WorkOS** on the Users screen refreshed profile fields only, and **Sync Roles from WorkOS** reapplied the role already stored in WordPress, so a missed role-change webhook couldn't be repaired from WordPress. With an organization configured, both now fetch the user's current membership from WorkOS, store it and apply the mapped WordPress role; Re-sync then refreshes the profile. `wp workos user sync <id> --direction=pull` and `wp workos sync pull` run the same full refresh. A failed request, a missing, inactive or duplicate membership, or an unmapped role is reported as an error: no fallback role is assigned and the user isn't deprovisioned, so review the membership or role mapping before retrying. A successful refresh records the membership's timestamp, so an older webhook delivered afterwards can't roll the role back. Without an organization, Re-sync stays profile-only.
+- **Sign-ins without role data reset the role to `member`** (#93) — when a WorkOS sign-in carried no membership role, the plugin stored `member` over the role a refresh or webhook had set. It now keeps the stored role, and falls back to `member` only when there is none.
+- **Re-sync lost the Users list's place** (#94) — after **Re-sync from WorkOS**, administrators landed on the unfiltered Users list. They now return to the same search, filters (other plugins' filters included), sorting and page, whether the refresh succeeded or failed. A return address that isn't this site's Users screen falls back to the plain list.
+- **Backslashes in sync error notices** (#94) — quotes in a sync error message showed as `\"`.
+- **Refused re-link notice for deactivated accounts** (#55) — the notice on the user's profile suggested `wp workos user link <id> <workos_id> --force`, which the CLI refuses for an account deactivated when its WorkOS user was deleted. It now adds `--reactivate` for those accounts, so the command it shows runs.
+
+### Changed
+
+- **Re-sync checks the right to change roles** (#93) — the row and bulk **Re-sync from WorkOS** actions need permission to edit each selected user and, with an organization configured, to promote them, since the role can change. **Sync Roles from WorkOS** always needs both, and an organization.
+- **`UserSync::resync_from_workos()` is an instance method** (#93) — it was static. Code that called `UserSync::resync_from_workos( $user_id )` must call it on the shared instance: `workos()->getContainer()->get( \WorkOS\Sync\UserSync::class )->resync_from_workos( $user_id )`. `UserSync::sync_existing_user()` stays static.
 
 ## [1.0.10] - 2026-10-14
 

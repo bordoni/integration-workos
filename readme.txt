@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.10
+Stable tag: 1.0.11
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,14 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.11 - 2026-10-28 =
+
+* Fix: Re-sync from WorkOS and Sync Roles from WorkOS on the Users screen now fetch the user's current WorkOS membership and apply the mapped WordPress role, so a role change from a missed webhook can be repaired. Re-sync also refreshes the profile, and `wp workos user sync --direction=pull` and `wp workos sync pull` do the same. Membership problems and unmapped roles are reported as errors; no fallback role is assigned. Both need permission to edit and promote each user; without an organization configured, Re-sync stays profile-only and needs edit only. For developers, `UserSync::resync_from_workos()` is now an instance method. (#93)
+* Fix: A WorkOS sign-in without role data keeps the stored membership role instead of resetting it to `member`. (#93)
+* Fix: After Re-sync, administrators return to the same Users search, filters, sorting and page. (#94)
+* Fix: Quotes in sync error notices no longer show backslashes. (#94)
+* Fix: The refused re-link notice suggests `--reactivate` for accounts deactivated when their WorkOS user was deleted, so the command it shows runs. (#55)
+
 = 1.0.10 - 2026-10-14 =
 
 * Fix: Accounts deactivated by WorkOS can no longer sign in. The deactivation was recorded but never checked, so the account could still sign in through WorkOS when a new WorkOS user matched its email, or with its WordPress password. Every sign-in path now refuses it, and deprovisioning ends its existing sessions. (#48)
@@ -298,6 +306,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.11 =
+Re-sync from WorkOS and Sync Roles from WorkOS now repair stale roles from the user's current WorkOS membership, and sign-ins without role data no longer reset a role to member. Custom code that calls `UserSync::resync_from_workos()` statically must switch to the shared instance.
 
 = 1.0.10 =
 Accounts deactivated by WorkOS can no longer sign in. Webhooks from WorkOS verify again: sites with a webhook secret have been rejecting every event, and pending retries apply after the update. Adds Re-link Protection (off on upgraded sites until you turn it on), an optional Require Linked Identity gate, and email-code verification during password sign-in. Adds a database table for WorkOS user lookups, created and filled on upgrade.
