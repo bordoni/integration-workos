@@ -358,6 +358,7 @@ tests/
     ├── SchemaTest.php                              # Database schema tests
     ├── TokenAuthRefreshTest.php                    # TokenAuth regression: rejects unsigned/expired Bearer JWTs
     ├── UserHelperTest.php                          # WorkOS\User + `workos_is_sso_user`/`workos_has_active_session` helpers
+    ├── UserProfileLinkRefusedNoticeTest.php        # Refused re-link notice: suggested `wp workos user link` command (--force, --reactivate when deactivated)
     ├── UserSyncDeprovisionTest.php                 # User deprovisioning tests
     ├── UserSyncFindOrCreateTest.php                # User find-or-create tests
     ├── UserLinksTest.php                           # Link table: follows meta writes, backfill, parity with the get_users() meta lookup, batched lookups
