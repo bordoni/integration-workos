@@ -7,13 +7,19 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Api\Client;
+
+use WorkOS\Sync\MembershipSync;
+
+use WorkOS\App;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Sync\UserSync;
 
 /**
  * Outbound user creation sync tests.
  */
-class UserSyncPushTest extends WPTestCase {
+final class UserSyncPushTest extends WPTestCase {
 
 	/**
 	 * UserSync instance under test.
@@ -60,7 +66,7 @@ class UserSyncPushTest extends WPTestCase {
 		add_filter( 'pre_http_request', [ $this, 'intercept_http' ], 10, 3 );
 
 		// Create a fresh instance for calling methods directly.
-		$this->sync = new UserSync();
+		$this->sync = new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) );
 
 		// Remove user_register hooks so factory()->user->create() doesn't
 		// trigger automatic pushes — we call push_user_to_workos() explicitly.

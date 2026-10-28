@@ -83,6 +83,31 @@ Go to **Settings > WorkOS** in the WordPress admin. The settings page has three 
 
 The plugin supports two environments — **Production** and **Staging** — with separate credentials for each. An admin bar badge shows which environment is active.
 
+### Refresh a linked user's profile and role
+
+On **Users**, click **Re-sync from WorkOS** under the user's WorkOS ID, or select
+users and choose the same bulk action. With an organization configured, this
+fetches the current WorkOS membership, updates the stored membership and mapped
+WordPress role, then refreshes profile fields. **Sync Roles from WorkOS** performs
+the membership and role refresh without changing profile fields.
+
+These actions require permission to edit and promote each selected user. Without
+a configured organization, full re-sync refreshes profile fields only and requires
+edit permission. The role-only action requires an organization.
+
+Failed requests, missing or inactive memberships, and unmapped roles are reported
+as errors. They do not assign a fallback role or automatically deprovision the
+user. Review the reported membership or mapping problem before retrying. A login
+that omits role data preserves the stored membership role.
+
+The existing CLI pull commands use the same full refresh. With WP-CLI installed
+and the plugin configured, refresh one linked user (replace `42` with their
+WordPress user ID):
+
+```bash
+wp workos user sync 42 --direction=pull
+```
+
 ### wp-config.php Constants
 
 All credentials can be set via constants in `wp-config.php`, which take precedence over database values:

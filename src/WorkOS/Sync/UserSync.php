@@ -8,6 +8,7 @@
 namespace WorkOS\Sync;
 
 use WorkOS\ActivityLog\EventLogger;
+use WorkOS\Api\Client;
 use WorkOS\Auth\ChangeEmail\RestApi as ChangeEmailRestApi;
 use WorkOS\Config;
 use WorkOS\Organization\Manager as OrganizationManager;
@@ -40,9 +41,29 @@ class UserSync {
 	private static bool $syncing = false;
 
 	/**
-	 * Constructor — registers WP->WorkOS sync hooks.
+	 * Refreshes the current organization membership and mapped role.
+	 *
+	 * @var MembershipSync
 	 */
-	public function __construct() {
+	private MembershipSync $membership_sync;
+
+	/**
+	 * Fetches the profile for inbound refreshes.
+	 *
+	 * @var Client
+	 */
+	private Client $client;
+
+	/**
+	 * Register user sync hooks with the shared inbound services.
+	 *
+	 * @param MembershipSync $membership_sync Membership refresh service.
+	 * @param Client         $client          WorkOS API client.
+	 */
+	public function __construct( MembershipSync $membership_sync, Client $client ) {
+		$this->membership_sync = $membership_sync;
+		$this->client          = $client;
+
 		// WP -> WorkOS: push profile updates and new user creation.
 		add_action( 'profile_update', [ $this, 'push_profile_to_workos' ], 10, 3 );
 		add_action( 'user_register', [ $this, 'push_user_to_workos' ], 10, 2 );
@@ -445,14 +466,15 @@ class UserSync {
 	/**
 	 * Re-sync a linked WordPress user from WorkOS.
 	 *
-	 * Fetches the latest profile data from WorkOS and updates the local WP user.
+	 * Fetches the current membership and mapped role when an organization is
+	 * configured, then refreshes the linked user's profile from WorkOS.
 	 * Intended for manual re-sync when profile data drifts or webhooks are missed.
 	 *
 	 * @param int $user_id WordPress user ID.
 	 *
 	 * @return array|\WP_Error WorkOS user data on success, WP_Error on failure.
 	 */
-	public static function resync_from_workos( int $user_id ) {
+	public function resync_from_workos( int $user_id ) {
 		if ( self::$syncing ) {
 			return new \WP_Error( 'workos_sync_in_progress', __( 'A sync operation is already in progress.', 'integration-workos' ) );
 		}
@@ -466,16 +488,49 @@ class UserSync {
 			return new \WP_Error( 'workos_not_linked', __( 'User is not linked to WorkOS.', 'integration-workos' ) );
 		}
 
-		$result = workos()->api()->get_user( $workos_id );
+		$result = $this->client->get_user( $workos_id );
 
 		if ( is_wp_error( $result ) ) {
 			workos_log( 'Failed to re-sync user #' . $user_id . ' from WorkOS: ' . $result->get_error_message(), 'error' );
 			return $result;
 		}
 
+		if ( ! $this->has_current_identity( $user_id, $workos_id ) ) {
+			return new \WP_Error( 'workos_identity_changed', __( 'The linked WorkOS identity changed during the request. Retry the refresh.', 'integration-workos' ) );
+		}
+
+		if ( '' !== Config::get_organization_id() ) {
+			$membership = $this->membership_sync->refresh( $user_id );
+
+			if ( is_wp_error( $membership ) ) {
+				return $membership;
+			}
+		}
+
+		if ( ! $this->has_current_identity( $user_id, $workos_id ) ) {
+			return new \WP_Error( 'workos_identity_changed', __( 'The linked WorkOS identity changed during the request. Retry the refresh.', 'integration-workos' ) );
+		}
+
 		self::update_wp_user_from_workos( $user_id, $result );
+		delete_transient( 'workos_profile_user_' . md5( $workos_id ) );
 
 		return $result;
+	}
+
+	/**
+	 * Recheck the link after remote requests without trusting pre-request metadata.
+	 *
+	 * @phpstan-impure
+	 *
+	 * @param int    $user_id   WordPress user ID.
+	 * @param string $workos_id Identity whose profile was fetched.
+	 *
+	 * @return bool
+	 */
+	private function has_current_identity( int $user_id, string $workos_id ): bool {
+		wp_cache_delete( $user_id, 'user_meta' );
+
+		return get_user_meta( $user_id, '_workos_user_id', true ) === $workos_id;
 	}
 
 	/**

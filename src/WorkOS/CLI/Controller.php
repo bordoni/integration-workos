@@ -29,10 +29,13 @@ class Controller extends BaseController {
 	 * @return void
 	 */
 	protected function doRegister(): void {
+		$this->container->singleton( UserCommand::class );
+		$this->container->singleton( SyncCommand::class );
+
 		\WP_CLI::add_command( 'workos status', StatusCommand::class );
-		\WP_CLI::add_command( 'workos user', UserCommand::class );
+		\WP_CLI::add_command( 'workos user', $this->container->get( UserCommand::class ) );
 		\WP_CLI::add_command( 'workos org', OrgCommand::class );
-		\WP_CLI::add_command( 'workos sync', SyncCommand::class );
+		\WP_CLI::add_command( 'workos sync', $this->container->get( SyncCommand::class ) );
 	}
 
 	/**

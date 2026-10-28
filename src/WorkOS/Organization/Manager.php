@@ -146,8 +146,21 @@ class Manager {
 		}
 
 		// Extract role and membership ID from auth result when available.
-		$membership    = $auth_result['organization_membership'] ?? [];
-		$workos_role   = RoleMapper::role_slug( $membership['role'] ?? $auth_result['role'] ?? '', 'member' );
+		$membership  = $auth_result['organization_membership'] ?? [];
+		$workos_role = RoleMapper::role_slug( $membership['role'] ?? $auth_result['role'] ?? '' );
+
+		if ( '' === $workos_role ) {
+			// A login without role data must not overwrite a refreshed membership.
+			foreach ( self::get_user_orgs( $wp_user_id ) as $user_org ) {
+				if ( $user_org->workos_org_id === $workos_org_id ) {
+					$workos_role = $user_org->workos_role;
+					break;
+				}
+			}
+
+			$workos_role = $workos_role ? $workos_role : 'member';
+		}
+
 		$membership_id = $membership['id'] ?? '';
 
 		$extra = [

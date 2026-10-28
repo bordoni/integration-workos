@@ -7,13 +7,19 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Api\Client;
+
+use WorkOS\Sync\MembershipSync;
+
+use WorkOS\App;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Sync\UserSync;
 
 /**
  * Deprovision strategy tests.
  */
-class UserSyncDeprovisionTest extends WPTestCase {
+final class UserSyncDeprovisionTest extends WPTestCase {
 
 	/**
 	 * Set up each test.
@@ -177,7 +183,7 @@ class UserSyncDeprovisionTest extends WPTestCase {
 		$user_id = self::factory()->user->create();
 		update_user_meta( $user_id, '_workos_user_id', 'user_to_deprovision' );
 
-		$sync = new UserSync();
+		$sync = new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) );
 		$sync->handle_user_deleted( [
 			'data' => [ 'id' => 'user_to_deprovision' ],
 		] );

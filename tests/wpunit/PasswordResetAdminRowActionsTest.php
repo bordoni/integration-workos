@@ -7,8 +7,13 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Sync\UserSync;
+
+use WorkOS\Sync\MembershipSync;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Admin\UserList;
+use WorkOS\App;
 use WorkOS\Auth\PasswordResetAdmin\RowActions;
 
 /**
@@ -21,7 +26,7 @@ use WorkOS\Auth\PasswordResetAdmin\RowActions;
  *     the trigger when the caller has `edit_user($id)`, and stays out
  *     when they don't.
  */
-class PasswordResetAdminRowActionsTest extends WPTestCase {
+final class PasswordResetAdminRowActionsTest extends WPTestCase {
 
 	/**
 	 * RowActions instance under test.
@@ -122,7 +127,7 @@ class PasswordResetAdminRowActionsTest extends WPTestCase {
 		add_filter( 'workos_user_list_column_actions', $cb, 10, 3 );
 
 		try {
-			$list = new UserList();
+			$list = new UserList( App::container()->get( MembershipSync::class ), App::container()->get( UserSync::class ) );
 			$html = $list->render_column( '', 'workos', $this->linked_user_id );
 		} finally {
 			remove_filter( 'workos_user_list_column_actions', $cb, 10 );
@@ -149,7 +154,7 @@ class PasswordResetAdminRowActionsTest extends WPTestCase {
 		add_filter( 'workos_user_list_column_actions', $cb );
 
 		try {
-			$list = new UserList();
+			$list = new UserList( App::container()->get( MembershipSync::class ), App::container()->get( UserSync::class ) );
 			$list->render_column( '', 'workos', $this->subscriber_id );
 		} finally {
 			remove_filter( 'workos_user_list_column_actions', $cb );

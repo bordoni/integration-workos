@@ -7,6 +7,12 @@
 
 namespace WorkOS\Tests\Wpunit;
 
+use WorkOS\Api\Client;
+
+use WorkOS\Sync\MembershipSync;
+
+use WorkOS\App;
+
 use lucatume\WPBrowser\TestCase\WPTestCase;
 use WorkOS\Auth\ChangeEmail\RestApi;
 use WorkOS\Sync\UserSync;
@@ -17,7 +23,7 @@ use WorkOS\Sync\UserSync;
  * fan-back races the local `wp_update_user()` and can re-trigger the
  * mutation we just made.
  */
-class ChangeEmailUserSyncRaceGuardTest extends WPTestCase {
+final class ChangeEmailUserSyncRaceGuardTest extends WPTestCase {
 
 	private int $user_id = 0;
 	private string $workos_id = 'user_race_guard_01';
@@ -48,7 +54,7 @@ class ChangeEmailUserSyncRaceGuardTest extends WPTestCase {
 	public function test_handle_user_updated_skips_while_in_progress(): void {
 		set_transient( RestApi::TRANSIENT_PREFIX . $this->user_id, 1, 30 );
 
-		$sync = new UserSync();
+		$sync = new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) );
 		$sync->handle_user_updated(
 			[
 				'data' => [
@@ -68,7 +74,7 @@ class ChangeEmailUserSyncRaceGuardTest extends WPTestCase {
 	public function test_handle_user_updated_runs_when_transient_absent(): void {
 		delete_transient( RestApi::TRANSIENT_PREFIX . $this->user_id );
 
-		$sync = new UserSync();
+		$sync = new UserSync( App::container()->get( MembershipSync::class ), App::container()->get( Client::class ) );
 		$sync->handle_user_updated(
 			[
 				'data' => [
