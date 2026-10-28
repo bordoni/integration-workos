@@ -142,11 +142,14 @@ class UserList {
 		}
 
 		if ( workos()->is_enabled() && $this->can_resync_user( $user_id ) ) {
+			$current_url = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+
 			$resync_url = wp_nonce_url(
 				add_query_arg(
 					[
-						'action'  => 'workos_resync_user',
-						'user_id' => $user_id,
+						'action'           => 'workos_resync_user',
+						'user_id'          => $user_id,
+						'_wp_http_referer' => rawurlencode( $this->users_list_url( $current_url ) ),
 					],
 					admin_url( 'users.php' )
 				),
@@ -488,6 +491,12 @@ class UserList {
 			return;
 		}
 
+		// Older WordPress versions read this value inside check_admin_referer() without a type check.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Normalize navigation data before core verifies the action nonce.
+		if ( isset( $_REQUEST['_wp_http_referer'] ) && ! is_string( $_REQUEST['_wp_http_referer'] ) ) {
+			$_REQUEST['_wp_http_referer'] = admin_url( 'users.php' );
+		}
+
 		check_admin_referer( 'workos_resync_user_' . $user_id );
 
 		if ( ! $this->can_resync_user( $user_id ) ) {
@@ -504,8 +513,66 @@ class UserList {
 			$query_args['workos_resynced'] = 1;
 		}
 
-		wp_safe_redirect( add_query_arg( $query_args, admin_url( 'users.php' ) ) );
+		$referer = wp_get_referer();
+
+		wp_safe_redirect( add_query_arg( $query_args, $this->users_list_url( is_string( $referer ) ? $referer : '' ) ) );
 		exit;
+	}
+
+	/**
+	 * Keep Users-screen filters while removing action and notification parameters.
+	 *
+	 * Require the current site's Users screen, then rebuild on its fixed URL so
+	 * neither a supplied referer nor a browser header can change the destination.
+	 *
+	 * @param string $url Original list URL.
+	 *
+	 * @return string Users-screen URL, falling back to the unfiltered list.
+	 */
+	private function users_list_url( string $url ): string {
+		$fallback = admin_url( 'users.php' );
+		$expected = wp_parse_url( $fallback );
+		$parts    = wp_parse_url( $url );
+
+		if ( ! is_array( $parts ) || ( $parts['path'] ?? '' ) !== $expected['path'] || isset( $parts['user'] ) || isset( $parts['pass'] ) ) {
+			return $fallback;
+		}
+
+		$origin_components = [
+			'scheme',
+			'host',
+			'port',
+		];
+
+		foreach ( $origin_components as $component ) {
+			if ( isset( $parts[ $component ] ) && ( $expected[ $component ] ?? null ) !== $parts[ $component ] ) {
+				return $fallback;
+			}
+		}
+
+		$remove = array_merge(
+			wp_removable_query_args(),
+			[
+				'action',
+				'action2',
+				'user',
+				'user_id',
+				'users',
+				'_wpnonce',
+				'_wp_http_referer',
+				'wp_http_referer',
+				'redirect_to',
+				'workos_synced',
+				'workos_resynced',
+				'workos_failed',
+				'workos_skipped',
+				'workos_errors',
+				'workos_roles_synced',
+				'workos_roles_skipped',
+			]
+		);
+
+		return remove_query_arg( $remove, $fallback . ( isset( $parts['query'] ) ? '?' . $parts['query'] : '' ) );
 	}
 
 	/**
@@ -586,6 +653,7 @@ class UserList {
 		$skipped = absint( SuperGlobals::get_get_var( 'workos_skipped' ) ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
 		$errors = SuperGlobals::get_get_var( 'workos_errors' ) ?? '';
+		$errors = is_string( $errors ) ? wp_unslash( $errors ) : '';
 
 		if ( $synced ) {
 			printf(
