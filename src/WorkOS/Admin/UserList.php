@@ -491,6 +491,12 @@ class UserList {
 			return;
 		}
 
+		// Older WordPress versions read this value inside check_admin_referer() without a type check.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Normalize navigation data before core verifies the action nonce.
+		if ( isset( $_REQUEST['_wp_http_referer'] ) && ! is_string( $_REQUEST['_wp_http_referer'] ) ) {
+			$_REQUEST['_wp_http_referer'] = admin_url( 'users.php' );
+		}
+
 		check_admin_referer( 'workos_resync_user_' . $user_id );
 
 		if ( ! $this->can_resync_user( $user_id ) ) {
@@ -507,8 +513,7 @@ class UserList {
 			$query_args['workos_resynced'] = 1;
 		}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce and capabilities verified above. Reject malformed referers before calling core.
-		$referer = isset( $_REQUEST['_wp_http_referer'] ) && ! is_string( $_REQUEST['_wp_http_referer'] ) ? false : wp_get_referer();
+		$referer = wp_get_referer();
 
 		wp_safe_redirect( add_query_arg( $query_args, $this->users_list_url( is_string( $referer ) ? $referer : '' ) ) );
 		exit;
@@ -533,7 +538,13 @@ class UserList {
 			return $fallback;
 		}
 
-		foreach ( [ 'scheme', 'host', 'port' ] as $component ) {
+		$origin_components = [
+			'scheme',
+			'host',
+			'port',
+		];
+
+		foreach ( $origin_components as $component ) {
 			if ( isset( $parts[ $component ] ) && ( $expected[ $component ] ?? null ) !== $parts[ $component ] ) {
 				return $fallback;
 			}
