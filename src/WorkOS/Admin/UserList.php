@@ -653,6 +653,7 @@ class UserList {
 		$skipped = absint( SuperGlobals::get_get_var( 'workos_skipped' ) ?? 0 );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only; data is sanitized below.
 		$errors = SuperGlobals::get_get_var( 'workos_errors' ) ?? '';
+		$errors = is_string( $errors ) ? wp_unslash( $errors ) : '';
 
 		if ( $synced ) {
 			printf(

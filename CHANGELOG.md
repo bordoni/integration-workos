@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Sync failure notices display quoted error messages without extra backslashes.
 - Re-sync returns administrators to their searched or filtered Users list, preserving sorting and pagination on both success and failure. Invalid return addresses fall back to the Users screen.
 - Manual re-sync and role sync now fetch the current WorkOS membership instead of leaving stale membership roles in place. Admin actions check permission to edit and promote each target user, and report membership failures without assigning a fallback role.
 - Logins without role data preserve an existing membership role instead of replacing it with `member`.

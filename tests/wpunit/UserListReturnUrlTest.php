@@ -226,6 +226,86 @@ final class UserListReturnUrlTest extends WPTestCase {
 	}
 
 	/**
+	 * Failure messages survive URL encoding and WordPress request slashing.
+	 *
+	 * @return array<string, array{string}>
+	 */
+	public static function error_messages(): array {
+		return [
+			'quoted identifier' => [
+				"User not found: 'nps-local-mixed'.",
+			],
+			'backslashes and quotes' => [
+				'Invalid value: "team\\member".',
+			],
+			'html' => [
+				'<script>alert("error")</script>',
+			],
+			'encoded characters' => [
+				'Invalid value: A&B + 50% %27.',
+			],
+		];
+	}
+
+	/**
+	 * Render the redirected error as text without WordPress-added slashes.
+	 *
+	 * @dataProvider error_messages
+	 *
+	 * @param string $message WorkOS error text.
+	 */
+	public function test_resync_error_notice_preserves_message( string $message ): void {
+		$_GET = $_REQUEST = wp_slash( $this->row_request() );
+		$this->sync->method( 'resync_from_workos' )
+			->willReturn( new \WP_Error( 'not_found', $message ) );
+
+		parse_str( (string) wp_parse_url( $this->dispatch(), PHP_URL_QUERY ), $query );
+		$_GET = wp_slash( $query );
+
+		$this->assertSame(
+			'<div class="notice notice-error is-dismissible"><p>' . esc_html( '1 user failed to sync. ' . $message ) . '</p></div>',
+			$this->render_notices()
+		);
+	}
+
+	/**
+	 * Malformed error parameters must not produce an array-to-string warning.
+	 */
+	public function test_error_notice_ignores_array_message(): void {
+		$_GET = [
+			'workos_failed' => '1',
+			'workos_errors' => [
+				'unexpected',
+			],
+		];
+
+		$this->assertSame(
+			'<div class="notice notice-error is-dismissible"><p>1 user failed to sync.</p></div>',
+			$this->render_notices()
+		);
+	}
+
+	/**
+	 * Capture notices on the Users screen without changing later tests' screen.
+	 *
+	 * @return string Notice markup.
+	 */
+	private function render_notices(): string {
+		$screen = get_current_screen();
+		set_current_screen( 'users' );
+		ob_start();
+
+		try {
+			$this->list->render_notices();
+
+			return ob_get_contents();
+		} finally {
+			ob_end_clean();
+			$GLOBALS['current_screen'] = $screen;
+		}
+	}
+
+	/**
 	 * Request-controlled destinations and actions never enter the return URL.
 	 */
 	public function test_resync_ignores_redirect_injection_and_malformed_filters(): void {
