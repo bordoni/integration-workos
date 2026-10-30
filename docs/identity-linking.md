@@ -54,6 +54,18 @@ The constant is read on every call, not only when it's synced into the options r
 
 The `workos_relink_protection_enabled` filter has the last word.
 
+## New WordPress users whose email is already in WorkOS
+
+A WordPress user created on the site (guest checkout, an import, an administrator adding an account) is pushed to WorkOS, and so is one synced by hand (`wp workos sync`, `wp workos user sync --direction=push`, the WorkOS sync actions on the Users screen). When that email already belongs to a WorkOS user, WorkOS refuses the create with `email_not_available`. The plugin never links by email alone, so the account stays unlinked until the person signs in. Then:
+
+- The existing WorkOS user is looked up by email and stored on the WordPress user as a **pending match** (`_workos_pending_match`: WorkOS ID, source, time). It is not a link: `_workos_user_id` stays empty, and Re-link Protection still applies. When that WorkOS user is already linked to a different WordPress user, nothing is stored.
+- `workos_user_push_failed` fires with the existing WorkOS ID, so the site can tell the customer to sign in with their existing account. It fires for every other failed create too, with `null`.
+- The debug log records it.
+
+When the person signs in with that WorkOS account, sign-in matches the WordPress user by email and links it (the WordPress user has no link yet, so Re-link Protection allows it), the pending match is cleared, and `workos_user_linked` fires.
+
+Both paths send `email_verified => true` to WorkOS by default. `workos_push_user_email_verified` changes that per user.
+
 ## Hooks
 
 ```php
@@ -67,6 +79,17 @@ do_action( 'workos_user_linked', int $wp_user_id, string $workos_id, string $pre
  * Re-link Protection kept a WP user on its current WorkOS user.
  */
 do_action( 'workos_user_link_refused', int $wp_user_id, string $current_id, array $workos_user, string $source );
+
+/**
+ * A WP user couldn't be created in WorkOS. $existing_id is the WorkOS user
+ * that already has the email, or null.
+ */
+do_action( 'workos_user_push_failed', int $user_id, WP_Error $error, ?string $existing_id );
+
+/**
+ * `email_verified` sent when a WP user is created in WorkOS. Default true.
+ */
+apply_filters( 'workos_push_user_email_verified', bool $verified, int $user_id, array $userdata );
 ```
 
 `$source` is one of `login`, `authkit`, `ajax_login`, `webhook`, `directory_sync`, `cli_import`, `cli_link`, `onboarding`, `password_reset`, `user_register`, `manual_sync`.
