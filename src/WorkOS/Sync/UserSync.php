@@ -182,6 +182,12 @@ class UserSync {
 	 * again, and this returns false. With both off, that check is the caller's
 	 * (the sign-in paths look the ID up first, in `find_or_create_wp_user()`).
 	 *
+	 * Those checks and the write run under a short lock on the WorkOS ID
+	 * ({@see LinkLock}), so two requests linking the same WorkOS user at once (a
+	 * sign-in and the `user.created` webhook) can't both pass them: the second
+	 * sees the first's link. If the lock can't be taken in time, nothing is
+	 * written and this returns false.
+	 *
 	 * @param int    $wp_user_id  WP user ID.
 	 * @param array  $workos_user WorkOS user data.
 	 * @param string $source      What is linking, for logs (e.g. 'login', 'webhook', 'cli_link').
@@ -195,30 +201,64 @@ class UserSync {
 			return false;
 		}
 
-		$previous_id = (string) get_user_meta( $wp_user_id, '_workos_user_id', true );
-		$is_relink   = '' !== $previous_id && $previous_id !== $new_id;
-
 		$protected = Config::is_relink_protection_enabled();
 
-		if ( $is_relink && ! $force && $protected ) {
+		// Only the checks below need the lock. With both off there are none
+		// (the caller owns them), and nothing changes.
+		$locked = $force || $protected;
+
+		if ( $locked ) {
+			$lock = LinkLock::acquire( $new_id );
+			if ( is_wp_error( $lock ) ) {
+				workos_log( sprintf( 'Did not link WP user #%d to WorkOS user %s: %s (source: %s).', $wp_user_id, $new_id, $lock->get_error_message(), $source ? $source : 'unknown' ), 'error' );
+				return false;
+			}
+
+			// Another request may have linked this user while this one waited.
+			wp_cache_delete( $wp_user_id, 'user_meta' );
+		}
+
+		$previous_id = '';
+		$is_relink   = false;
+		$refused     = false;
+		$holder      = null;
+
+		try {
+			$previous_id = (string) get_user_meta( $wp_user_id, '_workos_user_id', true );
+			$is_relink   = '' !== $previous_id && $previous_id !== $new_id;
+
+			$refused = $is_relink && ! $force && $protected;
+
+			if ( ! $refused && $locked ) {
+				$holder = self::get_wp_user_id_by_workos_id( $new_id );
+				if ( $holder === $wp_user_id ) {
+					$holder = null;
+				}
+			}
+
+			if ( ! $refused && ! $holder ) {
+				update_user_meta( $wp_user_id, '_workos_user_id', $new_id );
+				update_user_meta( $wp_user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
+				update_user_meta( $wp_user_id, '_workos_profile_hash', self::hash_profile( $workos_user ) );
+
+				if ( ! empty( $workos_user['organization_id'] ) ) {
+					update_user_meta( $wp_user_id, '_workos_org_id', $workos_user['organization_id'] );
+				}
+			}
+		} finally {
+			if ( $locked ) {
+				LinkLock::release( $new_id );
+			}
+		}
+
+		if ( $refused ) {
 			self::refuse_link( $wp_user_id, $previous_id, $workos_user, $source );
 			return false;
 		}
 
-		if ( $force || $protected ) {
-			$holder = self::get_wp_user_id_by_workos_id( $new_id );
-			if ( $holder && $holder !== $wp_user_id ) {
-				workos_log( sprintf( 'Refused to link WP user #%d to WorkOS user %s: already linked to WP user #%d (source: %s).', $wp_user_id, $new_id, $holder, $source ? $source : 'unknown' ), 'warning' );
-				return false;
-			}
-		}
-
-		update_user_meta( $wp_user_id, '_workos_user_id', $new_id );
-		update_user_meta( $wp_user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
-		update_user_meta( $wp_user_id, '_workos_profile_hash', self::hash_profile( $workos_user ) );
-
-		if ( ! empty( $workos_user['organization_id'] ) ) {
-			update_user_meta( $wp_user_id, '_workos_org_id', $workos_user['organization_id'] );
+		if ( $holder ) {
+			workos_log( sprintf( 'Refused to link WP user #%d to WorkOS user %s: already linked to WP user #%d (source: %s).', $wp_user_id, $new_id, $holder, $source ? $source : 'unknown' ), 'warning' );
+			return false;
 		}
 
 		if ( $previous_id !== $new_id ) {
