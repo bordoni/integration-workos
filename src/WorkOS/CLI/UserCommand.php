@@ -353,7 +353,154 @@ class UserCommand extends \WP_CLI_Command {
 		WP_CLI::confirm( "Unlink user #{$wp_user_id} ({$user->user_email}) from WorkOS ID {$workos_id}?", $assoc_args );
 
 		UserSync::unlink_user( $wp_user_id );
-		WP_CLI::success( "Unlinked WordPress user #{$wp_user_id} from WorkOS." );
+		WP_CLI::success( "Unlinked WordPress user #{$wp_user_id} from WorkOS. Its sessions were ended." );
+	}
+
+	/**
+	 * Move a WorkOS sign-in from one WordPress user to another.
+	 *
+	 * For accounts re-owned on the WordPress side: the customer's email and data
+	 * moved to another WordPress user, but the WorkOS link stayed on the old one,
+	 * so signing in lands in the old account (or is refused as a split account).
+	 *
+	 * Unlinks the WorkOS user from <from_user_id> and ends every session that user
+	 * has (WordPress login sessions and the WorkOS session), then links the WorkOS
+	 * user to <to_user_id>. Nothing changes if a check fails.
+	 *
+	 * When the WorkOS user's email differs from <to_user_id>'s email, pass
+	 * --use-wp-email to set the WorkOS email to <to_user_id>'s first, or
+	 * --keep-workos-email to keep it (the next sign-in then copies it onto
+	 * <to_user_id>).
+	 *
+	 * ## OPTIONS
+	 *
+	 * <from_user_id>
+	 * : WordPress user that holds the link now.
+	 *
+	 * <to_user_id>
+	 * : WordPress user that should hold it.
+	 *
+	 * [--use-wp-email]
+	 * : Set the WorkOS user's email to <to_user_id>'s email before moving.
+	 *
+	 * [--keep-workos-email]
+	 * : Move without changing the WorkOS user's email.
+	 *
+	 * [--force]
+	 * : Replace a link <to_user_id> already has to a different WorkOS user.
+	 *
+	 * [--dry-run]
+	 * : Show what would change, and change nothing.
+	 *
+	 * [--yes]
+	 * : Skip confirmation.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp workos user move 245554 425806 --dry-run
+	 *     wp workos user move 245554 425806
+	 *     wp workos user move 245554 425806 --use-wp-email --yes
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Associative arguments.
+	 */
+	public function move( $args, $assoc_args ) {
+		$this->require_enabled();
+
+		$from_id     = (int) $args[0];
+		$to_id       = (int) $args[1];
+		$use_wp      = ! empty( $assoc_args['use-wp-email'] );
+		$keep        = ! empty( $assoc_args['keep-workos-email'] );
+		$force       = ! empty( $assoc_args['force'] );
+		$dry_run     = ! empty( $assoc_args['dry-run'] );
+		$from        = get_user_by( 'id', $from_id );
+		$to          = get_user_by( 'id', $to_id );
+		$workos_id   = $from ? (string) get_user_meta( $from_id, '_workos_user_id', true ) : '';
+		$to_link     = $to ? (string) get_user_meta( $to_id, '_workos_user_id', true ) : '';
+		$to_inactive = $to && (bool) get_user_meta( $to_id, '_workos_deactivated', true );
+
+		if ( $from_id === $to_id ) {
+			WP_CLI::error( 'The two users are the same.' );
+		}
+		if ( ! $from ) {
+			WP_CLI::error( "WordPress user #{$from_id} not found." );
+		}
+		if ( ! $to ) {
+			WP_CLI::error( "WordPress user #{$to_id} not found." );
+		}
+		if ( '' === $workos_id ) {
+			WP_CLI::error( "User #{$from_id} is not linked to WorkOS." );
+		}
+		if ( $use_wp && $keep ) {
+			WP_CLI::error( 'Pass --use-wp-email or --keep-workos-email, not both.' );
+		}
+		if ( '' !== $to_link && ! $force ) {
+			WP_CLI::error( "User #{$to_id} is already linked to WorkOS user {$to_link}. Use --force to replace that link." );
+		}
+		if ( $to_inactive ) {
+			WP_CLI::error( "User #{$to_id} was deactivated when its WorkOS user was deleted. Reactivate it first (`wp workos user link {$to_id} {$workos_id} --force --reactivate` after unlinking #{$from_id})." );
+		}
+
+		$workos_user = workos()->api()->get_user( $workos_id );
+		if ( is_wp_error( $workos_user ) ) {
+			WP_CLI::error( 'Failed to fetch WorkOS user: ' . $workos_user->get_error_message() );
+		}
+
+		$workos_email  = (string) ( $workos_user['email'] ?? '' );
+		$emails_differ = 0 !== strcasecmp( $workos_email, (string) $to->user_email );
+		$change_email  = $emails_differ && $use_wp;
+
+		WP_CLI::log( "WorkOS user: {$workos_id} ({$workos_email})" );
+		WP_CLI::log( "From:        #{$from_id} ({$from->user_email}): unlink and end its sessions" );
+		WP_CLI::log( "To:          #{$to_id} ({$to->user_email}): link" . ( $to_link ? " (replaces {$to_link}; its sessions end too)" : '' ) );
+
+		if ( $emails_differ ) {
+			if ( ! $use_wp && ! $keep ) {
+				WP_CLI::error( "The WorkOS email ({$workos_email}) differs from #{$to_id}'s ({$to->user_email}). Pass --use-wp-email to set the WorkOS email to #{$to_id}'s, or --keep-workos-email to keep it (the next sign-in copies it onto #{$to_id})." );
+			}
+			WP_CLI::log(
+				$change_email
+					? "Email:       set the WorkOS email to {$to->user_email}"
+					: "Email:       keep {$workos_email} in WorkOS; the next sign-in copies it onto #{$to_id}"
+			);
+		}
+
+		if ( $dry_run ) {
+			WP_CLI::success( 'Dry run: nothing changed.' );
+			return;
+		}
+
+		WP_CLI::confirm( "Move WorkOS user {$workos_id} from #{$from_id} to #{$to_id}?", $assoc_args );
+
+		if ( $change_email ) {
+			$updated = workos()->api()->update_user( $workos_id, [ 'email' => $to->user_email ] );
+			if ( is_wp_error( $updated ) ) {
+				WP_CLI::error( 'Failed to update the WorkOS email, nothing changed: ' . $updated->get_error_message() );
+			}
+			$workos_user = is_array( $updated ) && ! empty( $updated['id'] ) ? $updated : array_merge( $workos_user, [ 'email' => $to->user_email ] );
+		}
+
+		UserSync::unlink_user( $from_id );
+
+		if ( ! UserSync::link_user( $to_id, $workos_user, 'cli_move', true ) ) {
+			// Put the link back where it was rather than leave the WorkOS user unlinked.
+			UserSync::link_user( $from_id, $workos_user, 'cli_move_rollback', true );
+			WP_CLI::error( "Could not link user #{$to_id} to WorkOS user {$workos_id}; the link stays on #{$from_id} (its sessions were ended). See the debug log." );
+		}
+
+		\WorkOS\ActivityLog\EventLogger::log(
+			'account_moved',
+			[
+				'user_id'        => $to_id,
+				'workos_user_id' => $workos_id,
+				'metadata'       => [
+					'from_user_id'  => $from_id,
+					'email_changed' => $change_email,
+				],
+			]
+		);
+
+		WP_CLI::success( "Moved WorkOS user {$workos_id} from #{$from_id} to #{$to_id}. #{$from_id}'s sessions were ended." );
 	}
 
 	/**

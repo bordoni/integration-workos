@@ -114,6 +114,11 @@ class UserSync {
 		if ( $linked_user_id ) {
 			$user = get_user_by( 'id', $linked_user_id );
 			if ( $user ) {
+				$split = self::check_split_account( $user, $workos_user, $source );
+				if ( is_wp_error( $split ) ) {
+					return $split;
+				}
+
 				self::update_wp_user_from_workos( $user->ID, $workos_user );
 				return $user;
 			}
@@ -166,6 +171,144 @@ class UserSync {
 		do_action( 'workos_user_created', $user_id, $workos_user );
 
 		return get_user_by( 'id', $user_id );
+	}
+
+	/**
+	 * Refuse a sign-in whose WorkOS email now belongs to a different, unlinked WP user.
+	 *
+	 * This happens when an account is re-owned on the WordPress side: the
+	 * customer's email moves to another WP user, but the WorkOS link stays on
+	 * the old one. Signing in would land the customer in the old account,
+	 * and the email update would fail because the address is taken. The
+	 * sign-in is refused until an administrator moves the link
+	 * (`wp workos user move <from> <to>`).
+	 *
+	 * @param \WP_User $linked      WP user linked to the WorkOS user.
+	 * @param array    $workos_user WorkOS user data.
+	 * @param string   $source      What is signing in or syncing, for logs.
+	 *
+	 * @return true|\WP_Error True when the sign-in can go on.
+	 */
+	private static function check_split_account( \WP_User $linked, array $workos_user, string $source ) {
+		$email = (string) ( $workos_user['email'] ?? '' );
+		if ( '' === $email || 0 === strcasecmp( (string) $linked->user_email, $email ) ) {
+			return true;
+		}
+
+		$holder = get_user_by( 'email', $email );
+		if ( ! $holder || (int) $holder->ID === (int) $linked->ID ) {
+			return true;
+		}
+
+		// A holder linked to another WorkOS user is someone else's account with a
+		// stale email, not a re-owned one: the linked account stays the right one.
+		$workos_id = (string) ( $workos_user['id'] ?? '' );
+		if ( '' !== (string) get_user_meta( $holder->ID, '_workos_user_id', true ) ) {
+			return true;
+		}
+		$source = $source ? $source : 'unknown';
+
+		/**
+		 * Filters whether a split account refuses the sign-in.
+		 *
+		 * A split account is a WorkOS user linked to one WP user while its
+		 * email belongs to another WP user with no WorkOS link. Return false to sign in to the linked WP
+		 * user anyway (the behavior before 1.0.12).
+		 *
+		 * @param bool   $refuse      Default true.
+		 * @param int    $linked_id   WP user linked to the WorkOS user.
+		 * @param int    $holder_id   WP user that has the WorkOS user's email.
+		 * @param array  $workos_user WorkOS user data.
+		 * @param string $source      What is signing in or syncing.
+		 */
+		$refuse = (bool) apply_filters( 'workos_refuse_split_account', true, (int) $linked->ID, (int) $holder->ID, $workos_user, $source );
+
+		workos_log(
+			sprintf(
+				'%s WorkOS user %s: linked to WP user #%d, but its email belongs to WP user #%d (source: %s). Run `wp workos user move %d %d` if #%d is the right account.',
+				$refuse ? 'Refused sign-in for' : 'Split account for',
+				$workos_id,
+				$linked->ID,
+				$holder->ID,
+				$source,
+				$linked->ID,
+				$holder->ID,
+				$holder->ID
+			),
+			'warning'
+		);
+
+		EventLogger::log(
+			'account_split',
+			[
+				'user_id'        => (int) $linked->ID,
+				'workos_user_id' => $workos_id,
+				'metadata'       => [
+					'email_holder_user_id' => (int) $holder->ID,
+					'source'               => $source,
+					'refused'              => $refuse,
+				],
+			]
+		);
+
+		/**
+		 * Fires when a WorkOS user is linked to one WP user while its email belongs to another.
+		 *
+		 * @param int    $linked_id   WP user linked to the WorkOS user.
+		 * @param int    $holder_id   WP user that has the WorkOS user's email.
+		 * @param array  $workos_user WorkOS user data.
+		 * @param string $source      What is signing in or syncing.
+		 * @param bool   $refused     Whether the sign-in was refused.
+		 */
+		do_action( 'workos_account_split_detected', (int) $linked->ID, (int) $holder->ID, $workos_user, $source, $refuse );
+
+		if ( ! $refuse ) {
+			return true;
+		}
+
+		return new \WP_Error(
+			'workos_account_split',
+			__( 'This sign-in is connected to a different account on this site. Contact support to connect it.', 'integration-workos' ),
+			[ 'status' => 409 ]
+		);
+	}
+
+	/**
+	 * End every session a WP user has: its WordPress login sessions and the
+	 * WorkOS session behind them, plus the stored WorkOS tokens.
+	 *
+	 * Used when the account's WorkOS link changes, so a browser that signed
+	 * in under the old link can't keep using the account.
+	 *
+	 * @param int    $wp_user_id WP user ID.
+	 * @param string $reason     Why, for logs (e.g. 'unlink', 'relink').
+	 */
+	public static function end_sessions( int $wp_user_id, string $reason = '' ): void {
+		$session_ids = array_filter(
+			array_unique(
+				[
+					(string) get_user_meta( $wp_user_id, '_workos_session_id', true ),
+					\WorkOS\Auth\Login::extract_session_id( (string) get_user_meta( $wp_user_id, '_workos_access_token', true ) ),
+				]
+			)
+		);
+
+		if ( $session_ids && workos()->is_enabled() ) {
+			foreach ( $session_ids as $session_id ) {
+				$result = workos()->api()->revoke_session( $session_id );
+				if ( is_wp_error( $result ) ) {
+					workos_log( sprintf( 'Could not revoke WorkOS session %s of WP user #%d: %s', $session_id, $wp_user_id, $result->get_error_message() ), 'warning' );
+				}
+			}
+		}
+
+		delete_user_meta( $wp_user_id, '_workos_access_token' );
+		delete_user_meta( $wp_user_id, '_workos_refresh_token' );
+		delete_user_meta( $wp_user_id, '_workos_session_id' );
+
+		WP_Session_Tokens::get_instance( $wp_user_id )->destroy_all();
+
+		workos_log( sprintf( 'Ended the sessions of WP user #%d (reason: %s).', $wp_user_id, $reason ? $reason : 'unknown' ), 'info' );
 	}
 
 	/**
@@ -226,6 +369,9 @@ class UserSync {
 
 			if ( $is_relink ) {
 				workos_log( sprintf( 'Re-linked WP user #%d from WorkOS user %s to %s (source: %s).', $wp_user_id, $previous_id, $new_id, $source ? $source : 'unknown' ), 'warning' );
+
+				// Sessions opened through the previous WorkOS user must not outlive its link.
+				self::end_sessions( $wp_user_id, 'relink' );
 			}
 
 			/**
@@ -301,6 +447,9 @@ class UserSync {
 	 * @param int $wp_user_id WP user ID.
 	 */
 	public static function unlink_user( int $wp_user_id ): void {
+		// A browser signed in through the WorkOS user must not keep the account.
+		self::end_sessions( $wp_user_id, 'unlink' );
+
 		delete_user_meta( $wp_user_id, '_workos_user_id' );
 		delete_user_meta( $wp_user_id, '_workos_org_id' );
 		delete_user_meta( $wp_user_id, '_workos_last_synced_at' );
@@ -511,7 +660,9 @@ class UserSync {
 			return new \WP_Error( 'workos_identity_changed', __( 'The linked WorkOS identity changed during the request. Retry the refresh.', 'integration-workos' ) );
 		}
 
-		self::update_wp_user_from_workos( $user_id, $result );
+		if ( ! self::update_wp_user_from_workos( $user_id, $result ) ) {
+			return new \WP_Error( 'workos_profile_update_failed', __( 'WordPress refused the profile from WorkOS. Its email may belong to another user; check the activity log.', 'integration-workos' ) );
+		}
 		delete_transient( 'workos_profile_user_' . md5( $workos_id ) );
 
 		return $result;
@@ -780,8 +931,10 @@ class UserSync {
 	 *
 	 * @param int   $wp_user_id  WP user ID.
 	 * @param array $workos_user WorkOS user data.
+	 *
+	 * @return bool False when WordPress refused the update (e.g. the email belongs to another user).
 	 */
-	private static function update_wp_user_from_workos( int $wp_user_id, array $workos_user ): void {
+	private static function update_wp_user_from_workos( int $wp_user_id, array $workos_user ): bool {
 		self::$syncing = true;
 
 		$update = [ 'ID' => $wp_user_id ];
@@ -801,13 +954,35 @@ class UserSync {
 			$update['display_name'] = $display;
 		}
 
-		wp_update_user( $update );
+		$result = wp_update_user( $update );
+
+		if ( is_wp_error( $result ) ) {
+			// Nothing was saved, so don't mark the profile as synced.
+			workos_log( sprintf( 'Could not update WP user #%d from WorkOS user %s: %s', $wp_user_id, (string) ( $workos_user['id'] ?? '' ), $result->get_error_message() ), 'warning' );
+
+			EventLogger::log(
+				'profile_sync_failed',
+				[
+					'user_id'        => $wp_user_id,
+					'workos_user_id' => (string) ( $workos_user['id'] ?? '' ),
+					'metadata'       => [
+						'error_code' => $result->get_error_code(),
+						'error'      => $result->get_error_message(),
+					],
+				]
+			);
+
+			self::$syncing = false;
+			return false;
+		}
 
 		update_user_meta( $wp_user_id, '_workos_last_synced_at', current_time( 'mysql', true ) );
 		update_user_meta( $wp_user_id, '_workos_profile_hash', self::hash_profile( $workos_user ) );
 		self::record_updated_at( $wp_user_id, $workos_user );
 
 		self::$syncing = false;
+
+		return true;
 	}
 
 	/**

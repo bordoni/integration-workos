@@ -39,6 +39,21 @@ wp workos user link <wp_user_id> <new_workos_user_id> --force --reactivate
 
 `--reactivate` clears the deactivation. A demoted account keeps the role it was demoted to; set the role yourself.
 
+### An account re-owned in WordPress
+
+Support sometimes moves a customer to another WordPress user: the email (and orders, subscriptions) go to the new user, and the old one gets a placeholder email. The WorkOS link stays on the old user, so the customer's next sign-in would land in the emptied account.
+
+Since 1.0.12 that sign-in is refused (the customer is asked to contact support) when the WorkOS user's email belongs to a WordPress user with no WorkOS link of its own. The `account_split` activity-log event and the `workos_account_split_detected` action record it; the `workos_refuse_split_account` filter (return `false`) restores the old behavior. Move the link to the right account:
+
+```bash
+wp workos user move <from_user_id> <to_user_id> --dry-run
+wp workos user move <from_user_id> <to_user_id>
+```
+
+It unlinks the old user and ends every session it has (WordPress login sessions and the WorkOS session), then links the new one. When the WorkOS email differs from the new user's, it stops and asks for `--use-wp-email` (set the WorkOS email to the new user's first) or `--keep-workos-email` (the next sign-in copies the WorkOS email onto the new user). `--force` replaces a link the new user already has.
+
+Unlinking (`wp workos user unlink`) and re-linking a user to a different WorkOS user also end its sessions, so a browser signed in through the old link can't keep the account.
+
 ### Turning it on
 
 **WorkOS → Users → Identity Linking → Re-link Protection**, per environment. On for new installs since 1.0.10; sites upgrading from an earlier version keep it off until they turn it on, so an update never changes who can sign in.
