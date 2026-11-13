@@ -177,10 +177,10 @@ WorkOS is provided by WorkOS, Inc.
 
 = 1.0.12 - 2026-11-13 =
 
-* Fix: When an account was re-owned in WordPress (the customer moved to another user, the old one given a placeholder email), WorkOS sign-ins landed in the emptied old account. If the WorkOS email belongs to a WordPress user with no WorkOS link, the sign-in is now refused and the customer is asked to contact support. The `workos_refuse_split_account` filter restores the old behavior.
-* Fix: Unlinking a user, or re-linking it to a different WorkOS user, now ends its WordPress sessions and revokes its WorkOS session, so a browser signed in through the old link can no longer use the account.
-* Fix: A profile from WorkOS that WordPress refuses (e.g. its email belongs to another user) is logged and no longer recorded as synced, and Re-sync from WorkOS reports the error.
-* New: `wp workos user move <from> <to>` moves a WorkOS sign-in to another WordPress user and ends the old user's sessions. `--dry-run` shows the plan.
+* Fix: When an account was re-owned in WordPress (the customer moved to another user, the old one given a placeholder email), WorkOS sign-ins landed in the emptied old account. If the WorkOS email belongs to a WordPress user with no WorkOS link, the sign-in is now refused and the customer is asked to contact support. The `workos_refuse_split_account` filter restores the old behavior. (#95)
+* Fix: Unlinking a user, or re-linking it to a different WorkOS user, now ends its WordPress sessions and revokes its WorkOS session, so a browser signed in through the old link can no longer use the account. (#95)
+* Fix: A profile from WorkOS that WordPress refuses (e.g. its email belongs to another user) is logged and no longer recorded as synced, and Re-sync from WorkOS reports the error. (#95)
+* New: `wp workos user move <from> <to>` moves a WorkOS sign-in to another WordPress user and ends the old user's sessions. `--dry-run` shows the plan. (#95)
 
 = 1.0.11 - 2026-10-28 =
 
