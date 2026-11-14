@@ -175,7 +175,7 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
-= 1.0.12 - 2026-11-13 =
+= 1.0.12 - 2026-11-14 =
 
 * Fix: When an account was re-owned in WordPress (the customer moved to another user, the old one given a placeholder email), WorkOS sign-ins landed in the emptied old account. If the WorkOS email belongs to a WordPress user with no WorkOS link, the sign-in is now refused and the customer is asked to contact support. The `workos_refuse_split_account` filter restores the old behavior. (#95)
 * Fix: Unlinking a user, or re-linking it to a different WorkOS user, now ends its WordPress sessions and revokes its WorkOS session, so a browser signed in through the old link can no longer use the account. (#95)
