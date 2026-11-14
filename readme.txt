@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.11
+Stable tag: 1.0.12
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,13 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.12 - 2026-11-14 =
+
+* Fix: When an account was re-owned in WordPress (the customer moved to another user, the old one given a placeholder email), WorkOS sign-ins landed in the emptied old account. If the WorkOS email belongs to a WordPress user with no WorkOS link, the sign-in is now refused and the customer is asked to contact support. The `workos_refuse_split_account` filter restores the old behavior. (#95)
+* Fix: Unlinking a user, or re-linking it to a different WorkOS user, now ends its WordPress sessions and revokes its WorkOS session, so a browser signed in through the old link can no longer use the account. (#95)
+* Fix: A profile from WorkOS that WordPress refuses (e.g. its email belongs to another user) is logged and no longer recorded as synced, and Re-sync from WorkOS reports the error. (#95)
+* New: `wp workos user move <from> <to>` moves a WorkOS sign-in to another WordPress user and ends the old user's sessions. `--dry-run` shows the plan. (#95)
+
 = 1.0.11 - 2026-10-28 =
 
 * Fix: Re-sync from WorkOS and Sync Roles from WorkOS on the Users screen now fetch the user's current WorkOS membership and apply the mapped WordPress role, so a role change from a missed webhook can be repaired. Re-sync also refreshes the profile, and `wp workos user sync --direction=pull` and `wp workos sync pull` do the same. Membership problems and unmapped roles are reported as errors; no fallback role is assigned. Both need permission to edit and promote each user; without an organization configured, Re-sync stays profile-only and needs edit only. For developers, `UserSync::resync_from_workos()` is now an instance method. (#93)
@@ -306,6 +313,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.12 =
+Sign-ins whose WorkOS email belongs to another, unlinked WordPress user are refused until an administrator runs `wp workos user move`. Unlinking or re-linking a user now signs it out everywhere.
 
 = 1.0.11 =
 Re-sync from WorkOS and Sync Roles from WorkOS now repair stale roles from the user's current WorkOS membership, and sign-ins without role data no longer reset a role to member. Custom code that calls `UserSync::resync_from_workos()` statically must switch to the shared instance.

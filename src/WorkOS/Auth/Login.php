@@ -426,13 +426,13 @@ class Login {
 	 * Extract the session ID (sid claim) from a WorkOS access token JWT.
 	 *
 	 * Decodes the payload without signature verification — we only need
-	 * the sid claim for logout, not cryptographic validation.
+	 * the sid claim to revoke the session, not cryptographic validation.
 	 *
 	 * @param string $token JWT access token.
 	 *
 	 * @return string Session ID, or empty string on failure.
 	 */
-	private static function extract_session_id( string $token ): string {
+	public static function extract_session_id( string $token ): string {
 		$parts = explode( '.', $token );
 		if ( count( $parts ) < 2 ) {
 			return '';

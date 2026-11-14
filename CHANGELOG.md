@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.12] - 2026-11-14
+
+### Fixed
+
+- **Re-owned accounts signed customers in to the emptied account** (#95) — when Support moved a customer to another WordPress user (email and data to the new user, a placeholder email on the old one), the WorkOS link stayed on the old user. The next WorkOS sign-in landed there, and the email update that followed failed silently because the address was taken. When the WorkOS user's email belongs to a WordPress user with no WorkOS link, the sign-in is now refused and the customer is asked to contact support; the `account_split` activity-log event and the `workos_account_split_detected` action record it. The `workos_refuse_split_account` filter (return `false`) restores the old behavior. Accounts whose email holder is linked to another WorkOS user sign in as before.
+- **Unlinking left the account signed in** (#95) — `wp workos user unlink`, and re-linking a user to a different WorkOS user, kept its WordPress login sessions, stored tokens and WorkOS session, so a browser signed in through the old link kept the account. Both now end every session the user has and revoke the WorkOS session.
+- **Failed profile updates from WorkOS were recorded as synced** (#95) — when WordPress refused a profile from WorkOS (e.g. the email belongs to another user), the plugin still stored the sync time and profile hash, so the change wasn't retried. It now logs a `profile_sync_failed` activity-log event and leaves the profile unsynced, and **Re-sync from WorkOS** reports the error instead of success.
+
+### Added
+
+- **`wp workos user move <from> <to>`** (#95) — moves a WorkOS sign-in from one WordPress user to another: unlinks the old user, ends its sessions and links the new one. `--dry-run` shows the plan. When the WorkOS email differs from the new user's, it asks for `--use-wp-email` or `--keep-workos-email`. See [`docs/identity-linking.md`](docs/identity-linking.md).
+
 ## [1.0.11] - 2026-10-28
 
 ### Fixed
