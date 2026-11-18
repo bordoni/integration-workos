@@ -65,7 +65,82 @@ Two endpoints declare their own request policy instead of using the shared ones,
 | `Signup::RATE_LIMIT_VERIFY_IP` | 10 / min | Verify is cheap and users retype codes. |
 | `OAuth::RATE_LIMIT_URL_IP` | 20 / min | Looser: building an authorize URL sends nothing and costs no WorkOS call. |
 
-These are class constants, not settings. There is no admin UI and no filter. Retuning is a code change, deliberately: the numbers are a support contract, and the earlier per-feature options (`change_email_rate_limit_*`, removed) were four knobs nobody tuned, where a stored `0` silently meant "unlimited".
+These are class constants, not settings, and there is no admin UI for them. The defaults are a support contract, and the earlier per-feature options (`change_email_rate_limit_*`, removed) were four knobs nobody tuned, where a stored `0` silently meant "unlimited". A site that really needs different numbers, such as one behind a proxy that collapses visitors or a support desk that signs in on behalf of customers, uses the filter below instead.
+
+## Buckets
+
+Every limit is charged against a named bucket. These are the names the filter, the action and the activity log use.
+
+| Bucket | Subject | Default |
+|---|---|---|
+| `password_ip` | IP | `REQUEST_IP` |
+| `password_email` | email, exact | `REQUEST_SUBJECT` |
+| `password_otp_ip` | IP | `SEND_IP` |
+| `password_otp_recipient` | mailbox | `SEND_RECIPIENT` |
+| `pw_reset_ip` | IP | `REQUEST_IP` |
+| `pw_reset_email` | mailbox | `REQUEST_SUBJECT` |
+| `pw_reset_confirm_ip` | IP | `REQUEST_IP` |
+| `magic_send_ip` | IP | `REQUEST_IP` |
+| `magic_send_email` | mailbox | `REQUEST_SUBJECT` |
+| `magic_verify_ip` | IP | `REQUEST_IP` |
+| `magic_verify_email` | email, exact | `REQUEST_SUBJECT` |
+| `otp_send_ip` | IP | `SEND_IP` |
+| `otp_send_recipient` | mailbox | `SEND_RECIPIENT` |
+| `email_verify_ip` | IP | `REQUEST_IP` |
+| `email_verify_token` | pending token | `REQUEST_SUBJECT` |
+| `email_verify_resend_ip` | IP | `REQUEST_IP` |
+| `signup_ip` | IP | 5 / min |
+| `signup_email` | mailbox | 3 / min |
+| `signup_verify_ip` | IP | 10 / min |
+| `mfa_challenge_ip` | IP | `REQUEST_IP` |
+| `mfa_challenge_factor` | factor ID | `REQUEST_SUBJECT` |
+| `mfa_verify_ip` | IP | `REQUEST_IP` |
+| `invitation_lookup_ip` | IP | `REQUEST_IP` |
+| `invitation_accept_ip` | IP | `REQUEST_IP` |
+| `oauth_url_ip` | IP | 20 / min |
+| `change_email_init_ip` | IP | `SEND_IP` |
+| `change_email_init_recipient` | user ID | `SEND_RECIPIENT` |
+| `pw_reset_admin_ip` | IP | `REQUEST_IP` |
+| `pw_reset_admin_user` | user ID | `REQUEST_SUBJECT` |
+
+"Exact" and "mailbox" are explained under [Which mailbox](#which-mailbox).
+
+### Tuning a bucket
+
+`workos_rate_limit_policy` filters the tiers one bucket runs with. It receives the default policy and the bucket name, and returns a list of `[ limit, window_seconds ]` tiers:
+
+```php
+add_filter(
+	'workos_rate_limit_policy',
+	static function ( array $policy, string $bucket ): array {
+		// A support desk signing in from one office IP.
+		if ( 'password_ip' === $bucket ) {
+			return [ [ 60, MINUTE_IN_SECONDS ] ];
+		}
+
+		return $policy;
+	},
+	10,
+	2
+);
+```
+
+- The filter runs on every attempt, refund and reset, so all three see the same tiers.
+- A return value that is not an array is ignored and the default applies.
+- An empty array turns the bucket off. Tiers with a non-positive limit or window are dropped one at a time, as with the constants.
+- Loosening a send bucket (`*_recipient`, `otp_send_ip`, `password_otp_ip`, `change_email_init_ip`) raises how much mail one inbox or one caller can cause. Prefer loosening the request bucket that is actually in the way.
+
+### When a limit triggers
+
+A refused attempt fires one action, from the first tier that refused:
+
+```php
+do_action( 'workos_rate_limited', string $bucket, string $subject_hash, int $retry_after );
+```
+
+`$subject_hash` is `TieredRateLimiter::hash_subject( $subject )`: the first 16 hex characters of an HMAC-SHA256 under `wp_salt( 'auth' )`. It is stable on one site, so repeated entries for the same address or IP line up, and it can't be checked against a guessed address without the salt. The raw subject is never passed to the hook.
+
+When the activity log is enabled, the plugin hooks this action and writes one `rate_limited` entry with the bucket, the subject hash and `retry_after` in its details. The entry's user and IP columns stay empty on purpose: for a per-IP or per-email bucket they would hold the subject the hash is hiding. The activity log screen can filter on `rate_limited`.
 
 ## Where limits apply
 
@@ -221,16 +296,21 @@ If the bucket is only charged on the branch that really sends, the `429` boundar
 
 ### Don't add a per-feature limit option.
 
-That is what was removed. One policy, one place, applied to every path that mails a caller-chosen address.
+That is what was removed. One policy, one place, applied to every path that mails a caller-chosen address. A site that needs other numbers uses `workos_rate_limit_policy`, which keeps the change in code next to the reason for it.
+
+### Don't log or pass a raw subject.
+
+Hooks and log entries carry `TieredRateLimiter::hash_subject()`, never the email or IP. A per-IP bucket's subject is the IP, so the `rate_limited` entry leaves the IP column empty too.
 
 ## Tests
 
 | File | Covers |
 |---|---|
 | `tests/wpunit/RateLimiterTest.php` | The single-window contract, run against **both** implementations via a data provider. |
-| `tests/wpunit/TieredRateLimiterTest.php` | Tier ordering and charging, against an in-memory fake limiter, plus a guard on the shipped policy constants. |
+| `tests/wpunit/TieredRateLimiterTest.php` | Tier ordering and charging, against an in-memory fake limiter, plus a guard on the shipped policy constants; the policy filter (attempt, refund, reset, bad return values); the `workos_rate_limited` action and the subject hash. |
+| `tests/wpunit/RateLimitActivityLogTest.php` | One `rate_limited` entry per refused attempt, with no raw email or IP in it; nothing written when the log is off. |
 | `tests/wpunit/AuthKitRestPasswordTest.php` | Reserve/refund on authenticate; reset-start send caps; the shared bucket. |
-| `tests/wpunit/AuthKitRestMagicSessionTest.php` | Magic-send caps and the shared bucket. |
+| `tests/wpunit/AuthKitRestMagicSessionTest.php` | Magic-send caps and the shared bucket; the policy filter tightening a live route. |
 
 `ObjectCacheRateLimiter` is only selected in production when a persistent cache exists, so the provider in `RateLimiterTest` is what exercises the atomic path in CI at all.
 

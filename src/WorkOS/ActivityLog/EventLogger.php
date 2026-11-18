@@ -22,7 +22,8 @@ class EventLogger {
 	 * Log an activity event.
 	 *
 	 * @param string $event_type Event type (e.g. 'login', 'logout', 'login_failed').
-	 * @param array  $data       Optional event data.
+	 * @param array  $data       Optional event data. `ip_address`, when set,
+	 *                           replaces the request's IP (pass '' to store none).
 	 */
 	public static function log( string $event_type, array $data = [] ): void {
 		if ( ! self::is_enabled() ) {
@@ -56,7 +57,7 @@ class EventLogger {
 				'user_id'        => absint( $user_id ),
 				'user_email'     => sanitize_email( $user_email ),
 				'workos_user_id' => sanitize_text_field( $workos_user_id ),
-				'ip_address'     => self::get_ip_address(),
+				'ip_address'     => isset( $data['ip_address'] ) ? sanitize_text_field( (string) $data['ip_address'] ) : self::get_ip_address(),
 				'user_agent'     => SuperGlobals::get_server_var( 'HTTP_USER_AGENT' ) ?? '',
 				'metadata'       => ! empty( $metadata ) ? wp_json_encode( $metadata ) : null,
 				'created_at'     => current_time( 'mysql', true ),

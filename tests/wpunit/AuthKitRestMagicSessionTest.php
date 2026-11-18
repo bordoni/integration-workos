@@ -306,6 +306,41 @@ class AuthKitRestMagicSessionTest extends WPTestCase {
 		$this->assertCount( 3, $send_calls, 'The over-limit attempt must not send another code.' );
 	}
 
+	/**
+	 * `workos_rate_limit_policy` changes the limit a real request sees,
+	 * and the refused request fires `workos_rate_limited` once.
+	 */
+	public function test_policy_filter_tightens_a_live_route(): void {
+		add_filter(
+			'workos_rate_limit_policy',
+			static fn( $policy, $bucket ) => 'otp_send_recipient' === $bucket ? [ [ 1, HOUR_IN_SECONDS ] ] : $policy,
+			10,
+			2
+		);
+		$fired = [];
+		add_action(
+			'workos_rate_limited',
+			static function ( $bucket ) use ( &$fired ) {
+				$fired[] = $bucket;
+			}
+		);
+
+		$first = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'members', 'email' => 'filtered@example.com' ]
+		);
+		$this->assertSame( 200, $first->get_status() );
+
+		$second = $this->dispatch_with_nonce(
+			'POST',
+			'/workos/v1/auth/magic/send',
+			[ 'profile' => 'members', 'email' => 'filtered@example.com' ]
+		);
+		$this->assertSame( 429, $second->get_status() );
+		$this->assertSame( [ 'otp_send_recipient' ], $fired );
+	}
+
 	public function test_magic_send_recipient_bucket_is_shared_across_endpoints(): void {
 		// Pre-charge the shared bucket the way reset_start does: same
 		// `otp_send_recipient` name means rotating endpoints buys nothing.

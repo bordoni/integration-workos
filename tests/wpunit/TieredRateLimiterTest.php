@@ -66,7 +66,14 @@ class TieredRateLimiterTest extends WPTestCase {
 				$this->counts[ $key ] = ( $this->counts[ $key ] ?? 0 ) + 1;
 
 				if ( $this->counts[ $key ] > $limit ) {
-					return new WP_Error( 'workos_rate_limited', 'nope', [ 'status' => 429 ] );
+					return new WP_Error(
+						'workos_rate_limited',
+						'nope',
+						[
+							'status'      => 429,
+							'retry_after' => 42,
+						]
+					);
 				}
 
 				return true;
@@ -223,6 +230,124 @@ class TieredRateLimiterTest extends WPTestCase {
 			$this->assertGreaterThanOrEqual( $previous, $limit );
 			$previous = $limit;
 		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Policy filter
+	// -------------------------------------------------------------------------
+
+	/**
+	 * The filter changes the limit a request sees, for the bucket it names
+	 * and no other.
+	 */
+	public function test_policy_filter_changes_the_limit(): void {
+		$seen = [];
+		add_filter(
+			'workos_rate_limit_policy',
+			static function ( $policy, $bucket ) use ( &$seen ) {
+				$seen[] = [ $policy, $bucket ];
+
+				return 'b' === $bucket ? [ [ 1, 60 ] ] : $policy;
+			},
+			10,
+			2
+		);
+
+		$default = [ [ 5, 60 ] ];
+
+		$this->assertTrue( $this->limiter->attempt( 'b', 's', $default ) );
+		$this->assertInstanceOf( WP_Error::class, $this->limiter->attempt( 'b', 's', $default ) );
+
+		// Another bucket keeps the default.
+		for ( $i = 0; $i < 5; $i++ ) {
+			$this->assertTrue( $this->limiter->attempt( 'other', 's', $default ) );
+		}
+
+		// The filter is handed the caller's policy and the bucket name.
+		$this->assertSame( [ $default, 'b' ], $seen[0] );
+	}
+
+	/**
+	 * Refund and reset see the filtered policy too, so they touch the
+	 * same windows the attempt charged.
+	 */
+	public function test_policy_filter_applies_to_refund_and_reset(): void {
+		add_filter( 'workos_rate_limit_policy', static fn() => [ [ 3, 120 ] ] );
+
+		$this->limiter->attempt( 'b', 's', [ [ 5, 60 ] ] );
+		$this->assertSame( 1, $this->fake->counts['b|s|120'] );
+		$this->assertArrayNotHasKey( 'b|s|60', $this->fake->counts );
+
+		$this->limiter->refund( 'b', 's', [ [ 5, 60 ] ] );
+		$this->assertSame( 0, $this->fake->counts['b|s|120'] );
+
+		$this->limiter->attempt( 'b', 's', [ [ 5, 60 ] ] );
+		$this->limiter->reset( 'b', 's', [ [ 5, 60 ] ] );
+		$this->assertSame( [], $this->fake->counts );
+	}
+
+	/**
+	 * A filter returning something other than an array is ignored, rather
+	 * than turning the limit off.
+	 */
+	public function test_non_array_filter_result_keeps_the_default(): void {
+		add_filter( 'workos_rate_limit_policy', static fn() => 'unlimited' );
+
+		$this->assertTrue( $this->limiter->attempt( 'b', 's', [ [ 1, 60 ] ] ) );
+		$this->assertInstanceOf( WP_Error::class, $this->limiter->attempt( 'b', 's', [ [ 1, 60 ] ] ) );
+	}
+
+	/**
+	 * Without a filter the effective policy is the one the caller passed.
+	 */
+	public function test_policy_without_filter_is_the_default(): void {
+		$this->assertSame( TieredRateLimiter::SEND_IP, $this->limiter->policy( 'otp_send_ip', TieredRateLimiter::SEND_IP ) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Limited action
+	// -------------------------------------------------------------------------
+
+	/**
+	 * A refused attempt fires `workos_rate_limited` once, with the bucket,
+	 * a hash of the subject, and the seconds until the refusing tier rolls.
+	 */
+	public function test_limited_attempt_fires_action_once(): void {
+		$calls = [];
+		add_action(
+			'workos_rate_limited',
+			static function ( $bucket, $subject_hash, $retry_after ) use ( &$calls ) {
+				$calls[] = [ $bucket, $subject_hash, $retry_after ];
+			},
+			10,
+			3
+		);
+
+		$policy = [ [ 1, 60 ], [ 5, 3600 ] ];
+
+		$this->assertTrue( $this->limiter->attempt( 'b', 'alice@example.com', $policy ) );
+		$this->assertSame( [], $calls, 'An allowed attempt fires nothing.' );
+
+		$this->assertInstanceOf( WP_Error::class, $this->limiter->attempt( 'b', 'alice@example.com', $policy ) );
+
+		$this->assertCount( 1, $calls );
+		$this->assertSame( 'b', $calls[0][0] );
+		$this->assertSame( TieredRateLimiter::hash_subject( 'alice@example.com' ), $calls[0][1] );
+		$this->assertStringNotContainsString( 'alice', $calls[0][1] );
+		$this->assertSame( 42, $calls[0][2] );
+	}
+
+	/**
+	 * The subject hash is stable, distinct per subject, and keyed, so a
+	 * log reader can't confirm a guessed address with a plain SHA-256.
+	 */
+	public function test_subject_hash_is_stable_and_keyed(): void {
+		$hash = TieredRateLimiter::hash_subject( 'alice@example.com' );
+
+		$this->assertSame( $hash, TieredRateLimiter::hash_subject( 'alice@example.com' ) );
+		$this->assertNotSame( $hash, TieredRateLimiter::hash_subject( 'bob@example.com' ) );
+		$this->assertMatchesRegularExpression( '/^[0-9a-f]{16}$/', $hash );
+		$this->assertStringStartsNotWith( $hash, hash( 'sha256', 'alice@example.com' ) );
 	}
 
 	// -------------------------------------------------------------------------
