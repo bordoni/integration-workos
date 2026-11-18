@@ -275,6 +275,8 @@ The validation runs on every endpoint that accepts `redirect_url` (start, confir
 
 Use this when your own plugin or theme needs to trigger a reset programmatically (e.g. from a custom REST endpoint, a WP-CLI command, or an admin action handler).
 
+The shortest way is `workos_send_password_reset( $wp_user_id, [ 'redirect_url' => … ] )`. It runs the same code as the endpoint (rate limits, profile gating, `redirect_url` validation, activity log) without a REST round-trip, and returns `true` or the endpoint's `WP_Error`. It leaves the `edit_user` check to you. See [`php-helpers.md`](php-helpers.md#workos_send_password_reset). The example below goes through the endpoint instead, which also does the capability check.
+
 ```php
 <?php
 /**
@@ -583,7 +585,7 @@ This section catalogs the failure modes we've seen people hit. If your integrati
 workos()->api()->send_password_reset( $email, 'https://example.com/whatever' );
 ```
 
-The URL you hand WorkOS gets emailed verbatim. Get the host wrong and the email link is dead. Skip the entity-decode and a host-side `home_url` filter will silently break it. Always route through `POST /admin/users/{id}/password-reset` or `POST /auth/password/reset/start`.
+The URL you hand WorkOS gets emailed verbatim. Get the host wrong and the email link is dead. Skip the entity-decode and a host-side `home_url` filter will silently break it. Always route through `POST /admin/users/{id}/password-reset`, `POST /auth/password/reset/start`, or `workos_send_password_reset()` from PHP.
 
 ### ❌ Don't store reset tokens or replay them.
 

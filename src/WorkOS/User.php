@@ -30,6 +30,15 @@ defined( 'ABSPATH' ) || exit;
  * Neither method verifies the access token is still valid against
  * WorkOS's JWKS — use `Api\Client::verify_access_token()` for that.
  *
+ * ### Session helpers
+ *
+ * Two methods go beyond reading meta:
+ *
+ * - {@see self::get_valid_access_token()} returns a token that hasn't
+ *   expired, refreshing it (and rotating the stored tokens) when needed.
+ * - {@see self::get_logout_url()} builds the WorkOS logout URL for the
+ *   stored session, or falls back to `wp_logout_url()`.
+ *
  * ### Example usage
  *
  * ```php
@@ -52,7 +61,8 @@ defined( 'ABSPATH' ) || exit;
  *
  * ```php
  * if ( workos_is_sso_user() ) { ... }
- * $token = workos_get_access_token( $user_id );
+ * $token = workos_get_access_token( $user_id );       // As stored; may be expired.
+ * $token = workos_get_valid_access_token( $user_id ); // Refreshed when needed; may be WP_Error.
  * ```
  */
 final class User {
@@ -83,6 +93,12 @@ final class User {
 
 	/** User meta key — flag indicating this WP user's first login via WorkOS. */
 	public const META_FIRST_LOGIN = '_workos_first_login';
+
+	/**
+	 * Seconds before expiry at which {@see self::get_valid_access_token()}
+	 * refreshes. Matches the React shell's pre-emptive refresh.
+	 */
+	public const ACCESS_TOKEN_REFRESH_LEEWAY = 60;
 
 	/**
 	 * Whether the user is linked to a WorkOS identity.
@@ -139,6 +155,114 @@ final class User {
 	 */
 	public static function get_access_token( int $user_id = 0 ): string {
 		return self::meta_string( $user_id, self::META_ACCESS_TOKEN );
+	}
+
+	/**
+	 * Get an access token for the user that is good for at least
+	 * {@see self::ACCESS_TOKEN_REFRESH_LEEWAY} more seconds.
+	 *
+	 * Returns the stored token while it is fresh. When it has expired, is
+	 * about to, or its expiry can't be read, the stored refresh token is
+	 * exchanged through `Api\Client::refresh_session()` and the new pair is
+	 * stored with `Auth\Login::store_tokens()`, the same calls the
+	 * `POST /auth/session/refresh` endpoint makes. Unlike
+	 * {@see self::get_access_token()}, this may call WorkOS and rotate the
+	 * stored tokens.
+	 *
+	 * The expiry is read from the stored token without checking its
+	 * signature: the token came from WorkOS and was stored server-side, and
+	 * the result only decides whether to refresh. Only pass a user ID your
+	 * own code trusts, never one taken from an unauthenticated request.
+	 *
+	 * @param int $user_id WP user ID; 0 or omitted targets the current user.
+	 *
+	 * @return string|\WP_Error Access token (JWT), or an error:
+	 *                          `workos_user_not_linked` (no WorkOS link or no user),
+	 *                          `workos_no_session` (signed out, or expired with no refresh token),
+	 *                          `workos_refresh_failed` (WorkOS returned no token),
+	 *                          or the API error from the refresh call.
+	 */
+	public static function get_valid_access_token( int $user_id = 0 ) {
+		$resolved = self::resolve_user_id( $user_id );
+		if ( 0 === $resolved || ! self::is_sso( $resolved ) ) {
+			return new \WP_Error(
+				'workos_user_not_linked',
+				__( 'This user is not linked to a WorkOS account.', 'integration-workos' ),
+				[ 'status' => 409 ]
+			);
+		}
+
+		$access_token = self::get_access_token( $resolved );
+		if ( '' !== $access_token && ! self::access_token_needs_refresh( $access_token ) ) {
+			return $access_token;
+		}
+
+		$refresh_token = self::get_refresh_token( $resolved );
+		if ( '' === $refresh_token ) {
+			return new \WP_Error(
+				'workos_no_session',
+				__( 'This user has no active WorkOS session.', 'integration-workos' ),
+				[ 'status' => 401 ]
+			);
+		}
+
+		$response = workos()->api()->refresh_session( $refresh_token );
+
+		if ( ! is_wp_error( $response ) && ( empty( $response['access_token'] ) || ! is_string( $response['access_token'] ) ) ) {
+			$response = new \WP_Error(
+				'workos_refresh_failed',
+				__( 'WorkOS did not return a new access token.', 'integration-workos' ),
+				[ 'status' => 502 ]
+			);
+		}
+
+		if ( is_wp_error( $response ) ) {
+			// Another request may have rotated the tokens while this one
+			// was waiting, which spends the refresh token we sent. Use its
+			// result if it left a fresh token behind.
+			$latest = self::get_access_token( $resolved );
+			if ( '' !== $latest && $latest !== $access_token && ! self::access_token_needs_refresh( $latest ) ) {
+				return $latest;
+			}
+
+			return $response;
+		}
+
+		Auth\Login::store_tokens( $resolved, $response );
+
+		return $response['access_token'];
+	}
+
+	/**
+	 * Get the URL that ends the user's current WorkOS session.
+	 *
+	 * Points at WorkOS's `GET /user_management/sessions/logout` for the
+	 * stored session ID, with `return_to` when given. WorkOS only redirects
+	 * to `return_to` values on the environment's sign-out redirect list.
+	 * With no stored session (not linked, or signed out) this returns
+	 * `wp_logout_url( $return_to )`.
+	 *
+	 * The WorkOS URL ends the WorkOS session only; the WordPress auth
+	 * cookie is untouched. `wp_logout_url()` already ends both, because the
+	 * plugin revokes the WorkOS session server-side on `wp_logout`.
+	 *
+	 * @param int    $user_id   WP user ID; 0 or omitted targets the current user.
+	 * @param string $return_to Optional URL to land on after sign-out.
+	 *
+	 * @return string
+	 */
+	public static function get_logout_url( int $user_id = 0, string $return_to = '' ): string {
+		$session_id = self::get_session_id( $user_id );
+		if ( '' === $session_id || ! self::is_sso( $user_id ) ) {
+			return wp_logout_url( $return_to );
+		}
+
+		$args = [ 'session_id' => $session_id ];
+		if ( '' !== $return_to ) {
+			$args['return_to'] = $return_to;
+		}
+
+		return Api\Client::get_base_url() . '/user_management/sessions/logout?' . http_build_query( $args, '', '&', PHP_QUERY_RFC3986 );
 	}
 
 	/**
@@ -200,6 +324,37 @@ final class User {
 			'organization_id'    => self::get_organization_id( $resolved ),
 			'session_id'         => self::get_session_id( $resolved ),
 		];
+	}
+
+	/**
+	 * Whether a stored access token has expired, expires within the
+	 * leeway, or has no readable `exp` claim.
+	 *
+	 * Reads the claim without checking the signature; see
+	 * {@see self::get_valid_access_token()} for why that is enough here.
+	 *
+	 * @param string $token JWT.
+	 *
+	 * @return bool
+	 */
+	private static function access_token_needs_refresh( string $token ): bool {
+		$parts = explode( '.', $token );
+		if ( 3 !== count( $parts ) ) {
+			return true;
+		}
+
+		$payload = json_decode(
+			// JWT payloads are base64url-encoded (RFC 7519); this reads the
+			// `exp` claim, it is not obfuscation.
+			(string) base64_decode( strtr( $parts[1], '-_', '+/' ) ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
+			true
+		);
+
+		if ( ! is_array( $payload ) || ! isset( $payload['exp'] ) || ! is_numeric( $payload['exp'] ) ) {
+			return true;
+		}
+
+		return (int) $payload['exp'] - self::ACCESS_TOKEN_REFRESH_LEEWAY <= time();
 	}
 
 	/**
