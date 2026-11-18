@@ -49,6 +49,7 @@ $workos_meta_keys = [
 	'_workos_deactivated',
 	'_workos_updated_at',
 	'_workos_membership_updated_at',
+	'_workos_pending_match',
 ];
 
 foreach ( $workos_meta_keys as $workos_key ) {
