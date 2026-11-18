@@ -17,7 +17,9 @@ Linking a user that has no link yet, or writing the same link again, is unaffect
 
 One WorkOS user maps to one WordPress user. With protection on (or `--force`), `link_user()` also refuses a WorkOS ID that is already linked to a different WordPress user.
 
-The checks are read-then-write with no lock. Two first links that run at the same moment for one WorkOS user (a sign-in and the `user.created` webhook, say) can both pass them. When both match the same WordPress user by email, the same link is written twice and nothing is lost. When neither finds one, both can create a WordPress user (WordPress's own email check is read-then-write too), leaving two accounts linked to one WorkOS user; lookups then return the first by login. It needs both requests inside the same few milliseconds, and `wp workos user unlink` plus deleting the spare account clears it.
+Two links of one WorkOS user at the same moment (a sign-in and the `user.created` webhook, or two webhook retries) can't both pass these checks. `link_user()` runs them and writes the link under a short lock on the WorkOS ID: MySQL `GET_LOCK()`, or a row in the options table where `GET_LOCK()` isn't available. The second request waits, then sees the first one's link: the same WordPress user gets the same link again (no second `workos_user_linked`), and a different one is refused. If the lock isn't free within 5 seconds (`workos_link_lock_timeout` filter), nothing is linked and the error goes to the debug log. With protection off and no `--force` there are no checks to run and no lock.
+
+When neither request finds a WordPress user by email, both can still create one (WordPress's own email check is read-then-write). Only the first gets the link. The second account stays unlinked, although the request that created it still carries on with it; it can be deleted.
 
 Reassigning an account on purpose stays possible, and is explicit:
 
