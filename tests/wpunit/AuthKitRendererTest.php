@@ -736,4 +736,78 @@ class AuthKitRendererTest extends WPTestCase {
 
 		$this->assertStringNotContainsString( 'wa-skeleton--footer', $html );
 	}
+
+	/**
+	 * The full-page document declares the site language as a real `lang`
+	 * attribute. Escaping the language attributes a second time printed
+	 * `lang=&quot;en-US&quot;`, which isn't a valid page language.
+	 */
+	public function test_full_page_document_declares_a_valid_lang_attribute(): void {
+		$this->assertSame( '<html lang="en-US">', $this->render_full_page_html_tag() );
+	}
+
+	/**
+	 * Attributes a theme adds through the `language_attributes` filter
+	 * reach the full-page <html> element as attributes too.
+	 */
+	public function test_full_page_document_keeps_filtered_language_attributes(): void {
+		$cb = static function ( string $output ): string {
+			return $output . ' data-brand="acme"';
+		};
+		add_filter( 'language_attributes', $cb );
+
+		try {
+			$tag = $this->render_full_page_html_tag();
+		} finally {
+			remove_filter( 'language_attributes', $cb );
+		}
+
+		$this->assertSame( '<html lang="en-US" data-brand="acme">', $tag );
+	}
+
+	/**
+	 * Render the full-page document without sending headers or exiting,
+	 * and return its opening <html> tag.
+	 *
+	 * Fresh script and style registries keep the printed asset queues from
+	 * leaking into other tests.
+	 *
+	 * @return string
+	 */
+	private function render_full_page_html_tag(): string {
+		$renderer = new class() extends Renderer {
+			public function capture( Profile $profile ): string {
+				ob_start();
+				try {
+					$this->render_document( $profile );
+				} finally {
+					$html = (string) ob_get_clean();
+				}
+
+				return $html;
+			}
+		};
+		$profile  = Profile::from_array(
+			[
+				'slug'    => 'members',
+				'methods' => [ Profile::METHOD_PASSWORD ],
+			]
+		);
+
+		$scripts               = $GLOBALS['wp_scripts'] ?? null;
+		$styles                = $GLOBALS['wp_styles'] ?? null;
+		$GLOBALS['wp_scripts'] = new \WP_Scripts();
+		$GLOBALS['wp_styles']  = new \WP_Styles();
+
+		try {
+			$html = $renderer->capture( $profile );
+		} finally {
+			$GLOBALS['wp_scripts'] = $scripts;
+			$GLOBALS['wp_styles']  = $styles;
+		}
+
+		preg_match( '/<html\b[^>]*>/', $html, $matches );
+
+		return $matches[0] ?? '';
+	}
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Invalid page language on the full-page sign-in** — the wp-login.php takeover and `/workos/login/{profile}` escaped the `<html>` language attributes a second time, so the page declared `lang=&quot;en-US&quot;`. Screen readers couldn't tell the page's language (WCAG 3.1.1, axe `html-lang-valid`). It now declares `lang="en-US"`, and attributes added through the `language_attributes` filter reach the `<html>` element intact.
+
 ## [1.0.12] - 2026-11-14
 
 ### Fixed
