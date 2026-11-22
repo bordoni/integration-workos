@@ -229,6 +229,8 @@ class ProfileRepository {
 		 * Lets other subsystems react (e.g. keep the global `login_mode`
 		 * env option aligned with the default profile's mode field).
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param Profile $saved The freshly-saved profile (with its post ID).
 		 */
 		do_action( 'workos_login_profile_saved', $saved );
@@ -274,6 +276,8 @@ class ProfileRepository {
 		 *
 		 * Lets subsystems react to removal — used by the FrontendRoute to
 		 * invalidate its cached custom-path rewrite signature.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param Profile $profile The profile that was deleted.
 		 */

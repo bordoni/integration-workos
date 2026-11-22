@@ -230,6 +230,8 @@ class RestApi {
 		 * Filter whether the current request can initiate a change for
 		 * a given target.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param bool $allowed       Whether the request is allowed.
 		 * @param int  $target_id     Target user ID.
 		 * @param int  $initiator_id  Current user ID (0 for unauthenticated).
@@ -398,6 +400,8 @@ class RestApi {
 		/**
 		 * Fires after a pending email change is stored and notifications sent.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param int    $user_id      Target WP user ID.
 		 * @param string $new_email    Requested new address.
 		 * @param int    $initiated_by Current user ID (0 for system).
@@ -462,6 +466,8 @@ class RestApi {
 		 * Fires after an email change is committed to WorkOS + WP. Shared
 		 * with the verified-confirm path so downstream observers don't have
 		 * to special-case how the change was authorized.
+		 *
+		 * @since 1.0.6
 		 *
 		 * @param int    $user_id   Target WP user ID.
 		 * @param string $old_email Previous email.
@@ -587,6 +593,8 @@ class RestApi {
 		/**
 		 * Fires after an email change is committed to WorkOS + WP.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param int    $user_id   Target WP user ID.
 		 * @param string $old_email Previous email.
 		 * @param string $new_email New email.
@@ -656,6 +664,8 @@ class RestApi {
 
 		/**
 		 * Fires after a pending change is cancelled.
+		 *
+		 * @since 1.0.6
 		 *
 		 * @param int    $user_id Target WP user ID.
 		 * @param string $reason  'token' or 'capability'.
@@ -787,6 +797,8 @@ class RestApi {
 
 		/**
 		 * Filter the change-email token lifetime in seconds.
+		 *
+		 * @since 1.0.6
 		 *
 		 * @param int $lifetime Lifetime in seconds.
 		 */

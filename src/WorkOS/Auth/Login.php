@@ -166,6 +166,8 @@ class Login {
 		/**
 		 * Fires after a user is authenticated via WorkOS.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param int   $wp_user_id  WP user ID.
 		 * @param array $workos_data Full WorkOS auth response.
 		 */

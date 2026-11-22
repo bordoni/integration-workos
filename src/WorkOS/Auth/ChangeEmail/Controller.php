@@ -72,6 +72,8 @@ class Controller extends BaseController {
 		/**
 		 * Filter whether the change-email feature is active.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param bool $enabled Whether the change-email feature is active.
 		 */
 		return (bool) apply_filters( 'workos_change_email_enabled', $enabled );

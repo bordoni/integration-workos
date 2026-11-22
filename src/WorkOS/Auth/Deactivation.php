@@ -54,6 +54,8 @@ class Deactivation {
 		/**
 		 * Filter whether a WP user counts as deactivated, and so can't sign in.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param bool $deactivated Default: the `_workos_deactivated` user meta.
 		 * @param int  $user_id     WP user ID.
 		 */

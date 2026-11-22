@@ -396,6 +396,8 @@ before authorizing a sensitive action), verify via
 
 ## Hooks Reference
 
+The most-used hooks, with examples. Every hook the plugin fires, with its arguments and call sites, is in [`docs/hooks.md`](docs/hooks.md) (generated from the source).
+
 ### Filters
 
 #### `workos_redirect_urls`

@@ -234,6 +234,17 @@ class MagicCode extends BaseEndpoint {
 	 * @return bool
 	 */
 	private function registration_allowed( Profile $profile ): bool {
+		/**
+		 * Filters the slug of the Login Profile that uses the legacy email-code registration toggle.
+		 *
+		 * Email-code sign-in on this profile reads
+		 * `allow_legacy_magic_code_registration`; every other profile reads
+		 * `allow_magic_code_registration`.
+		 *
+		 * @since 1.0.6
+		 *
+		 * @param string $slug Login Profile slug. Default 'legacy'.
+		 */
 		$legacy_slug = (string) apply_filters( 'workos_legacy_profile_slug', 'legacy' );
 
 		$option = $profile->get_slug() === $legacy_slug

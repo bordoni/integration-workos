@@ -37,6 +37,8 @@ class EventGuard {
 		/**
 		 * Filters how long a handled webhook event ID is remembered.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param int $ttl Seconds. Default 3 days.
 		 */
 		return max( HOUR_IN_SECONDS, (int) apply_filters( 'workos_webhook_seen_ttl', 3 * DAY_IN_SECONDS ) );

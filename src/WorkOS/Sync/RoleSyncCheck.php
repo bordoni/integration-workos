@@ -89,6 +89,8 @@ class RoleSyncCheck {
 		/**
 		 * Filters how many members the role sync check reads per query.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param int $size Members per batch. Default 1000.
 		 */
 		return max( 1, (int) apply_filters( 'workos_role_sync_check_batch_size', self::BATCH_SIZE ) );

@@ -9,7 +9,9 @@
 		"lint:ts": "tsc --noEmit",
 		"check:build-tokens": "bun tests/build/portal-tokens.ts",
 		"lint:php": "composer lint",
-		"lint:php:fix": "composer lint:fix"
+		"lint:php:fix": "composer lint:fix",
+		"docs:hooks": "bun tools/hooks-reference.ts",
+		"docs:hooks:check": "bun tools/hooks-reference.ts --check"
 	},
 	"devDependencies": {
 		"@types/react": "^18.3.0",

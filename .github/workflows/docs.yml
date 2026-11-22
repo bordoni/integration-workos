@@ -1,0 +1,23 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main ]
+  # No base-branch filter, like Tests: stacked PRs need the check too.
+  pull_request:
+
+jobs:
+  hooks-reference:
+    name: Hook reference
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      # docs/hooks.md is generated from the do_action / apply_filters call
+      # sites in src/. Fails when it is stale or a call site has no
+      # docblock; fix with `bun run docs:hooks` and commit the result.
+      - name: Check docs/hooks.md is up to date
+        run: bun tools/hooks-reference.ts --check

@@ -178,6 +178,8 @@ class Notifier {
 		/**
 		 * Filter whether change-email notices fan out to the old address.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param bool $enabled
 		 */
 		return (bool) apply_filters( 'workos_change_email_notify_old_address', $enabled );

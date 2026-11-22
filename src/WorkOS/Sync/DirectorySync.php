@@ -64,7 +64,17 @@ class DirectorySync {
 			return;
 		}
 
-		// Trigger the standard user.updated flow.
+		/**
+		 * Re-fires a directory `dsync.user.updated` event as `user.updated`.
+		 *
+		 * Lets the standard `user.updated` handling (UserSync and any
+		 * extension listening there) apply directory changes to a linked
+		 * WP user. The payload is the original `dsync.user.updated` event.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param array $event Full `dsync.user.updated` event payload.
+		 */
 		do_action( 'workos_webhook_user.updated', $event );
 	}
 

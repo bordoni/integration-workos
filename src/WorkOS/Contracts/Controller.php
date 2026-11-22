@@ -46,12 +46,16 @@ abstract class Controller extends ServiceProvider {
 			/**
 			 * Fires when any service provider is registered.
 			 *
+			 * @since 1.0.0
+			 *
 			 * @param array $classes Array containing the class name of the registered provider.
 			 */
 			do_action( 'workos/container/registered_provider', [ static::class ] );
 
 			/**
 			 * Fires when a specific service provider is registered.
+			 *
+			 * @since 1.0.0
 			 *
 			 * @param array $classes Array containing the class name of the registered provider.
 			 */

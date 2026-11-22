@@ -65,6 +65,8 @@ class LogoutRedirect {
 		 *
 		 * Return `false` to skip entirely (e.g., for admin users).
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param bool     $should_apply      Whether to apply role-based logout redirect.
 		 * @param \WP_User $user              The user logging out.
 		 * @param string   $requested_redirect The current redirect URL.
@@ -74,6 +76,8 @@ class LogoutRedirect {
 		if ( ! $should_apply ) {
 			/**
 			 * Fires when role-based logout redirect is skipped.
+			 *
+			 * @since 1.0.0
 			 *
 			 * @param \WP_User $user   The user logging out.
 			 * @param string   $reason Reason the redirect was skipped.
@@ -93,6 +97,8 @@ class LogoutRedirect {
 		 *
 		 * Return empty string to skip role-based logout redirect.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param string   $url  The role-based logout redirect URL.
 		 * @param \WP_User $user The user logging out.
 		 * @param string   $role The user's primary WP role.
@@ -107,6 +113,8 @@ class LogoutRedirect {
 
 			/**
 			 * Fires just before the role-based logout redirect is applied.
+			 *
+			 * @since 1.0.0
 			 *
 			 * @param string   $url  The redirect URL.
 			 * @param \WP_User $user The user logging out.
@@ -139,6 +147,8 @@ class LogoutRedirect {
 		 * The full role→logout redirect URL map from settings.
 		 *
 		 * Allows adding/removing/overriding entries programmatically.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param array $map Role slug → URL string.
 		 */
