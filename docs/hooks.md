@@ -129,7 +129,7 @@ Filters the CSS classes applied to the AuthKit full-page <body>.
 | `$classes` | `string[]` | Default body classes. |
 | `$profile` | `Profile` | The active profile. |
 
-Fired from: [`Auth/AuthKit/Renderer.php:221`](../src/WorkOS/Auth/AuthKit/Renderer.php#L221).
+Fired from: [`Auth/AuthKit/Renderer.php:236`](../src/WorkOS/Auth/AuthKit/Renderer.php#L236).
 
 ### `workos_authkit_branding`
 
@@ -142,7 +142,7 @@ Filters the resolved branding for an AuthKit render.
 | `$resolved` | `array` | Resolved branding. |
 | `$profile` | `Profile` | The active profile. |
 
-Fired from: [`Auth/AuthKit/Renderer.php:389`](../src/WorkOS/Auth/AuthKit/Renderer.php#L389).
+Fired from: [`Auth/AuthKit/Renderer.php:409`](../src/WorkOS/Auth/AuthKit/Renderer.php#L409).
 
 ### `workos_authkit_enqueue_assets`
 
