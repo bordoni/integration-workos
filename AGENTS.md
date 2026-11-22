@@ -7,7 +7,7 @@ Enterprise identity management for WordPress powered by WorkOS. SSO, directory s
 - **Version:** 1.0.12
 - **Namespace:** `WorkOS\`
 - **PHP Requirement:** 7.4+
-- **WordPress Requirement:** 5.9+
+- **WordPress Requirement:** 6.2+ (plugin header `Requires at least`, `readme.txt` and phpcs `minimum_wp_version`)
 - **Text Domain:** `integration-workos`
 - **Author:** Gustavo Bordoni
 
@@ -100,7 +100,7 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/PasswordReset.php` | Legacy guard — blocks WP's native password-reset flow for WorkOS-linked users so they're funneled to the WorkOS-backed reset (`PasswordResetAdmin/*`) instead. |
 | **Auth — Password Reset Admin** ([`docs/password-reset.md`](docs/password-reset.md)) | |
 | `src/WorkOS/Auth/PasswordResetAdmin/Controller.php` | DI controller — wires the REST endpoint, JS/CSS assets, WP user-row trigger, user-edit panel, and the `[workos:password-reset]` shortcode. |
-| `src/WorkOS/Auth/PasswordResetAdmin/RestApi.php` | `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. Gated by `current_user_can('edit_user', $id)` — the same route covers admin-of-other and self-service (WP grants `edit_user($self)` to any logged-in user). Per-IP (10/min) and per-target (5/min) rate limits via `Auth\AuthKit\RateLimiter`. Writes `password_reset.admin_sent` to the activity log. Builds the email URL via `FrontendRoute::url_for_profile()` so reset emails land on the React shell. |
+| `src/WorkOS/Auth/PasswordResetAdmin/RestApi.php` | `POST /wp-json/workos/v1/admin/users/{id}/password-reset`. Gated by `current_user_can('edit_user', $id)` — the same route covers admin-of-other and self-service (WP grants `edit_user($self)` to any logged-in user). Per-IP (10/min) and per-target (5/min) rate limits via `RateLimit\TieredRateLimiter`. Writes `password_reset.admin_sent` to the activity log. Builds the email URL via `FrontendRoute::url_for_profile()` so reset emails land on the React shell. |
 | `src/WorkOS/Auth/PasswordResetAdmin/RedirectValidator.php` | Same-host validator for `redirect_url`. Rejects cross-origin, protocol-relative (`//host`), and non-`http(s)` schemes. Falls back to `Profile::get_post_login_redirect()` then `home_url('/')`. |
 | `src/WorkOS/Auth/PasswordResetAdmin/RowActions.php` | "Send password reset" row action under the **WorkOS column** on `wp-admin/users.php` (hooks `workos_user_list_column_actions` filter exposed by `Admin\UserList`). |
 | `src/WorkOS/Auth/PasswordResetAdmin/UserProfilePanel.php` | "Password Reset" panel + trigger button on the WP user-edit screen (`edit_user_profile` / `show_user_profile` at priority 20 so it renders after the existing read-only WorkOS panel). |
@@ -137,9 +137,14 @@ Per-environment constants (take priority over generic):
 | `src/WorkOS/Auth/AuthKit/Shortcode.php` | `[workos:login]` shortcode |
 | `src/WorkOS/Auth/AuthKit/Renderer.php` | HTML shell + React bundle enqueue. Stapled to `password-strength-meter` (zxcvbn) so `wp.passwordStrength.meter` is available for the reset-confirm form. Emits a pre-hydration skeleton inside the mount `<div>` mirroring the React `FlowSkeleton` shape (1- or 2-input variant chosen from `initial_step` / `reset_token` / `invitation_token`) so the page never paints blank. Fires `workos_authkit_enqueue_assets` action and applies `workos_authkit_branding` / `workos_authkit_profile_data` / `workos_authkit_body_classes` filters — see `docs/extending-the-login-ui.md`. |
 | `src/WorkOS/Auth/AuthKit/Nonce.php` | Profile-scoped CSRF nonces |
-| `src/WorkOS/Auth/AuthKit/RateLimiter.php` | Per-IP / per-email transient buckets |
 | `src/WorkOS/Auth/AuthKit/Radar.php` | WorkOS Radar site-key + request-header extraction |
 | `src/WorkOS/Auth/AuthKit/ModeSyncer.php` | Keeps the global `login_mode` option aligned with the default Login Profile's `mode` whenever a profile is saved |
+| **Rate limiting** ([`docs/rate-limiting.md`](docs/rate-limiting.md)) | |
+| `src/WorkOS/RateLimit/RateLimiter.php` | Single-window rate limiter contract |
+| `src/WorkOS/RateLimit/BaseRateLimiter.php` | Shared window logic |
+| `src/WorkOS/RateLimit/DatabaseRateLimiter.php` / `ObjectCacheRateLimiter.php` | Transient-backed and object-cache-backed limiters |
+| `src/WorkOS/RateLimit/TieredRateLimiter.php` | Layered windows (used by the auth endpoints, password reset and change email) |
+| `src/WorkOS/RateLimit/Controller.php` | Picks the object-cache limiter when a persistent object cache is on (transients otherwise) and binds `TieredRateLimiter` |
 | **Organization** | |
 | `src/WorkOS/Organization/Controller.php` | Organization controller |
 | `src/WorkOS/Organization/Manager.php` | Organization CRUD and caching |
@@ -218,12 +223,14 @@ Per-environment constants (take priority over generic):
 | `webpack.config.js` | Extends `@wordpress/scripts` default config with `authkit`, `admin-profiles`, `admin-users`, and `admin-password-reset` entries |
 | `phpstan.neon.dist` | PHPStan config (level 5, scans `src/` + `integration-workos.php` + `uninstall.php`, `phpVersion: 70400`, Strauss vendor resolved via `vendor/autoload.php` in `scanFiles`) |
 | `phpstan/stubs.php` | Symbol stubs for `WORKOS_*` runtime-defined constants so PHPStan can resolve them statically — never executed |
+| `tools/hooks-reference.ts` | Generates `docs/hooks.md` from the `do_action` / `apply_filters` call sites and their docblocks (`bun run docs:hooks`; `--check` in CI). Dynamic hook names get the reviewed notes in its `DYNAMIC` map |
+| `docs/hooks.md` | Generated hook reference — never edit by hand |
 
 ## Build System
 
 ### Requirements
 
-- Node.js >= 20 (see `.nvmrc`)
+- Node.js >= 24 (see `.nvmrc` and `engines` in `package.json`)
 - bun
 
 ### Commands
@@ -236,6 +243,9 @@ bun run lint:ts       # Type-check TypeScript (tsc --noEmit)
 bun run lint:php      # Lint PHP via PHPCS
 bun run lint:php:fix  # Auto-fix PHP lint issues
 composer phpstan      # Static analysis (PHPStan level 5, --memory-limit=2G)
+composer check        # PHPCS + PHPStan + wpunit (both passes); run inside slic or the test runner
+bun run docs:hooks    # Regenerate docs/hooks.md from the hook call sites in src/
+bun run docs:hooks:check  # CI check: fails when docs/hooks.md is stale or a hook call has no docblock
 ```
 
 `@wordpress/scripts` v30 transpiles `.ts` / `.tsx` natively via its default
@@ -327,7 +337,6 @@ tests/
     ├── AuthKitProfileRouterTest.php                # Rule matching (redirect_to / referrer_host / user_role)
     ├── AuthKitProfileTest.php                      # Profile value object + enum validation
     ├── AuthKitRadarTest.php                        # Radar site-key resolution + header extraction
-    ├── AuthKitRateLimiterTest.php                  # Fixed-window IP + email bucket limits
     ├── AuthKitRendererTest.php                     # Renderer markup + shortcode + takeover hook wiring
     ├── AuthKitRestMagicSessionTest.php             # magic/{send,verify}, session/{refresh,logout}, /nonce
     ├── AuthKitRestMfaTest.php                      # mfa/{challenge,verify,factors,*/enroll,factor/delete}
@@ -393,6 +402,23 @@ Use the global `/slic` skill for comprehensive guidance on test structure, envir
 
 - PHP follows WordPress Coding Standards via PHPCS/WPCS
 - Run `composer lint` / `composer lint:fix` for PHP linting
+
+### Hook conventions
+
+These apply to **new** hooks and new code. Existing hook names stay as they are (renaming one breaks every listener), and there are no aliases for old names.
+
+- **Names:** snake_case `workos_<area>_<event>`, area first: `workos_change_email_confirmed`, `workos_identity_gate_message`. Actions name what happened, in the past tense (`…_linked`, `…_cancelled`); filters name the value being filtered (`…_redirect_url`, `…_enabled` for on/off switches).
+- **Webhooks are the exception:** `workos_webhook_{$event_type}` keeps the WorkOS event name with its dots (`workos_webhook_user.updated`), so it matches the WorkOS docs. Don't add other dotted or `workos/…` slash names.
+- **Literals at the call site:** pass the hook name as a string literal so it stays greppable, not a constant or a concatenation.
+- **Docblock every call site:** a one-line summary, a `@since` with the release it ships in, and an `@param` per argument. A second site for the same hook uses `/** This action is documented in <File>.php */`. Keep the arguments identical across sites.
+- **Regenerate the reference:** [`docs/hooks.md`](docs/hooks.md) is generated from those docblocks by `bun run docs:hooks` (`tools/hooks-reference.ts`). CI (`Docs` workflow) fails when it is stale or a call site has no docblock, so run it whenever you add, move or change a hook, or shift the lines above one.
+
+### Extension points
+
+- **Register hooks in `register()`**, called by the feature's Controller, rather than in a constructor. About 30 classes still hook in their constructors; leave them unless you're already changing that class.
+- **Inject services** through the constructor (the di52 container builds it) instead of reaching for `workos()->api()` or `App::get()` inside methods, in new code.
+- **No new `final`** on classes that integrators extend or mock (`Plugin`, `Api\Client`, the Sync and Auth services). Don't remove the existing ones either; that's a separate decision.
+- **Public contract:** don't rename, reorder or retype the parameters of anything in [`docs/hooks.md`](docs/hooks.md), the README's "Helpers for Third-Party Integrations", or the symbols the Software Portal calls. Add a trailing optional parameter or a new method instead.
 
 ## Static Analysis (PHPStan)
 
