@@ -57,7 +57,7 @@ class Plugin {
 	 *
 	 * @var string
 	 */
-	private string $version = '1.0.12';
+	private string $version = '1.0.13';
 
 	/**
 	 * Container instance.
