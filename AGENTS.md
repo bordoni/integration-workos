@@ -360,6 +360,9 @@ tests/
     ├── PasswordResetAdminRestApiTest.php            # `POST /admin/users/{id}/password-reset` — capability matrix, missing user, unlinked user, masked-email response, redirect_url validation, rate limit, activity-log row content
     ├── PasswordResetAdminRowActionsTest.php         # `workos_user_list_column_actions` filter + RowActions injection (capability check, self-service, defensive empty-workos_id)
     ├── PluginTest.php                              # Plugin singleton + constants tests
+    ├── PublicContractDataTest.php                  # Public contract (group `public-contract`): meta keys, sync_existing_user errors, workos/v1 routes + response keys, query vars, handles
+    ├── PublicContractHooksTest.php                 # Public contract: hook priorities the Software Portal relies on, workos_user_linked / workos_authkit_enqueue_assets / wp_login firing
+    ├── PublicContractSignaturesTest.php            # Public contract: Reflection on Portal-facing + README-documented PHP symbols (compatible, not identical), load order
     ├── RedirectTest.php                            # Login redirect tests
     ├── RendererKsesTest.php                        # Shared renderer KSES allowlist tests
     ├── RoleMapperTest.php                          # Role mapper tests
@@ -388,6 +391,10 @@ Use the global `/slic` skill for comprehensive guidance on test structure, envir
 - **Pattern:** AAA (Arrange, Act, Assert)
 - **HTTP mocking:** Use the `pre_http_request` filter to intercept outbound HTTP calls
 - **WordPress factories:** Use `static::factory()` to create test posts, users, etc.
+
+### Public contract tests
+
+`tests/wpunit/PublicContract*Test.php` (group `public-contract`) pin what the Software Portal and other integrators call: signatures, hook priorities, meta keys, routes and handles. `tests/build/portal-tokens.ts` (`bun run check:build-tokens`, run in the JS Build CI job) does the same for ids, classes and CSS variables in `build/`. When one fails, the change breaks a downstream caller: keep the old shape (add a new method, keep the old name beside the new one) rather than editing the test. Signatures are pinned for compatibility, so a new trailing optional parameter passes.
 
 ### Existing Config Files
 

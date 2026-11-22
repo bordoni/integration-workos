@@ -1,0 +1,29 @@
+name: TypeScript
+
+on:
+  push:
+    branches: [ main ]
+  # No base-branch filter, like Tests: stacked PRs need the check too.
+  pull_request:
+
+jobs:
+  tsc:
+    name: Type check (tsc --noEmit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Covers what tsconfig.json includes today (src/js/authkit, src/js/admin-profiles).
+      - name: Type check
+        run: bun run lint:ts
