@@ -132,6 +132,8 @@ class Receiver {
 			/**
 			 * Fires for a specific WorkOS webhook event type.
 			 *
+			 * @since 1.0.0
+			 *
 			 * @param array $event Full event payload.
 			 */
 			do_action( "workos_webhook_{$event_type}", $event );
@@ -139,6 +141,8 @@ class Receiver {
 
 		/**
 		 * Fires for all WorkOS webhook events.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param array  $event      Full event payload.
 		 * @param string $event_type The event type string.

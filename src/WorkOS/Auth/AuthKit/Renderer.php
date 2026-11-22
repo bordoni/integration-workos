@@ -109,6 +109,8 @@ class Renderer {
 			 * handle for ordering, plus `wp-plugins` / `wp-components`
 			 * if registering SlotFill plugins.
 			 *
+			 * @since 1.0.0
+			 *
 			 * @param Profile $profile The active Login Profile.
 			 */
 			do_action( 'workos_authkit_enqueue_assets', $profile );
@@ -149,6 +151,8 @@ class Renderer {
 		 * Use to inject extra config keys a SlotFill plugin needs at the
 		 * client. The shell will receive whatever is returned here as the
 		 * `data-profile` JSON.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param array   $profile_data Trimmed profile data.
 		 * @param Profile $profile      The active profile.
@@ -208,6 +212,8 @@ class Renderer {
 		 *
 		 * Use to give external stylesheets a per-profile hook (e.g. add
 		 * `workos-profile-{slug}` for slug-scoped rules).
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param string[] $classes Default body classes.
 		 * @param Profile  $profile The active profile.
@@ -374,6 +380,8 @@ class Renderer {
 		 *
 		 * Use to override the logo fallback chain or rewrite any branding
 		 * field at the last mile before it lands in the data-profile JSON.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param array   $resolved Resolved branding.
 		 * @param Profile $profile  The active profile.

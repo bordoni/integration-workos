@@ -404,6 +404,8 @@ class Manager {
 		/**
 		 * Fires after a user's local organization membership is added, changed or removed.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param int $user_id WP user ID.
 		 */
 		do_action( 'workos_org_membership_changed', $user_id );
@@ -434,6 +436,8 @@ class Manager {
 
 		/**
 		 * Fires after a user's local organization membership is added, changed or removed.
+		 *
+		 * @since 1.0.10
 		 *
 		 * @param int $user_id WP user ID.
 		 */
@@ -638,6 +642,8 @@ class Manager {
 
 		/**
 		 * Fires after a user's local organization membership is added, changed or removed.
+		 *
+		 * @since 1.0.10
 		 *
 		 * @param int $wp_user_id WP user ID.
 		 */

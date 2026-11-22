@@ -165,6 +165,8 @@ class UserSync {
 		 *
 		 * Does NOT fire for email-match auto-links.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param int   $user_id     WP user ID.
 		 * @param array $workos_user WorkOS user data.
 		 */
@@ -215,6 +217,8 @@ class UserSync {
 		 * email belongs to another WP user with no WorkOS link. Return false to sign in to the linked WP
 		 * user anyway (the behavior before 1.0.12).
 		 *
+		 * @since 1.0.12
+		 *
 		 * @param bool   $refuse      Default true.
 		 * @param int    $linked_id   WP user linked to the WorkOS user.
 		 * @param int    $holder_id   WP user that has the WorkOS user's email.
@@ -253,6 +257,8 @@ class UserSync {
 
 		/**
 		 * Fires when a WorkOS user is linked to one WP user while its email belongs to another.
+		 *
+		 * @since 1.0.12
 		 *
 		 * @param int    $linked_id   WP user linked to the WorkOS user.
 		 * @param int    $holder_id   WP user that has the WorkOS user's email.
@@ -380,6 +386,8 @@ class UserSync {
 			 * Covers first links and re-links; doesn't fire when the same link is
 			 * written again. Use it to resume work that waited for an identity.
 			 *
+			 * @since 1.0.10
+			 *
 			 * @param int    $wp_user_id  WP user ID.
 			 * @param string $workos_id   WorkOS user ID now linked.
 			 * @param string $previous_id WorkOS user ID linked before, or '' for a first link.
@@ -432,6 +440,8 @@ class UserSync {
 
 		/**
 		 * Fires when Re-link Protection refuses to move a WP user to a different WorkOS user.
+		 *
+		 * @since 1.0.10
 		 *
 		 * @param int    $wp_user_id  WP user ID.
 		 * @param string $current_id  WorkOS user ID the WP user stays linked to.

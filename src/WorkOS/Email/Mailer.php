@@ -47,6 +47,8 @@ class Mailer {
 		/**
 		 * Filter the rendered email body before sending.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param string $body     Rendered HTML body.
 		 * @param string $template Template basename.
 		 * @param array  $context  Template context.
@@ -55,6 +57,8 @@ class Mailer {
 
 		/**
 		 * Filter the email subject line before sending.
+		 *
+		 * @since 1.0.6
 		 *
 		 * @param string $subject  Subject line.
 		 * @param string $template Template basename.
@@ -137,6 +141,8 @@ class Mailer {
 		/**
 		 * Filter the headers used for plugin-sent emails.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param array  $headers  Header lines.
 		 * @param string $template Template basename.
 		 * @param array  $context  Template context.
@@ -156,9 +162,15 @@ class Mailer {
 		$host    = (string) wp_parse_url( home_url(), PHP_URL_HOST );
 		$default = (string) get_option( 'admin_email', 'wordpress@' . ( '' !== $host ? $host : 'localhost' ) );
 
-		// `wp_mail_from` is a WP core filter — we honor it so existing
-		// transport plugins continue to work. PHPCS doesn't recognize core
-		// filter names as "allowed unprefixed" because they aren't.
+		/**
+		 * Filters the from-address of the plugin's emails (WordPress core filter).
+		 *
+		 * `wp_mail_from` is honored so existing transport plugins keep
+		 * working. PHPCS doesn't recognize core filter names as "allowed
+		 * unprefixed" because they aren't, hence the ignore below.
+		 *
+		 * @param string $from_email From-address. Default the site's admin email.
+		 */
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		return (string) apply_filters( 'wp_mail_from', $default );
 	}

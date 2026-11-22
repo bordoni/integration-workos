@@ -68,6 +68,8 @@ class Redirect {
 		 *
 		 * Return `false` to skip entirely (e.g., for admin users).
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param bool     $should_apply      Whether to apply role-based redirect.
 		 * @param \WP_User $user              The authenticated user.
 		 * @param string   $requested_redirect The current redirect URL.
@@ -77,6 +79,8 @@ class Redirect {
 		if ( ! $should_apply ) {
 			/**
 			 * Fires when role-based redirect is skipped.
+			 *
+			 * @since 1.0.0
 			 *
 			 * @param \WP_User $user   The authenticated user.
 			 * @param string   $reason Reason the redirect was skipped.
@@ -93,6 +97,8 @@ class Redirect {
 		 * Whether the current redirect_to is considered "explicit" (user-initiated).
 		 *
 		 * By default, any redirect_to that is NOT admin_url() or empty is explicit.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param bool     $is_explicit Whether the redirect is explicit.
 		 * @param string   $redirect_to The redirect URL.
@@ -123,6 +129,8 @@ class Redirect {
 		/**
 		 * Override the per-entry "first login only" setting programmatically.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param bool     $first_login_only Whether to redirect only on first login.
 		 * @param string   $role             The user's primary WP role.
 		 * @param \WP_User $user             The authenticated user.
@@ -141,6 +149,8 @@ class Redirect {
 		 *
 		 * Return empty string to skip role-based redirect.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param string   $url            The role-based redirect URL.
 		 * @param \WP_User $user           The authenticated user.
 		 * @param string   $role           The user's primary WP role.
@@ -156,6 +166,8 @@ class Redirect {
 
 			/**
 			 * Fires just before the role-based redirect is applied.
+			 *
+			 * @since 1.0.0
 			 *
 			 * @param string   $url            The redirect URL.
 			 * @param \WP_User $user           The authenticated user.
@@ -208,6 +220,8 @@ class Redirect {
 		 *
 		 * Each entry is an array with 'url' (string) and 'first_login_only' (bool).
 		 * Allows adding/removing/overriding entries programmatically.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param array $map Role slug → redirect entry array.
 		 */

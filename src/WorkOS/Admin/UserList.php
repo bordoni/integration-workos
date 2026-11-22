@@ -173,6 +173,8 @@ class UserList {
 		 * Entries are joined with ` | ` separators on render — same visual
 		 * style as `user_row_actions`.
 		 *
+		 * @since 1.0.5
+		 *
 		 * @param array<string,string> $actions   Map of action slug => HTML.
 		 * @param int                  $user_id   WordPress user ID.
 		 * @param string               $workos_id Linked WorkOS user ID.

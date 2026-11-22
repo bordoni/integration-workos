@@ -61,6 +61,8 @@ class LoginBypass {
 		 *
 		 * Only runs if bypass is enabled. Use for IP whitelisting, etc.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param bool $allowed Whether bypass is allowed for this request.
 		 */
 		$allowed = apply_filters( 'workos_bypass_check', true );
@@ -82,6 +84,8 @@ class LoginBypass {
 
 		/**
 		 * Fires when login bypass is activated.
+		 *
+		 * @since 1.0.0
 		 */
 		do_action( 'workos_bypass_activated' );
 	}
@@ -96,6 +100,8 @@ class LoginBypass {
 		 * Filter whether login bypass is enabled.
 		 *
 		 * Default is false — bypass must be explicitly enabled.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param bool $enabled Whether bypass is enabled.
 		 */

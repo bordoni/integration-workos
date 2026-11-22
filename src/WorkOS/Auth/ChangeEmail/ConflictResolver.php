@@ -67,6 +67,8 @@ class ConflictResolver {
 		 * Fired before the policy is enforced so other features (notably
 		 * the future merge flow in Issue 2) can observe the collision.
 		 *
+		 * @since 1.0.6
+		 *
 		 * @param int    $target_user_id      User whose email is changing.
 		 * @param string $new_email           Requested new address.
 		 * @param int    $conflicting_user_id Existing WP user that owns the address.
@@ -92,6 +94,8 @@ class ConflictResolver {
 				 * Fired when the conflict policy is `merge_request`. The
 				 * future merge feature (Issue 2) subscribes here. Until
 				 * that lands the request still rejects, mirroring `block`.
+				 *
+				 * @since 1.0.6
 				 *
 				 * @param int    $target_user_id      User whose email is changing.
 				 * @param string $new_email           Requested new address.
@@ -123,6 +127,8 @@ class ConflictResolver {
 
 		/**
 		 * Filter the change-email conflict policy at request time.
+		 *
+		 * @since 1.0.6
 		 *
 		 * @param string $policy One of block | allow_orphan | merge_request.
 		 */
@@ -169,6 +175,17 @@ class ConflictResolver {
 			return false;
 		}
 
+		/**
+		 * Filters how long an account must go without a sign-in to count as an orphan.
+		 *
+		 * Only read under the `allow_orphan` conflict policy, after the
+		 * WorkOS-link, post and comment checks pass. Values below 1 are
+		 * raised to 1.
+		 *
+		 * @since 1.0.6
+		 *
+		 * @param int $days Days without a sign-in. Default 90.
+		 */
 		$days = (int) apply_filters(
 			'workos_change_email_orphan_max_inactive_days',
 			self::DEFAULT_ORPHAN_MAX_INACTIVE_DAYS

@@ -117,6 +117,8 @@ class IdentityGate {
 		/**
 		 * Filter whether a signed-in user may skip the linked-identity gate.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param bool     $exempt Default: the user can manage_options.
 		 * @param \WP_User $user   The current user.
 		 */
@@ -206,6 +208,8 @@ class IdentityGate {
 		/**
 		 * Filter whether a front-end request goes through for a user the gate blocks.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param bool $allowed Default: true for the WorkOS callback and login routes,
 		 *                      and WooCommerce's order-received and order-pay pages.
 		 */
@@ -222,6 +226,8 @@ class IdentityGate {
 	public function is_allowed_ajax_action( string $action ): bool {
 		/**
 		 * Filter the admin-ajax actions a user the gate blocks may still call.
+		 *
+		 * @since 1.0.10
 		 *
 		 * @param string[] $actions Default: heartbeat (keeps the session alive, returns no data).
 		 */
@@ -275,6 +281,8 @@ class IdentityGate {
 		/**
 		 * Filter the heading of the "Connect your account" page.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param string $heading Heading text.
 		 */
 		return (string) apply_filters( 'workos_identity_gate_heading', __( 'Connect your account', 'integration-workos' ) );
@@ -302,6 +310,8 @@ class IdentityGate {
 		/**
 		 * Filter the message shown on the "Connect your account" page and
 		 * returned with REST and AJAX errors.
+		 *
+		 * @since 1.0.10
 		 *
 		 * @param string   $message Message text.
 		 * @param \WP_User $user    The signed-in user.
@@ -444,6 +454,8 @@ class IdentityGate {
 
 		/**
 		 * Filter whether a REST route goes through for a user the gate blocks.
+		 *
+		 * @since 1.0.10
 		 *
 		 * @param bool   $allowed Default: true for the sign-in routes (workos/v1/auth).
 		 * @param string $route   REST route.

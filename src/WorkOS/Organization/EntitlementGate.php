@@ -33,6 +33,8 @@ class EntitlementGate {
 		/**
 		 * Filter whether the entitlement gate is enabled.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param bool $enabled Whether the gate is enabled.
 		 */
 		return (bool) apply_filters( 'workos_entitlement_gate_enabled', $enabled );
@@ -82,6 +84,8 @@ class EntitlementGate {
 
 		/**
 		 * Filter whether the user passes the entitlement check.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param bool|null $allowed     Whether the user is allowed, or null to use the default check.
 		 * @param int       $user_id     WP user ID.
@@ -168,6 +172,8 @@ class EntitlementGate {
 
 		/**
 		 * Fires when a login is denied by the entitlement gate.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param int    $user_id     WP user ID.
 		 * @param string $reason      Denial reason.

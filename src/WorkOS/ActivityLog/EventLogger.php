@@ -67,6 +67,8 @@ class EventLogger {
 		/**
 		 * Fires after an activity event is logged.
 		 *
+		 * @since 1.0.0
+		 *
 		 * @param string $event_type Event type.
 		 * @param array  $data       Event data.
 		 */

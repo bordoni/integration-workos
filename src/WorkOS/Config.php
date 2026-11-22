@@ -182,6 +182,8 @@ class Config {
 		/**
 		 * Filter whether Re-link Protection is on.
 		 *
+		 * @since 1.0.10
+		 *
 		 * @param bool $enabled Whether automatic re-linking is refused.
 		 */
 		return (bool) apply_filters( 'workos_relink_protection_enabled', $enabled );
@@ -210,6 +212,8 @@ class Config {
 		 * Filter whether signed-in users must have a linked WorkOS identity.
 		 *
 		 * Only consulted while Re-link Protection is on.
+		 *
+		 * @since 1.0.10
 		 *
 		 * @param bool $required Whether the identity gate is on.
 		 */
