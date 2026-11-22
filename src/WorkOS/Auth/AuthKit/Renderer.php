@@ -193,6 +193,21 @@ class Renderer {
 		nocache_headers();
 		header( 'Content-Type: text/html; charset=utf-8' );
 
+		$this->render_document( $profile, $context );
+
+		exit;
+	}
+
+	/**
+	 * Print the full-page login document. Split from render_full_page()
+	 * so the markup can be captured without sending headers or exiting.
+	 *
+	 * @param Profile $profile Active profile.
+	 * @param array   $context Render context (see render_mount()).
+	 *
+	 * @return void
+	 */
+	protected function render_document( Profile $profile, array $context = [] ): void {
 		$site_name = wp_strip_all_tags( (string) get_bloginfo( 'name' ) );
 		$language  = get_bloginfo( 'language' );
 
@@ -224,10 +239,16 @@ class Renderer {
 		 * admin and theme chrome we do not want. Instead we call
 		 * wp_print_scripts + wp_print_styles after our enqueue so only our
 		 * own bundle ships.
+		 *
+		 * language_attributes() prints attribute markup that core has
+		 * already escaped, and `language_attributes` filters are expected
+		 * to escape what they add. Passing it through esc_attr() again
+		 * encodes the quotes and leaves an invalid `lang` value that
+		 * screen readers can't use.
 		 */
 		?>
 <!DOCTYPE html>
-<html <?php echo esc_attr( get_language_attributes() ); ?>>
+<html <?php language_attributes(); ?>>
 <head>
 	<meta charset="<?php echo esc_attr( get_bloginfo( 'charset' ) ); ?>" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -258,7 +279,6 @@ class Renderer {
 </body>
 </html>
 		<?php
-		exit;
 	}
 
 	/**
