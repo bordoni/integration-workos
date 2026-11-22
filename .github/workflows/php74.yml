@@ -1,0 +1,88 @@
+name: PHP 7.4
+
+# The plugin declares `Requires PHP: 7.4`, but the test suite can't run
+# there: wp-browser 4.x (composer.lock pins 4.5.11) requires PHP ^8.0.
+# So this workflow proves what it can on a real 7.4 runtime:
+#   1. every shipped PHP file parses on 7.4 (`php -l`);
+#   2. the built plugin ZIP installs and activates on PHP 7.4 + WordPress
+#      6.2 (the plugin's minimum) and serves requests without PHP errors.
+# Behaviour is still tested by wpunit on 8.0–8.3 in the Tests workflow,
+# and PHPStan checks 7.4 syntax and calls (`phpVersion: 70400`).
+
+on:
+  push:
+    branches: [ main ]
+  # No base-branch filter, like Tests: stacked PRs need the check too.
+  pull_request:
+
+jobs:
+  lint:
+    name: Syntax (php -l on 7.4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup PHP 7.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          coverage: none
+          tools: none
+
+      - name: Lint src/, templates/ and the root PHP files
+        run: find src templates integration-workos.php uninstall.php -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > lint.log 2>&1 && echo "$(grep -c '^No syntax errors' lint.log) files parse on $(php -r 'echo PHP_VERSION;')" || { grep -v '^No syntax errors' lint.log; exit 1; }
+
+  zip:
+    name: Build plugin ZIP
+    uses: ./.github/workflows/zip.yml
+
+  activate:
+    name: Install + activate on PHP 7.4 / WP 6.2
+    needs: zip
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ppassword --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup PHP 7.4 + WP-CLI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mysqli
+          coverage: none
+          tools: wp-cli
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Download plugin build
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.zip.outputs.zip_name }}
+          path: plugin/integration-workos
+
+      - name: Zip the build the way it ships
+        run: cd plugin && zip -qr ../integration-workos.zip integration-workos
+
+      - name: Install, activate and request pages
+        run: bun tests/compat/php74-smoke.ts
+        env:
+          WP_CMD: wp --path=wp
+          SERVER_CMD: wp --path=wp server --host=127.0.0.1 --port=8080
+          SITE_URL: http://127.0.0.1:8080
+          PLUGIN_ZIP: integration-workos.zip
+          WP_VERSION: '6.2'
+          DB_HOST: 127.0.0.1:3306
+          DB_NAME: wordpress
+          DB_USER: root
+          DB_PASSWORD: password
