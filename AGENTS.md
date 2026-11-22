@@ -4,7 +4,7 @@
 
 Enterprise identity management for WordPress powered by WorkOS. SSO, directory sync, MFA, and user management.
 
-- **Version:** 1.0.12
+- **Version:** 1.0.13
 - **Namespace:** `WorkOS\`
 - **PHP Requirement:** 7.4+
 - **WordPress Requirement:** 6.2+ (plugin header `Requires at least`, `readme.txt` and phpcs `minimum_wp_version`)

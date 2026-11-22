@@ -1,10 +1,30 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.13] - 2026-11-22
 
 ### Fixed
 
-- **Invalid page language on the full-page sign-in** — the wp-login.php takeover and `/workos/login/{profile}` escaped the `<html>` language attributes a second time, so the page declared `lang=&quot;en-US&quot;`. Screen readers couldn't tell the page's language (WCAG 3.1.1, axe `html-lang-valid`). It now declares `lang="en-US"`, and attributes added through the `language_attributes` filter reach the `<html>` element intact.
+- **Invalid page language on the full-page sign-in** (#96) — the wp-login.php takeover and `/workos/login/{profile}` escaped the `<html>` language attributes a second time, so the page declared `lang=&quot;en-US&quot;`. Screen readers couldn't tell the page's language (WCAG 3.1.1, axe `html-lang-valid`). It now declares `lang="en-US"`, and attributes added through the `language_attributes` filter reach the `<html>` element intact.
+
+### Added
+
+- **Hook reference** (#98) — [`docs/hooks.md`](docs/hooks.md) lists every action and filter the plugin fires (64 of its own, plus the 2 core hooks it fires), with each hook's arguments, the version it first appeared in and its call sites. It's generated from the source with `bun run docs:hooks`, and CI fails when it falls out of date. Every hook docblock now carries `@since`, and the four call sites that had no docblock got one. The README's Hooks Reference links to it.
+- **`composer check`** (#98) — runs PHPCS, PHPStan and the wpunit suite (with the `constants` group in its own pass, as CI does) in one command.
+
+### Changed
+
+- **Node 24** (#54) — `.nvmrc`, `engines` and the README now ask for Node 24 (was 20). The release ZIP's front-end assets are built on the Node version in `.nvmrc`; they used to be built on the runner's default Node.
+- **Developer docs** (#98) — `AGENTS.md` gains hook conventions and extension-point guidance, and now gives WordPress 6.2 as the minimum (as the plugin header does) and the current rate-limiter files.
+
+### Removed
+
+- **Unused `brianhenryie/strauss` dev dependency** (#98) — the build runs the pinned Strauss 0.27.3 phar, so the Composer package was never used. Removing it drops 35 dev-only packages from `composer.lock`. Nothing that ships changes.
+
+### Tests
+
+- **Public contract tests** (#97) — `tests/wpunit/PublicContract*Test.php` (group `public-contract`) pin what the Software Portal and other integrators rely on: the signatures of the PHP symbols they call, hook priorities and arguments, meta keys, `sync_existing_user()` error codes, the `workos/v1` routes, query vars and script handles. Signatures are checked for compatibility, so a new trailing optional parameter passes. `bun run check:build-tokens` checks that `build/` still has the ids, classes and CSS variables the Portal uses.
+- **PHP 7.4 in CI** (#99) — every PHP file is syntax-checked on PHP 7.4, and the built ZIP is installed and activated on PHP 7.4 with WordPress 6.2 and a few pages are loaded. The wpunit suite still runs on PHP 8.0–8.3, since wp-browser needs PHP 8.
+- **TypeScript check on pull requests** (#99) — `tsc --noEmit` now runs in CI.
 
 ## [1.0.12] - 2026-11-14
 

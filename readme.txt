@@ -5,7 +5,7 @@ Tags: sso, identity, workos, authentication, directory-sync
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.12
+Stable tag: 1.0.13
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -175,6 +175,11 @@ WorkOS is provided by WorkOS, Inc.
 
 == Changelog ==
 
+= 1.0.13 - 2026-11-22 =
+
+* Fix: The full-page sign-in (the wp-login.php takeover and `/workos/login/{profile}`) declared an invalid page language, so screen readers couldn't tell which language it was in. It now declares a valid `lang`, and attributes added through the `language_attributes` filter reach the page intact. (#96)
+* New: For developers, `docs/hooks.md` lists every action and filter the plugin fires, with its arguments, the version it first appeared in and where it fires. Every hook docblock now carries `@since`. (#98)
+
 = 1.0.12 - 2026-11-14 =
 
 * Fix: When an account was re-owned in WordPress (the customer moved to another user, the old one given a placeholder email), WorkOS sign-ins landed in the emptied old account. If the WorkOS email belongs to a WordPress user with no WorkOS link, the sign-in is now refused and the customer is asked to contact support. The `workos_refuse_split_account` filter restores the old behavior. (#95)
@@ -313,6 +318,9 @@ Base platform:
 * WP-CLI commands for status, user management, organization management, and bulk sync.
 
 == Upgrade Notice ==
+
+= 1.0.13 =
+Fixes the page language on the full-page sign-in for screen readers. No settings or behavior change otherwise.
 
 = 1.0.12 =
 Sign-ins whose WorkOS email belongs to another, unlinked WordPress user are refused until an administrator runs `wp workos user move`. Unlinking or re-linking a user now signs it out everywhere.
