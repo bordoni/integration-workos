@@ -17,7 +17,6 @@
 		"stellarwp/superglobals": "^2.0"
 	},
 	"require-dev": {
-		"brianhenryie/strauss": "^0.19.2",
 		"codeception/module-asserts": "^3.0",
 		"codeception/module-cli": "^2.0",
 		"codeception/module-db": "^3.0",
@@ -51,6 +50,12 @@
 		"lint:fix": "phpcbf",
 		"phpstan": "phpstan analyse --memory-limit=2G",
 		"phpstan:baseline": "phpstan analyse --memory-limit=2G --generate-baseline",
+		"check": [
+			"@lint",
+			"@phpstan",
+			"codecept run wpunit --skip-group constants",
+			"codecept run wpunit --group constants"
+		],
 		"strauss-install": [
 			"test -f ./bin/strauss-0.27.3.phar || (mkdir -p bin && curl -o bin/strauss-0.27.3.phar -L https://github.com/BrianHenryIE/strauss/releases/download/0.27.3/strauss.phar)"
 		],
@@ -61,6 +66,9 @@
 		],
 		"post-install-cmd": ["@strauss"],
 		"post-update-cmd": ["@strauss"]
+	},
+	"scripts-descriptions": {
+		"check": "PHPCS, PHPStan and the wpunit suite (run where the test DB is reachable: slic or the test-site runner)."
 	},
 	"extra": {
 		"strauss": {
