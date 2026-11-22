@@ -165,3 +165,8 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun run build
+
+      # The Software Portal styles and tests the AuthKit shell through ids,
+      # classes, CSS variables and SlotFill names in these bundles.
+      - name: Check Portal front-end tokens
+        run: bun run check:build-tokens
